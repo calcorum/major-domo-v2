@@ -13,6 +13,9 @@ from models.team import Team
 class Player(SBABaseModel):
     """Player model representing an SBA player."""
     
+    # Override base model to make id required for database entities
+    id: int = Field(..., description="Player ID from database")
+    
     name: str = Field(..., description="Player full name")
     wara: float = Field(..., description="Wins Above Replacement Average")
     season: int = Field(..., description="Season number")

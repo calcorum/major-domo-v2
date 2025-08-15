@@ -12,6 +12,9 @@ from models.base import SBABaseModel
 class Team(SBABaseModel):
     """Team model representing an SBA team."""
     
+    # Override base model to make id required for database entities
+    id: int = Field(..., description="Team ID from database")
+    
     abbrev: str = Field(..., description="Team abbreviation (e.g., 'NYY')")
     sname: str = Field(..., description="Short team name")
     lname: str = Field(..., description="Long team name")

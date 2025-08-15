@@ -29,7 +29,7 @@ class TestSBABaseModel:
     
     def test_to_dict_functionality(self):
         """Test model to dictionary conversion."""
-        team = Team(abbrev='LAA', sname='Angels', lname='Los Angeles Angels', season=12)
+        team = Team(id=1, abbrev='LAA', sname='Angels', lname='Los Angeles Angels', season=12)
         
         team_dict = team.to_dict()
         assert 'abbrev' in team_dict
@@ -38,7 +38,7 @@ class TestSBABaseModel:
     
     def test_model_repr(self):
         """Test model string representation."""
-        team = Team(abbrev='BOS', sname='Red Sox', lname='Boston Red Sox', season=12)
+        team = Team(id=2, abbrev='BOS', sname='Red Sox', lname='Boston Red Sox', season=12)
         repr_str = repr(team)
         assert 'Team(' in repr_str
         assert 'abbrev=BOS' in repr_str
@@ -50,6 +50,7 @@ class TestTeamModel:
     def test_team_creation_minimal(self):
         """Test team creation with minimal required fields."""
         team = Team(
+            id=4,
             abbrev='HOU',
             sname='Astros',
             lname='Houston Astros',
@@ -64,6 +65,7 @@ class TestTeamModel:
     def test_team_creation_with_optional_fields(self):
         """Test team creation with optional fields."""
         team = Team(
+            id=5,
             abbrev='SF',
             sname='Giants',
             lname='San Francisco Giants',
@@ -81,7 +83,7 @@ class TestTeamModel:
     
     def test_team_str_representation(self):
         """Test team string representation."""
-        team = Team(abbrev='SD', sname='Padres', lname='San Diego Padres', season=12)
+        team = Team(id=3, abbrev='SD', sname='Padres', lname='San Diego Padres', season=12)
         assert str(team) == 'SD - San Diego Padres'
 
 
@@ -91,6 +93,7 @@ class TestPlayerModel:
     def test_player_creation(self):
         """Test player creation with required fields."""
         player = Player(
+            id=101,
             name='Mike Trout',
             wara=8.5,
             season=12,
@@ -107,6 +110,7 @@ class TestPlayerModel:
     def test_player_positions_property(self):
         """Test player positions property."""
         player = Player(
+            id=102,
             name='Shohei Ohtani',
             wara=9.0,
             season=12,
@@ -126,6 +130,7 @@ class TestPlayerModel:
     def test_player_primary_position(self):
         """Test primary position property."""
         player = Player(
+            id=103,
             name='Mookie Betts',
             wara=7.2,
             season=12,
@@ -140,6 +145,7 @@ class TestPlayerModel:
     def test_player_is_pitcher(self):
         """Test is_pitcher property."""
         pitcher = Player(
+            id=104,
             name='Gerrit Cole',
             wara=6.8,
             season=12,
@@ -149,6 +155,7 @@ class TestPlayerModel:
         )
         
         position_player = Player(
+            id=105,
             name='Aaron Judge',
             wara=8.1,
             season=12,
@@ -163,6 +170,7 @@ class TestPlayerModel:
     def test_player_str_representation(self):
         """Test player string representation."""
         player = Player(
+            id=106,
             name='Ronald Acuna Jr.',
             wara=8.8,
             season=12,
@@ -364,6 +372,7 @@ class TestModelCoverageExtras:
     def test_player_positions_comprehensive(self):
         """Test player positions property with all position variations."""
         player_data = {
+            'id': 201,
             'name': 'Multi-Position Player',
             'wara': 3.0,
             'season': 12,
@@ -404,6 +413,7 @@ class TestModelCoverageExtras:
         
         for position, expected in test_cases:
             player_data = {
+                'id': 300 + ord(position[0]),  # Generate unique IDs based on position
                 'name': f'Test {position}',
                 'wara': 2.0,
                 'season': 12,

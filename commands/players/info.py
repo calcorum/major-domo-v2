@@ -10,7 +10,8 @@ from discord.ext import commands
 
 from services.player_service import player_service
 from exceptions import BotException
-from utils.logging import get_contextual_logger, set_discord_context
+from utils.logging import get_contextual_logger
+from utils.decorators import logged_command
 from constants import SBA_CURRENT_SEASON
 
 
@@ -29,6 +30,7 @@ class PlayerInfoCommands(commands.Cog):
         name="Player name to search for",
         season="Season to show stats for (defaults to current season)"
     )
+    @logged_command("/player")
     async def player_info(
         self,
         interaction: discord.Interaction,
@@ -36,24 +38,11 @@ class PlayerInfoCommands(commands.Cog):
         season: Optional[int] = None
     ):
         """Display player card with statistics."""
-        # Set up logging context for this command
-        set_discord_context(
-            interaction=interaction,
-            command="/player",
-            player_name=name,
-            season=season
-        )
-        
-        # Start operation timing and tracing
-        trace_id = self.logger.start_operation("player_info_command")
+        # Defer response for potentially slow API calls
+        await interaction.response.defer()
+        self.logger.debug("Response deferred")
         
         try:
-            self.logger.info("Player info command started")
-            
-            # Defer response for potentially slow API calls
-            await interaction.response.defer()
-            self.logger.debug("Response deferred")
-            
             # Search for player by name (use season parameter or default to current)
             search_season = season or SBA_CURRENT_SEASON
             self.logger.debug("Starting player search", api_call="get_players_by_name", season=search_season)
@@ -61,9 +50,23 @@ class PlayerInfoCommands(commands.Cog):
             self.logger.info("Player search completed", players_found=len(players), season=search_season)
             
             if not players:
-                self.logger.warning("No players found for search", search_term=name)
+                # Try fuzzy search as fallback
+                self.logger.info("No exact matches found, attempting fuzzy search", search_term=name)
+                fuzzy_players = await player_service.search_players_fuzzy(name, limit=10)
+                
+                if not fuzzy_players:
+                    self.logger.warning("No players found even with fuzzy search", search_term=name)
+                    await interaction.followup.send(
+                        f"❌ No players found matching '{name}'.",
+                        ephemeral=True
+                    )
+                    return
+                
+                # Show fuzzy search results for user selection
+                self.logger.info("Fuzzy search results found", fuzzy_results_count=len(fuzzy_players))
+                fuzzy_list = "\n".join([f"• {p.name} ({p.primary_position})" for p in fuzzy_players[:10]])
                 await interaction.followup.send(
-                    f"❌ No players found matching '{name}'.",
+                    f"🔍 No exact match found for '{name}'. Did you mean one of these?\n{fuzzy_list}\n\nPlease try again with the exact name.",
                     ephemeral=True
                 )
                 return
@@ -83,7 +86,7 @@ class PlayerInfoCommands(commands.Cog):
                         self.logger.debug("Exact match found", player_id=player.id, player_name=player.name)
                         break
                 
-                if not player:
+                if player is None:
                     # Show multiple options
                     candidate_names = [p.name for p in players[:10]]
                     self.logger.info("Multiple candidates found, requiring user clarification", 
@@ -101,8 +104,8 @@ class PlayerInfoCommands(commands.Cog):
                             player_id=player.id, 
                             api_call="get_player_with_team")
             
-            player_with_team = await player_service.get_player_with_team(player.id)
-            if not player_with_team:
+            player_with_team = await player_service.get_player_with_team(player.id) 
+            if player_with_team is None:
                 self.logger.warning("Failed to get player with team, using basic player data")
                 player_with_team = player  # Fallback to player without team
             else:
@@ -162,16 +165,16 @@ class PlayerInfoCommands(commands.Cog):
             await interaction.followup.send(embed=embed)
             self.logger.info("Player info command completed successfully", 
                            final_player_id=player_with_team.id,
-                           final_player_name=player_with_team.name)
+                       final_player_name=player_with_team.name)
             
         except Exception as e:
-            self.logger.error("Player info command failed", error=e)
             error_msg = "❌ Error retrieving player information."
             
             if interaction.response.is_done():
                 await interaction.followup.send(error_msg, ephemeral=True)
             else:
                 await interaction.response.send_message(error_msg, ephemeral=True)
+            raise  # Re-raise to let decorator handle logging
 
 
 async def setup(bot: commands.Bot):
