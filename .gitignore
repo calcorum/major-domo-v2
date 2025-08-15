@@ -6,6 +6,17 @@ __pycache__/
 # C extensions
 *.so
 
+# Bot-specific files
+.last_command_hash
+logs/
+*.log
+*.json
+
+# Claude files & directories
+.claude/
+CLAUDE.md
+.env*
+
 # Distribution / packaging
 .Python
 build/
