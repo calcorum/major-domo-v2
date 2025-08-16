@@ -48,6 +48,9 @@ class MockChannel:
         self.id = 444555666
 
 
+import pytest
+
+@pytest.mark.asyncio
 async def test_player_search():
     """Test player search with real data."""
     print("🔍 Testing Player Search...")
@@ -125,6 +128,7 @@ async def test_player_search():
         return False
 
 
+@pytest.mark.asyncio
 async def test_player_service_methods():
     """Test various player service methods."""
     print("🔧 Testing Player Service Methods...")
@@ -176,6 +180,7 @@ async def test_player_service_methods():
         return False
 
 
+@pytest.mark.asyncio
 async def test_api_connectivity():
     """Test basic API connectivity."""
     print("🌐 Testing API Connectivity...")

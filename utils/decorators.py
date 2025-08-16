@@ -87,6 +87,6 @@ def logged_command(
                 raise
         
         # Preserve signature for Discord.py command registration
-        wrapper.__signature__ = inspect.signature(func)
+        wrapper.__signature__ = inspect.signature(func)  # type: ignore
         return wrapper
     return decorator

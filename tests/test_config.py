@@ -35,7 +35,7 @@ class TestBotConfig:
             'GUILD_ID': '123456789',
             'API_TOKEN': 'test_api_token',
             'DB_URL': 'https://api.example.com'
-        }):
+        }, clear=True):
             config = BotConfig()
             assert config.sba_season == 12
             assert config.pd_season == 9

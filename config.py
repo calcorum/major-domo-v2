@@ -1,10 +1,7 @@
 """
 Configuration management for Discord Bot v2.0
 """
-import os
-from typing import Optional
-from pydantic_settings import BaseSettings
-from pydantic import ConfigDict
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class BotConfig(BaseSettings):
@@ -29,7 +26,7 @@ class BotConfig(BaseSettings):
     environment: str = "development"
     testing: bool = False
     
-    model_config = ConfigDict(
+    model_config = SettingsConfigDict(
         env_file=".env",
         case_sensitive=False,
         extra="ignore"  # Ignore extra environment variables
@@ -53,5 +50,5 @@ def get_config() -> BotConfig:
     """Get the global configuration instance."""
     global _config
     if _config is None:
-        _config = BotConfig()
+        _config = BotConfig()  # type: ignore
     return _config

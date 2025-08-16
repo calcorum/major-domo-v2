@@ -2,6 +2,8 @@
 API client tests using aioresponses for clean HTTP mocking
 """
 import pytest
+import asyncio
+import aiohttp
 from unittest.mock import MagicMock, patch
 from aioresponses import aioresponses
 
@@ -473,3 +475,63 @@ class TestAPIClientCoverageExtras:
             # Test with no parameters
             url = client._add_params("https://example.com/api")
             assert url == "https://example.com/api"
+    
+    @pytest.mark.asyncio
+    async def test_timeout_error_handling(self, mock_config):
+        """Test timeout error handling using aioresponses."""
+        with patch('api.client.get_config', return_value=mock_config):
+            client = APIClient()
+            
+            # Test timeout using aioresponses exception parameter
+            with aioresponses() as m:
+                m.get(
+                    "https://api.example.com/v3/players",
+                    exception=asyncio.TimeoutError("Request timed out")
+                )
+                
+                with pytest.raises(APIException, match="API call failed.*Request timed out"):
+                    await client.get("players")
+                    
+            await client.close()
+    
+    @pytest.mark.asyncio
+    async def test_generic_exception_handling(self, mock_config):
+        """Test generic exception handling."""
+        with patch('api.client.get_config', return_value=mock_config):
+            client = APIClient()
+            
+            # Test generic exception
+            with aioresponses() as m:
+                m.get(
+                    "https://api.example.com/v3/players",
+                    exception=Exception("Generic error")
+                )
+                
+                with pytest.raises(APIException, match="API call failed.*Generic error"):
+                    await client.get("players")
+                    
+            await client.close()
+    
+    @pytest.mark.asyncio
+    async def test_session_closed_handling(self, mock_config):
+        """Test handling of closed session."""
+        with patch('api.client.get_config', return_value=mock_config):
+            # Test that the client recreates session when needed
+            with aioresponses() as m:
+                m.get(
+                    "https://api.example.com/v3/players",
+                    payload={"success": True},
+                    status=200
+                )
+                
+                client = APIClient()
+                
+                # Close the session manually
+                await client._ensure_session()
+                await client._session.close()
+                
+                # Client should recreate session and work fine
+                result = await client.get("players")
+                assert result == {"success": True}
+                
+                await client.close()

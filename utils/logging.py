@@ -59,6 +59,10 @@ class JSONFormatter(logging.Formatter):
         context = log_context.get({})
         if context:
             log_obj['context'] = context.copy()
+            
+            # Promote trace_id to standard key if available in context
+            if 'trace_id' in context:
+                log_obj['trace_id'] = context['trace_id']
         
         # Add custom fields from extra parameter
         excluded_keys = {
@@ -82,7 +86,7 @@ class JSONFormatter(logging.Formatter):
         if extra_data:
             log_obj['extra'] = extra_data
         
-        return json.dumps(log_obj, ensure_ascii=False)
+        return json.dumps(log_obj, ensure_ascii=False) + '\n'
 
 
 class ContextualLogger:
@@ -123,6 +127,39 @@ class ContextualLogger:
         log_context.set(current_context)
         
         return trace_id
+    
+    def end_operation(self, trace_id: str, operation_result: str = "completed") -> None:
+        """
+        End an operation and log the final duration.
+        
+        Args:
+            trace_id: The trace ID returned by start_operation
+            operation_result: Result status (e.g., "completed", "failed", "cancelled")
+        """
+        if self._start_time is None:
+            self.warning("end_operation called without corresponding start_operation")
+            return
+        
+        duration_ms = int((time.time() - self._start_time) * 1000)
+        
+        # Get current context
+        current_context = log_context.get({})
+        
+        # Log operation completion
+        self.info(f"Operation {operation_result}", 
+                 trace_id=trace_id,
+                 final_duration_ms=duration_ms,
+                 operation_result=operation_result)
+        
+        # Clear operation-specific context
+        if 'operation' in current_context:
+            current_context.pop('operation', None)
+        if 'trace_id' in current_context and current_context['trace_id'] == trace_id:
+            current_context.pop('trace_id', None)
+        log_context.set(current_context)
+        
+        # Reset start time
+        self._start_time = None
     
     def _get_duration_ms(self) -> Optional[int]:
         """Get operation duration in milliseconds if start_operation was called."""

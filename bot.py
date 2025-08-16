@@ -30,27 +30,15 @@ def setup_logging():
     logger = logging.getLogger('discord_bot_v2')
     logger.setLevel(getattr(logging, config.log_level.upper()))
     
-    # Console handler - human readable for development
+    # Console handler - detailed format for development debugging
     console_handler = logging.StreamHandler()
     console_formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s'
     )
     console_handler.setFormatter(console_formatter)
     logger.addHandler(console_handler)
     
-    # Traditional file handler - human readable with debug info
-    file_handler = RotatingFileHandler(
-        'logs/discord_bot_v2.log',
-        maxBytes=5 * 1024 * 1024,  # 5MB
-        backupCount=5
-    )
-    file_formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s'
-    )
-    file_handler.setFormatter(file_formatter)
-    logger.addHandler(file_handler)
-    
-    # JSON file handler - structured logging for analysis
+    # JSON file handler - structured logging for monitoring and analysis
     json_handler = RotatingFileHandler(
         'logs/discord_bot_v2.json',
         maxBytes=5 * 1024 * 1024,  # 5MB
@@ -59,15 +47,19 @@ def setup_logging():
     json_handler.setFormatter(JSONFormatter())
     logger.addHandler(json_handler)
     
-    # Apply to all loggers (not just root)
+    # Configure root logger for third-party libraries (discord.py, aiohttp, etc.)
     root_logger = logging.getLogger()
     root_logger.setLevel(getattr(logging, config.log_level.upper()))
     
-    # Add handlers to root logger so all child loggers inherit them
+    # Add handlers to root logger so third-party loggers inherit them
     if not root_logger.handlers:  # Avoid duplicate handlers
         root_logger.addHandler(console_handler)
-        root_logger.addHandler(file_handler)
         root_logger.addHandler(json_handler)
+    
+    # Prevent discord_bot_v2 logger from propagating to root to avoid duplicate messages
+    # (bot logs will still appear via its own handlers, third-party logs via root handlers)
+    # To revert: remove the line below and bot logs will appear twice
+    logger.propagate = False
     
     return logger
 
@@ -84,7 +76,7 @@ class SBABot(commands.Bot):
         super().__init__(
             command_prefix='!',  # Legacy prefix, primarily using slash commands
             intents=intents,
-            description="SBA League Management Bot v2.0"
+            description="Major Domo v2.0"
         )
         
         self.logger = logging.getLogger('discord_bot_v2')
@@ -112,13 +104,15 @@ class SBABot(commands.Bot):
     async def _load_command_packages(self):
         """Load all command packages with resilient error handling."""
         from commands.players import setup_players
+        from commands.teams import setup_teams
+        from commands.league import setup_league
         
         # Define command packages to load
         command_packages = [
             ("players", setup_players),
+            ("teams", setup_teams),
+            ("league", setup_league),
             # Future packages:
-            # ("teams", setup_teams),
-            # ("league", setup_league), 
             # ("admin", setup_admin),
         ]
         
@@ -153,19 +147,29 @@ class SBABot(commands.Bot):
             # Create hash of current command tree
             commands_data = []
             for cmd in self.tree.get_commands():
-                # Include relevant command data for comparison
-                cmd_dict = {
-                    'name': cmd.name,
-                    'description': cmd.description,
-                    'parameters': [
+                # Handle different command types properly
+                cmd_dict = {}
+                cmd_dict['name'] = cmd.name
+                cmd_dict['type'] = type(cmd).__name__
+                
+                # Add description if available (most command types have this)
+                if hasattr(cmd, 'description'):
+                    cmd_dict['description'] = cmd.description # type: ignore
+                
+                # Add parameters for Command objects
+                if isinstance(cmd, discord.app_commands.Command):
+                    cmd_dict['parameters'] = [
                         {
                             'name': param.name,
                             'description': param.description,
                             'required': param.required,
                             'type': str(param.type)
                         } for param in cmd.parameters
-                    ] if hasattr(cmd, 'parameters') else []
-                }
+                    ]
+                elif isinstance(cmd, discord.app_commands.Group):
+                    # For groups, include subcommands
+                    cmd_dict['subcommands'] = [subcmd.name for subcmd in cmd.commands]
+                
                 commands_data.append(cmd_dict)
             
             # Sort for consistent hashing
@@ -195,18 +199,29 @@ class SBABot(commands.Bot):
             # Create hash of current command tree (same logic as _should_sync_commands)
             commands_data = []
             for cmd in self.tree.get_commands():
-                cmd_dict = {
-                    'name': cmd.name,
-                    'description': cmd.description,
-                    'parameters': [
+                # Handle different command types properly
+                cmd_dict = {}
+                cmd_dict['name'] = cmd.name
+                cmd_dict['type'] = type(cmd).__name__
+                
+                # Add description if available (most command types have this)
+                if hasattr(cmd, 'description'):
+                    cmd_dict['description'] = cmd.description # type: ignore
+                
+                # Add parameters for Command objects
+                if isinstance(cmd, discord.app_commands.Command):
+                    cmd_dict['parameters'] = [
                         {
                             'name': param.name,
                             'description': param.description,
                             'required': param.required,
                             'type': str(param.type)
                         } for param in cmd.parameters
-                    ] if hasattr(cmd, 'parameters') else []
-                }
+                    ]
+                elif isinstance(cmd, discord.app_commands.Group):
+                    # For groups, include subcommands
+                    cmd_dict['subcommands'] = [subcmd.name for subcmd in cmd.commands]
+                
                 commands_data.append(cmd_dict)
             
             commands_data.sort(key=lambda x: x['name'])

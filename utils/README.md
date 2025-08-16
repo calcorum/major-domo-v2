@@ -47,7 +47,10 @@ class YourCommandCog(commands.Cog):
             
         except Exception as e:
             self.logger.error("Command failed", error=e)
+            self.logger.end_operation(trace_id, "failed")
             raise
+        else:
+            self.logger.end_operation(trace_id, "completed")
 ```
 
 ### **Key Features**
@@ -59,18 +62,25 @@ Every log entry automatically includes:
 - **Operation Context**: Trace ID, operation name, execution duration
 - **Custom Fields**: Additional context via keyword arguments
 
-#### **⏱️ Automatic Timing**
+#### **⏱️ Automatic Timing & Tracing**
 ```python
 trace_id = self.logger.start_operation("complex_operation")
 # ... do work ...
-self.logger.info("Operation completed")  # Automatically includes duration_ms
+self.logger.info("Operation in progress")  # Includes duration_ms in extras
+# ... more work ...
+self.logger.end_operation(trace_id, "completed")  # Final timing log
 ```
+
+**Key Behavior:**
+- **`trace_id`**: Promoted to **standard JSON key** (root level) for easy filtering
+- **`duration_ms`**: Available in **extras** when timing is active (optional field)
+- **Context**: All operation context preserved throughout the async operation
 
 #### **🔗 Request Tracing**
 Track a single request through all log entries using trace IDs:
 ```bash
-# Find all logs for a specific request
-jq '.context.trace_id == "abc12345"' logs/discord_bot_v2.json
+# Find all logs for a specific request (trace_id is now a standard key)
+jq 'select(.trace_id == "abc12345")' logs/discord_bot_v2.json
 ```
 
 #### **📤 Hybrid Output**
@@ -109,6 +119,14 @@ clear_context()
 ```python
 # Start timing and get trace ID
 trace_id = logger.start_operation("player_search")
+```
+
+**`end_operation(trace_id: str, operation_result: str = "completed")`**
+```python
+# End operation and log final duration
+logger.end_operation(trace_id, "completed")
+# or
+logger.end_operation(trace_id, "failed")
 ```
 
 **`info(message: str, **kwargs)`**
@@ -156,12 +174,13 @@ except:
 #### **JSON Output (Monitoring & Analysis)**
 ```json
 {
-  "timestamp": "2025-08-14T14:32:15.123Z",
+  "timestamp": "2025-08-15T14:32:15.123Z",
   "level": "INFO",
   "logger": "commands.players.info.PlayerInfoCommands",
   "message": "Player info command started",
   "function": "player_info",
   "line": 50,
+  "trace_id": "abc12345",
   "context": {
     "user_id": "123456789",
     "guild_id": "987654321",
@@ -182,12 +201,13 @@ except:
 #### **Error Output with Exception**
 ```json
 {
-  "timestamp": "2025-08-14T14:32:18.789Z",
+  "timestamp": "2025-08-15T14:32:18.789Z",
   "level": "ERROR",
-  "logger": "commands.players.info.PlayerInfoCommands",
+  "logger": "commands.players.info.PlayerInfoCommands", 
   "message": "API call failed",
   "function": "player_info",
   "line": 125,
+  "trace_id": "abc12345",
   "exception": {
     "type": "APITimeout",
     "message": "Request timed out after 30s",
@@ -198,7 +218,8 @@ except:
     "guild_id": "987654321",
     "command": "/player",
     "player_name": "Mike Trout",
-    "trace_id": "abc12345"
+    "trace_id": "abc12345",
+    "operation": "player_info_command"
   },
   "extra": {
     "duration_ms": 30000,
@@ -315,7 +336,7 @@ jq -r 'select(.level == "ERROR") | .exception.type' logs/discord_bot_v2.json | s
 
 **Trace a complete request:**
 ```bash
-jq 'select(.context.trace_id == "abc12345")' logs/discord_bot_v2.json | jq -s 'sort_by(.timestamp)'
+jq 'select(.trace_id == "abc12345")' logs/discord_bot_v2.json | jq -s 'sort_by(.timestamp)'
 ```
 
 #### **Performance Analysis**
@@ -340,15 +361,24 @@ jq -r '.context.command' logs/discord_bot_v2.json | sort | uniq -c | sort -nr
 #### **✅ Do:**
 1. **Always set Discord context** at the start of command handlers
 2. **Use start_operation()** for timing critical operations
-3. **Include relevant context** in log messages via keyword arguments
-4. **Log at appropriate levels** (debug for detailed flow, info for milestones, warning for recoverable issues, error for failures)
-5. **Include error context** when logging exceptions
+3. **Call end_operation()** to complete operation timing
+4. **Include relevant context** in log messages via keyword arguments
+5. **Log at appropriate levels** (debug for detailed flow, info for milestones, warning for recoverable issues, error for failures)
+6. **Include error context** when logging exceptions
+7. **Use trace_id for correlation** - it's automatically available as a standard key
 
 #### **❌ Don't:**
 1. **Don't log sensitive information** (passwords, tokens, personal data)
 2. **Don't over-log in tight loops** (use sampling or conditional logging)
 3. **Don't use string formatting in log messages** (use keyword arguments instead)
 4. **Don't forget to handle exceptions** in logging code itself
+5. **Don't manually add trace_id to log messages** - it's handled automatically
+
+#### **🎯 Trace ID & Duration Guidelines:**
+- **`trace_id`**: Automatically promoted to standard key when operation is active
+- **`duration_ms`**: Appears in extras for logs during timed operations
+- **Operation flow**: Always call `start_operation()` → log messages → `end_operation()`
+- **Query logs**: Use `jq 'select(.trace_id == "xyz")'` for request tracing
 
 #### **Performance Considerations**
 - JSON serialization adds minimal overhead (~1-2ms per log entry)
@@ -524,7 +554,7 @@ utils/
 
 ---
 
-**Last Updated:** Phase 2.1 - Structured Logging Implementation  
+**Last Updated:** Phase 1.5 - Enhanced Logging with trace_id Promotion and Operation Timing  
 **Next Update:** When additional utility modules are added
 
 For questions or improvements to the logging system, check the implementation in `utils/logging.py` or refer to the JSON log outputs in `logs/discord_bot_v2.json`.
