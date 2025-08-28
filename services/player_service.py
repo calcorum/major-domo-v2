@@ -8,7 +8,6 @@ from typing import Optional, List, TYPE_CHECKING
 
 from services.base_service import BaseService
 from models.player import Player
-from models.team import Team
 from constants import FREE_AGENT_TEAM_ID, SBA_CURRENT_SEASON
 from exceptions import APIException
 
@@ -55,40 +54,6 @@ class PlayerService(BaseService[Player]):
             logger.error(f"Unexpected error getting player {player_id}: {e}")
             return None
     
-    async def get_player_with_team(self, player_id: int) -> Optional[Player]:
-        """
-        Get player with team information populated.
-        
-        Args:
-            player_id: Unique player identifier
-            
-        Returns:
-            Player instance with team data or None if not found
-        """
-        try:
-            player = await self.get_player(player_id)
-            if not player:
-                return None
-            
-            # Populate team information if team_id exists and TeamService is available
-            if player.team_id and self._team_service:
-                team = await self._team_service.get_team(player.team_id)
-                if team:
-                    player.team = team
-                    logger.debug(f"Populated team data via TeamService for player {player_id}: {team.sname}")
-            # Fallback to direct API call
-            elif player.team_id:
-                client = await self.get_client()
-                team_data = await client.get('teams', object_id=player.team_id)
-                if team_data:
-                    player.team = Team.from_api_data(team_data)
-                    logger.debug(f"Populated team data via API for player {player_id}: {player.team.sname}")
-            
-            return player
-            
-        except Exception as e:
-            logger.error(f"Error getting player with team {player_id}: {e}")
-            return None
     
     async def get_players_by_team(self, team_id: int, season: int) -> List[Player]:
         """
@@ -168,19 +133,25 @@ class PlayerService(BaseService[Player]):
             logger.error(f"Error finding exact player match for '{name}': {e}")
             return None
     
-    async def search_players_fuzzy(self, query: str, limit: int = 10) -> List[Player]:
+    async def search_players_fuzzy(self, query: str, limit: int = 10, season: Optional[int] = None) -> List[Player]:
         """
-        Fuzzy search for players by name with limit.
+        Fuzzy search for players by name with limit using existing name search functionality.
         
         Args:
             query: Search query
             limit: Maximum results to return
+            season: Season to search in (defaults to current season)
             
         Returns:
             List of matching players (up to limit)
         """
         try:
-            players = await self.search(query)
+            if season is None:
+                from constants import SBA_CURRENT_SEASON
+                season = SBA_CURRENT_SEASON
+                
+            # Use the existing name-based search that actually works
+            players = await self.get_players_by_name(query, season)
             
             # Sort by relevance (exact matches first, then partial)
             query_lower = query.lower()

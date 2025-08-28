@@ -171,8 +171,8 @@ class EnhancedPlayerCommands(commands.Cog):
         season: int
     ):
         """Show detailed player information with action buttons."""
-        # Get full player data with team information
-        player_with_team = await player_service.get_player_with_team(player.id)
+        # Get full player data (API already includes team information)
+        player_with_team = await player_service.get_player(player.id)
         if player_with_team is None:
             player_with_team = player
         
@@ -182,7 +182,7 @@ class EnhancedPlayerCommands(commands.Cog):
         # Create detailed info view with action buttons
         async def refresh_player_data(interaction: discord.Interaction) -> discord.Embed:
             """Refresh player data."""
-            updated_player = await player_service.get_player_with_team(player.id)
+            updated_player = await player_service.get_player(player.id)
             return self._create_enhanced_player_embed(updated_player or player, season)
         
         async def show_more_details(interaction: discord.Interaction):

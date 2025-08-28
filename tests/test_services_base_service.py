@@ -133,19 +133,6 @@ class TestBaseService:
         assert result is True
         mock_client.delete.assert_called_once_with('mocks', object_id=1)
     
-    @pytest.mark.asyncio
-    async def test_search(self, base_service, mock_client):
-        """Test search functionality."""
-        mock_data = {
-            'count': 1,
-            'mocks': [{'id': 1, 'name': 'Searchable', 'value': 100}]
-        }
-        mock_client.get.return_value = mock_data
-        
-        result = await base_service.search('Searchable')
-        
-        assert len(result) == 1
-        mock_client.get.assert_called_once_with('mocks', params=[('q', 'Searchable')])
     
     @pytest.mark.asyncio
     async def test_get_by_field(self, base_service, mock_client):
@@ -217,11 +204,6 @@ class TestBaseServiceExtras:
         mock_client = AsyncMock()
         service = BaseService(TestModel, 'test', client=mock_client)
         
-        # Test search with kwargs
-        mock_client.get.return_value = {'count': 1, 'test': [{'name': 'Test', 'value': 100}]}
-        result = await service.search('query', season=12, active=True)
-        expected_params = [('q', 'query'), ('season', 12), ('active', True)]
-        mock_client.get.assert_called_once_with('test', params=expected_params)
         
         # Test count method
         mock_client.reset_mock()

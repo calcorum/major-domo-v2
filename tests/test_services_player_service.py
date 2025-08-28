@@ -56,29 +56,29 @@ class TestPlayerService:
         mock_client.get.assert_called_once_with('players', object_id=1)
     
     @pytest.mark.asyncio
-    async def test_get_player_with_team(self, player_service_instance, mock_client):
-        """Test player retrieval with team population."""
+    async def test_get_player_includes_team_data(self, player_service_instance, mock_client):
+        """Test that get_player returns data with team information (from API)."""
+        # API returns player data with team information already included
         player_data = self.create_player_data(1, 'Test Player', team_id=5)
-        team_data = {
+        player_data['team'] = {
             'id': 5,
-            'abbrev': 'TST',
+            'abbrev': 'TST', 
             'sname': 'Test Team',
             'lname': 'Test Team Long Name',
             'season': 12
         }
         
-        # Mock the get calls
-        mock_client.get.side_effect = [player_data, team_data]
+        mock_client.get.return_value = player_data
         
-        result = await player_service_instance.get_player_with_team(1)
+        result = await player_service_instance.get_player(1)
         
         assert isinstance(result, Player)
         assert result.name == 'Test Player'
         assert result.team is not None
         assert result.team.sname == 'Test Team'
         
-        # Should call get twice: once for player, once for team
-        assert mock_client.get.call_count == 2
+        # Should call get once for player (team data included in API response)
+        mock_client.get.assert_called_once_with('players', object_id=1)
     
     @pytest.mark.asyncio
     async def test_get_players_by_team(self, player_service_instance, mock_client):
@@ -182,7 +182,7 @@ class TestPlayerService:
         # Should return exact match first, then partial matches, limited to 2
         assert len(result) == 2
         assert result[0].name == 'John'  # exact match first
-        mock_client.get.assert_called_once_with('players', params=[('q', 'John')])
+        mock_client.get.assert_called_once_with('players', params=[('season', '12'), ('name', 'John')])
     
     @pytest.mark.asyncio
     async def test_get_players_by_position(self, player_service_instance, mock_client):

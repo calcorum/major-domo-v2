@@ -92,8 +92,8 @@ async def test_player_search():
             print(f"  ✅ Found Mike Trout: {player.name} (WARA: {player.wara})")
             
             # Get with team info
-            logger.debug("Testing get_player_with_team", player_id=player.id)
-            player_with_team = await player_service.get_player_with_team(player.id)
+            logger.debug("Testing get_player (with team data)", player_id=player.id)
+            player_with_team = await player_service.get_player(player.id)
             if player_with_team and hasattr(player_with_team, 'team') and player_with_team.team:
                 print(f"     Team: {player_with_team.team.abbrev} - {player_with_team.team.sname}")
                 logger.info("Player with team retrieved successfully",

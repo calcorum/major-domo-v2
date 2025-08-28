@@ -36,7 +36,8 @@ class TestBotConfig:
             'API_TOKEN': 'test_api_token',
             'DB_URL': 'https://api.example.com'
         }, clear=True):
-            config = BotConfig()
+            # Create config with disabled env file to test true defaults
+            config = BotConfig(_env_file=None)
             assert config.sba_season == 12
             assert config.pd_season == 9
             assert config.fa_lock_week == 14
@@ -186,7 +187,7 @@ class TestConfigValidation:
             'DB_URL': 'https://api.example.com'
         }, clear=True):
             with pytest.raises(Exception):  # Pydantic ValidationError
-                BotConfig()
+                BotConfig(_env_file=None)
         
         # Missing GUILD_ID
         with patch.dict(os.environ, {
@@ -195,7 +196,7 @@ class TestConfigValidation:
             'DB_URL': 'https://api.example.com'
         }, clear=True):
             with pytest.raises(Exception):  # Pydantic ValidationError
-                BotConfig()
+                BotConfig(_env_file=None)
     
     def test_invalid_guild_id_raises_error(self):
         """Test that invalid guild_id values raise validation errors."""

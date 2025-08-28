@@ -5,22 +5,24 @@ Provides consistent embed styling and templates for common use cases.
 """
 from typing import Optional, Union, Any, List
 from datetime import datetime
+from dataclasses import dataclass
 
 import discord
 
 from constants import SBA_CURRENT_SEASON
 
 
+@dataclass(frozen=True)
 class EmbedColors:
     """Standard color palette for embeds."""
-    PRIMARY = 0xa6ce39      # SBA green
-    SUCCESS = 0x28a745      # Green
-    WARNING = 0xffc107      # Yellow
-    ERROR = 0xdc3545        # Red
-    INFO = 0x17a2b8         # Blue
-    SECONDARY = 0x6c757d    # Gray
-    DARK = 0x343a40         # Dark gray
-    LIGHT = 0xf8f9fa        # Light gray
+    PRIMARY: int = 0xa6ce39      # SBA green
+    SUCCESS: int = 0x28a745      # Green
+    WARNING: int = 0xffc107      # Yellow
+    ERROR: int = 0xdc3545        # Red
+    INFO: int = 0x17a2b8         # Blue
+    SECONDARY: int = 0x6c757d    # Gray
+    DARK: int = 0x343a40         # Dark gray
+    LIGHT: int = 0xf8f9fa        # Light gray
 
 
 class EmbedTemplate:

@@ -40,3 +40,8 @@ class Current(SBABaseModel):
     def can_trade_picks(self) -> bool:
         """Check if draft pick trading is currently allowed."""
         return self.pick_trade_start <= self.week <= self.pick_trade_end
+    
+    @property
+    def ever_trade_picks(self) -> bool:
+        """Check if draft pick trading is allowed this season at all"""
+        return self.pick_trade_start <= self.playoffs_begin + 4

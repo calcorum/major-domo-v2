@@ -8,6 +8,7 @@ from pydantic import Field
 
 from models.base import SBABaseModel
 from models.team import Team
+from models.sbaplayer import SBAPlayer
 
 
 class Player(SBABaseModel):
@@ -20,12 +21,12 @@ class Player(SBABaseModel):
     wara: float = Field(..., description="Wins Above Replacement Average")
     season: int = Field(..., description="Season number")
     
-    # Team relationship
-    team_id: int = Field(..., description="Team ID this player belongs to")
-    team: Optional[Team] = Field(None, description="Team object (populated when needed)")
+    # Team relationship (team_id extracted from nested team object)
+    team_id: Optional[int] = Field(None, description="Team ID this player belongs to")
+    team: Optional[Team] = Field(None, description="Team object (populated from API)")
     
     # Images and media
-    image: str = Field(..., description="Primary player image URL")
+    image: Optional[str] = Field(None, description="Primary player image URL")
     image2: Optional[str] = Field(None, description="Secondary player image URL")
     vanity_card: Optional[str] = Field(None, description="Custom vanity card URL")
     headshot: Optional[str] = Field(None, description="Player headshot URL")
@@ -53,7 +54,7 @@ class Player(SBABaseModel):
     # External identifiers
     strat_code: Optional[str] = Field(None, description="Strat-o-matic code")
     bbref_id: Optional[str] = Field(None, description="Baseball Reference ID")
-    sbaplayer_id: Optional[int] = Field(None, description="SBA player ID")
+    sbaplayer: Optional[SBAPlayer] = Field(None, description="SBA player data object")
     
     @property
     def positions(self) -> List[str]:
@@ -91,11 +92,10 @@ class Player(SBABaseModel):
                 from models.team import Team
                 player_data['team'] = Team.from_api_data(team_data)
         
-        # Handle nested sbaplayer_id structure (API sometimes returns object instead of int)
-        if 'sbaplayer_id' in player_data and isinstance(player_data['sbaplayer_id'], dict):
-            sba_data = player_data['sbaplayer_id']
-            # Extract ID from nested object, or set to None if no valid ID
-            player_data['sbaplayer_id'] = sba_data.get('id') if sba_data.get('id') else None
+        # Handle sbaplayer structure (convert to SBAPlayer model)
+        if 'sbaplayer' in player_data and isinstance(player_data['sbaplayer'], dict):
+            sba_data = player_data['sbaplayer']
+            player_data['sbaplayer'] = SBAPlayer.from_api_data(sba_data)
         
         return super().from_api_data(player_data)
     

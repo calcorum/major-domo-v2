@@ -12,6 +12,7 @@ from constants import SBA_CURRENT_SEASON
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
 from exceptions import BotException
+from views.embeds import EmbedTemplate
 
 class LeagueInfoCommands(commands.Cog):
     """League information command handlers."""
@@ -31,67 +32,62 @@ class LeagueInfoCommands(commands.Cog):
         current_state = await league_service.get_current_state()
         
         if current_state is None:
-            embed = discord.Embed(
+            embed = EmbedTemplate.create_base_embed(
                 title="League Information Unavailable",
-                description="❌ Unable to retrieve current league information",
-                color=0xff6b6b
+                description="❌ Unable to retrieve current league information"
             )
             await interaction.followup.send(embed=embed)
             return
         
         # Create league info embed
-        embed = discord.Embed(
+        embed = EmbedTemplate.create_base_embed(
             title="🏆 SBA League Status",
-            description="Current league information and status",
-            color=0xa6ce39
+            description="Current league information and status"
         )
         
         # Basic league info
         embed.add_field(name="Season", value=str(current_state.season), inline=True)
         embed.add_field(name="Week", value=str(current_state.week), inline=True)
         
-        # League status
-        if current_state.freeze:
-            embed.add_field(name="Status", value="🔒 Frozen", inline=True)
-        else:
-            embed.add_field(name="Status", value="🟢 Active", inline=True)
-        
-        # Season phase
+        # Season phase - determine phase and add field first
         if current_state.is_offseason:
-            phase = "🏖️ Offseason"
+            embed.add_field(name="Timing", value="🏔️ Offseason", inline=True)
+            # Add offseason-specific fields here if needed
+            
         elif current_state.is_playoffs:
-            phase = "🏆 Playoffs"
+            embed.add_field(name="Phase", value="🏆 Playoffs", inline=True)
+            # Add playoff-specific fields here if needed
+            
         else:
-            phase = "⚾ Regular Season"
+            embed.add_field(name="Phase", value="⚾ Regular Season", inline=True)
         
-        embed.add_field(name="Phase", value=phase, inline=True)
+            # League status
+            if current_state.freeze:
+                embed.add_field(name="Transactions", value="🔒 Frozen", inline=True)
+            else:
+                embed.add_field(name="Transactions", value="🟢 Active", inline=True)
         
-        # Trading info
-        if current_state.can_trade_picks:
-            embed.add_field(name="Draft Pick Trading", value="✅ Open", inline=True)
-        else:
-            embed.add_field(name="Draft Pick Trading", value="❌ Closed", inline=True)
+            # Trade deadline info
+            embed.add_field(name="Trade Deadline", value=f"Week {current_state.trade_deadline}", inline=True)
         
-        # Trade deadline info
-        embed.add_field(name="Trade Deadline", value=f"Week {current_state.trade_deadline}", inline=True)
-        
-        # Additional info
-        embed.add_field(
-            name="Betting Week", 
-            value=current_state.bet_week, 
-            inline=True
-        )
-        
-        if current_state.playoffs_begin <= 18:
+            # Playoff timing
             embed.add_field(
                 name="Playoffs Begin", 
                 value=f"Week {current_state.playoffs_begin}", 
                 inline=True
             )
-        
-        self.logger.info("League info displayed successfully", 
-                   season=current_state.season,
-                   week=current_state.week,
-                   phase=phase)
+    
+        if current_state.ever_trade_picks:
+            if current_state.can_trade_picks:
+                embed.add_field(name="Draft Pick Trading", value="✅ Open", inline=True)
+            else:
+                embed.add_field(name="Draft Pick Trading", value="❌ Closed", inline=True)
+
+        # Additional info
+        embed.add_field(
+            name="Sheets Card ID", 
+            value=current_state.bet_week, 
+            inline=True
+        )
         
         await interaction.followup.send(embed=embed)

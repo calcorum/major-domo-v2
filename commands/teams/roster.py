@@ -13,6 +13,7 @@ from constants import SBA_CURRENT_SEASON
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
 from exceptions import BotException
+from views.embeds import EmbedTemplate, EmbedColors
 
 
 class TeamRosterCommands(commands.Cog):
@@ -43,10 +44,9 @@ class TeamRosterCommands(commands.Cog):
         
         if team is None:
             self.logger.info("Team not found", team_abbrev=abbrev)
-            embed = discord.Embed(
+            embed = EmbedTemplate.error(
                 title="Team Not Found",
-                description=f"No team found with abbreviation '{abbrev.upper()}'",
-                color=0xff6b6b
+                description=f"No team found with abbreviation '{abbrev.upper()}'"
             )
             await interaction.followup.send(embed=embed)
             return
@@ -55,21 +55,15 @@ class TeamRosterCommands(commands.Cog):
         roster_data = await team_service.get_team_roster(team.id, roster_type)
         
         if not roster_data:
-            embed = discord.Embed(
+            embed = EmbedTemplate.error(
                 title="Roster Not Available",
-                description=f"No {roster_type} roster data available for {team.abbrev}",
-                color=0xff6b6b
+                description=f"No {roster_type} roster data available for {team.abbrev}"
             )
             await interaction.followup.send(embed=embed)
             return
         
         # Create roster embeds
         embeds = await self._create_roster_embeds(team, roster_data, roster_type)
-        
-        self.logger.info("Team roster displayed successfully", 
-                   team_id=team.id,
-                   team_abbrev=team.abbrev,
-                   roster_type=roster_type)
         
         # Send first embed and follow up with others if needed
         await interaction.followup.send(embed=embeds[0])
@@ -82,10 +76,10 @@ class TeamRosterCommands(commands.Cog):
         embeds = []
         
         # Main roster embed
-        embed = discord.Embed(
+        embed = EmbedTemplate.create_base_embed(
             title=f"{team.abbrev} - {roster_type.title()} Roster",
             description=f"{team.lname} roster breakdown",
-            color=int(team.color, 16) if team.color else 0xa6ce39
+            color=int(team.color, 16) if team.color else EmbedColors.PRIMARY
         )
         
         # Position counts for active roster
@@ -121,7 +115,7 @@ class TeamRosterCommands(commands.Cog):
             # Total WAR
             total_war = active_roster.get('WARa', 0)
             embed.add_field(
-                name="Total WARa", 
+                name="Total sWAR", 
                 value=f"{total_war:.1f}" if isinstance(total_war, (int, float)) else str(total_war), 
                 inline=True
             )
@@ -129,11 +123,11 @@ class TeamRosterCommands(commands.Cog):
         # Add injury list summaries
         if 'shortil' in roster_data and roster_data['shortil']:
             short_il_count = len(roster_data['shortil'].get('players', []))
-            embed.add_field(name="Short IL", value=f"{short_il_count} players", inline=True)
+            embed.add_field(name="Minor League", value=f"{short_il_count} players", inline=True)
         
         if 'longil' in roster_data and roster_data['longil']:
             long_il_count = len(roster_data['longil'].get('players', []))
-            embed.add_field(name="Long IL", value=f"{long_il_count} players", inline=True)
+            embed.add_field(name="Injured List", value=f"{long_il_count} players", inline=True)
         
         embeds.append(embed)
         
@@ -154,13 +148,13 @@ class TeamRosterCommands(commands.Cog):
         """Create an embed with detailed player list."""
         roster_titles = {
             'active': 'Active Roster',
-            'shortil': 'Short IL',
-            'longil': 'Long IL'
+            'shortil': 'Minor League',
+            'longil': 'Injured List'
         }
         
-        embed = discord.Embed(
+        embed = EmbedTemplate.create_base_embed(
             title=f"{team.abbrev} - {roster_titles.get(roster_name, roster_name.title())}",
-            color=int(team.color, 16) if team.color else 0xa6ce39
+            color=int(team.color, 16) if team.color else EmbedColors.PRIMARY
         )
         
         # Group players by position for better organization

@@ -10,7 +10,8 @@ import discord
 from discord.ext import commands
 
 from .info import LeagueInfoCommands
-# from .standings import LeagueStandingsCommands  # Module not available yet
+from .standings import StandingsCommands
+from .schedule import ScheduleCommands
 
 logger = logging.getLogger(f'{__name__}.setup_league')
 
@@ -24,7 +25,8 @@ async def setup_league(bot: commands.Bot) -> Tuple[int, int, List[str]]:
     """
     league_cogs: List[Tuple[str, Type[commands.Cog]]] = [
         ("LeagueInfoCommands", LeagueInfoCommands),
-        # ("LeagueStandingsCommands", LeagueStandingsCommands),  # Module not available yet
+        ("StandingsCommands", StandingsCommands),
+        ("ScheduleCommands", ScheduleCommands),
     ]
     
     successful = 0

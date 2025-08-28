@@ -16,6 +16,8 @@ from discord.ext import commands
 from config import get_config
 from exceptions import BotException
 from api.client import get_global_client, cleanup_global_client
+from utils.random_gen import STARTUP_WATCHING, random_from_list
+from views.embeds import EmbedTemplate, EmbedColors
 
 
 def setup_logging():
@@ -88,6 +90,9 @@ class SBABot(commands.Bot):
         # Load command packages
         await self._load_command_packages()
         
+        # Initialize cleanup tasks
+        await self._setup_background_tasks()
+        
         # Smart command syncing: auto-sync in development if changes detected
         config = get_config()
         if config.is_development:
@@ -106,14 +111,16 @@ class SBABot(commands.Bot):
         from commands.players import setup_players
         from commands.teams import setup_teams
         from commands.league import setup_league
+        from commands.custom_commands import setup_custom_commands
+        from commands.admin import setup_admin
         
         # Define command packages to load
         command_packages = [
             ("players", setup_players),
             ("teams", setup_teams),
             ("league", setup_league),
-            # Future packages:
-            # ("admin", setup_admin),
+            ("custom_commands", setup_custom_commands),
+            ("admin", setup_admin),
         ]
         
         total_successful = 0
@@ -140,6 +147,20 @@ class SBABot(commands.Bot):
             self.logger.info(f"🎉 All command packages loaded successfully ({total_successful} total cogs)")
         else:
             self.logger.warning(f"⚠️  Command loading completed with issues: {total_successful} successful, {total_failed} failed")
+    
+    async def _setup_background_tasks(self):
+        """Initialize background tasks for the bot."""
+        try:
+            self.logger.info("Setting up background tasks...")
+            
+            # Initialize custom command cleanup task
+            from tasks.custom_command_cleanup import setup_cleanup_task
+            self.custom_command_cleanup = setup_cleanup_task(self)
+            
+            self.logger.info("✅ Background tasks initialized successfully")
+            
+        except Exception as e:
+            self.logger.error(f"❌ Failed to initialize background tasks: {e}", exc_info=True)
     
     async def _should_sync_commands(self) -> bool:
         """Check if commands have changed since last sync."""
@@ -256,13 +277,29 @@ class SBABot(commands.Bot):
         # Set activity status
         activity = discord.Activity(
             type=discord.ActivityType.watching,
-            name="SBA League Management"
+            name=random_from_list(STARTUP_WATCHING)
         )
         await self.change_presence(activity=activity)
     
     async def on_error(self, event_method: str, /, *args, **kwargs):
         """Global error handler for events."""
         self.logger.error(f"Error in event {event_method}", exc_info=True)
+    
+    async def close(self):
+        """Clean shutdown of the bot."""
+        self.logger.info("Bot shutting down...")
+        
+        # Stop background tasks
+        if hasattr(self, 'custom_command_cleanup'):
+            try:
+                self.custom_command_cleanup.cleanup_task.cancel()
+                self.logger.info("Custom command cleanup task stopped")
+            except Exception as e:
+                self.logger.error(f"Error stopping cleanup task: {e}")
+        
+        # Call parent close method
+        await super().close()
+        self.logger.info("Bot shutdown complete")
 
 
 # Create global bot instance
@@ -290,14 +327,11 @@ async def health_command(interaction: discord.Interaction):
             api_status = f"❌ Error: {str(e)}"
         
         # Bot health info
-        bot_uptime = discord.utils.utcnow() - bot.user.created_at if bot.user else None
         guild_count = len(bot.guilds)
         
         # Create health status embed
-        embed = discord.Embed(
-            title="🏥 Bot Health Check",
-            color=discord.Color.green(),
-            timestamp=discord.utils.utcnow()
+        embed = EmbedTemplate.success(
+            title="🏥 Bot Health Check"
         )
         
         embed.add_field(name="Bot Status", value="✅ Online", inline=True)

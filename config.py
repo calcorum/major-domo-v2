@@ -26,6 +26,10 @@ class BotConfig(BaseSettings):
     environment: str = "development"
     testing: bool = False
     
+    # Optional Redis caching settings
+    redis_url: str = ""  # Empty string means no Redis caching
+    redis_cache_ttl: int = 300  # 5 minutes default TTL
+    
     model_config = SettingsConfigDict(
         env_file=".env",
         case_sensitive=False,

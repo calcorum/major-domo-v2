@@ -13,6 +13,7 @@ from services.team_service import team_service
 from models.team import Team
 from constants import SBA_CURRENT_SEASON
 from utils.logging import get_contextual_logger
+from views.embeds import EmbedTemplate, EmbedColors
 from utils.decorators import logged_command
 
 # Import new view components
@@ -51,10 +52,9 @@ class MigrationExampleCommands(commands.Cog):
         teams = await team_service.get_teams_by_season(season)
         
         if not teams:
-            embed = discord.Embed(
+            embed = EmbedTemplate.error(
                 title="No Teams Found",
-                description=f"No teams found for season {season}",
-                color=0xff6b6b
+                description=f"No teams found for season {season}"
             )
             await interaction.followup.send(embed=embed)
             return
@@ -63,9 +63,9 @@ class MigrationExampleCommands(commands.Cog):
         teams.sort(key=lambda t: t.abbrev)
         
         # Create basic embed
-        embed = discord.Embed(
+        embed = EmbedTemplate.create_base_embed(
             title=f"SBA Teams - Season {season}",
-            color=0xa6ce39
+            color=EmbedColors.PRIMARY
         )
         
         # Simple list - limited functionality

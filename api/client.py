@@ -309,6 +309,70 @@ class APIClient:
             logger.error(f"Unexpected error in PUT {url}: {e}")
             raise APIException(f"PUT failed: {e}")
     
+    async def patch(
+        self, 
+        endpoint: str, 
+        data: Optional[Dict[str, Any]] = None,
+        object_id: Optional[int] = None,
+        api_version: int = 3,
+        timeout: Optional[int] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Make PATCH request to API.
+        
+        Args:
+            endpoint: API endpoint
+            data: Request payload (optional for some PATCH operations)
+            object_id: Optional object ID
+            api_version: API version (default: 3)
+            timeout: Request timeout override
+            
+        Returns:
+            JSON response data
+            
+        Raises:
+            APIException: For HTTP errors or network issues
+        """
+        url = self._build_url(endpoint, api_version, object_id)
+        
+        await self._ensure_session()
+        
+        try:
+            logger.debug(f"PATCH: {endpoint} id: {object_id} data: {data}")
+            
+            request_timeout = aiohttp.ClientTimeout(total=timeout) if timeout else None
+            
+            # Use json=data if data is provided, otherwise send empty body
+            kwargs = {}
+            if data is not None:
+                kwargs['json'] = data
+            
+            async with self._session.patch(url, timeout=request_timeout, **kwargs) as response:
+                if response.status == 401:
+                    logger.error(f"Authentication failed for PATCH: {url}")
+                    raise APIException("Authentication failed - check API token")
+                elif response.status == 403:
+                    logger.error(f"Access forbidden for PATCH: {url}")
+                    raise APIException("Access forbidden - insufficient permissions")
+                elif response.status == 404:
+                    logger.warning(f"Resource not found for PATCH: {url}")
+                    return None
+                elif response.status not in [200, 201]:
+                    error_text = await response.text()
+                    logger.error(f"PATCH error {response.status}: {url} - {error_text}")
+                    raise APIException(f"PATCH request failed with status {response.status}: {error_text}")
+                
+                result = await response.json()
+                logger.debug(f"PATCH Response: {str(result)[:1200]}{'...' if len(str(result)) > 1200 else ''}")
+                return result
+                
+        except aiohttp.ClientError as e:
+            logger.error(f"HTTP client error for PATCH {url}: {e}")
+            raise APIException(f"Network error: {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error in PATCH {url}: {e}")
+            raise APIException(f"PATCH failed: {e}")
+    
     async def delete(
         self, 
         endpoint: str, 

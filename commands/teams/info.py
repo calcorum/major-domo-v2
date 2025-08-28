@@ -13,6 +13,7 @@ from constants import SBA_CURRENT_SEASON
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
 from exceptions import BotException
+from views.embeds import EmbedTemplate, EmbedColors
 
 
 class TeamInfoCommands(commands.Cog):
@@ -41,10 +42,9 @@ class TeamInfoCommands(commands.Cog):
         
         if team is None:
             self.logger.info("Team not found", team_abbrev=abbrev, season=season)
-            embed = discord.Embed(
+            embed = EmbedTemplate.error(
                 title="Team Not Found",
-                description=f"No team found with abbreviation '{abbrev.upper()}' in season {season}",
-                color=0xff6b6b
+                description=f"No team found with abbreviation '{abbrev.upper()}' in season {season}"
             )
             await interaction.followup.send(embed=embed)
             return
@@ -54,11 +54,6 @@ class TeamInfoCommands(commands.Cog):
         
         # Create main embed
         embed = await self._create_team_embed(team, standings_data)
-        
-        self.logger.info("Team info displayed successfully", 
-                   team_id=team.id,
-                   team_name=team.lname,
-                   season=season)
         
         await interaction.followup.send(embed=embed)
     
@@ -76,10 +71,9 @@ class TeamInfoCommands(commands.Cog):
         teams = await team_service.get_teams_by_season(season)
         
         if not teams:
-            embed = discord.Embed(
+            embed = EmbedTemplate.error(
                 title="No Teams Found",
-                description=f"No teams found for season {season}",
-                color=0xff6b6b
+                description=f"No teams found for season {season}"
             )
             await interaction.followup.send(embed=embed)
             return
@@ -88,9 +82,9 @@ class TeamInfoCommands(commands.Cog):
         teams.sort(key=lambda t: t.abbrev)
         
         # Create embed with team list
-        embed = discord.Embed(
+        embed = EmbedTemplate.create_base_embed(
             title=f"SBA Teams - Season {season}",
-            color=0xa6ce39
+            color=EmbedColors.PRIMARY
         )
         
         # Group teams by division if available
@@ -113,18 +107,14 @@ class TeamInfoCommands(commands.Cog):
         
         embed.set_footer(text=f"Total: {len(teams)} teams")
         
-        self.logger.info("Teams list displayed successfully", 
-                   season=season, 
-                   team_count=len(teams))
-        
         await interaction.followup.send(embed=embed)
     
     async def _create_team_embed(self, team: Team, standings_data: Optional[dict] = None) -> discord.Embed:
         """Create a rich embed for team information."""
-        embed = discord.Embed(
+        embed = EmbedTemplate.create_base_embed(
             title=f"{team.abbrev} - {team.lname}",
             description=f"Season {team.season} Team Information",
-            color=int(team.color, 16) if team.color else 0xa6ce39
+            color=int(team.color, 16) if team.color else EmbedColors.PRIMARY
         )
         
         # Basic team info
