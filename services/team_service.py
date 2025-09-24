@@ -7,7 +7,7 @@ import logging
 from typing import Optional, List, Dict, Any
 
 from services.base_service import BaseService
-from models.team import Team
+from models.team import Team, RosterType
 from constants import SBA_CURRENT_SEASON
 from exceptions import APIException
 
@@ -50,6 +50,52 @@ class TeamService(BaseService[Team]):
         except Exception as e:
             logger.error(f"Unexpected error getting team {team_id}: {e}")
             return None
+    
+    async def get_teams_by_owner(
+        self,
+        owner_id: int,
+        season: Optional[int] = None,
+        roster_type: Optional[str] = None
+    ) -> List[Team]:
+        """
+        Get teams owned by a specific Discord user.
+
+        Args:
+            owner_id: Discord user ID
+            season: Season number (defaults to current season)
+            roster_type: Filter by roster type ('ml', 'mil', 'il') - optional
+
+        Returns:
+            List of Team instances owned by the user, optionally filtered by type
+        """
+        try:
+            season = season or SBA_CURRENT_SEASON
+            params = [
+                ('owner_id', str(owner_id)),
+                ('season', str(season))
+            ]
+            
+            teams = await self.get_all_items(params=params)
+
+            # Filter by roster type if specified
+            if roster_type and teams:
+                try:
+                    target_type = RosterType(roster_type)
+                    teams = [team for team in teams if team.roster_type() == target_type]
+                    logger.debug(f"Filtered to {len(teams)} {roster_type} teams for owner {owner_id}")
+                except ValueError:
+                    logger.warning(f"Invalid roster_type '{roster_type}' - returning all teams")
+
+            if teams:
+                logger.debug(f"Found {len(teams)} teams for owner {owner_id} in season {season}")
+                return teams
+            
+            logger.debug(f"No teams found for owner {owner_id} in season {season}")
+            return []
+            
+        except Exception as e:
+            logger.error(f"Error getting teams for owner {owner_id}: {e}")
+            return []
     
     async def get_team_by_abbrev(self, abbrev: str, season: Optional[int] = None) -> Optional[Team]:
         """

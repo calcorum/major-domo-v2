@@ -4,6 +4,7 @@ League Schedule Commands
 Implements slash commands for displaying game schedules and results.
 """
 from typing import Optional
+import asyncio
 
 import discord
 from discord.ext import commands
@@ -42,27 +43,17 @@ class ScheduleCommands(commands.Cog):
         """Display game schedule for a week or team."""
         await interaction.response.defer()
         
-        try:
-            search_season = season or SBA_CURRENT_SEASON
-            
-            if team:
-                # Show team schedule
-                await self._show_team_schedule(interaction, search_season, team, week)
-            elif week:
-                # Show specific week schedule
-                await self._show_week_schedule(interaction, search_season, week)
-            else:
-                # Show recent/upcoming games
-                await self._show_current_schedule(interaction, search_season)
-                
-        except Exception as e:
-            error_msg = f"❌ Error retrieving schedule: {str(e)}"
-            
-            if interaction.response.is_done():
-                await interaction.followup.send(error_msg, ephemeral=True)
-            else:
-                await interaction.response.send_message(error_msg, ephemeral=True)
-            raise
+        search_season = season or SBA_CURRENT_SEASON
+        
+        if team:
+            # Show team schedule
+            await self._show_team_schedule(interaction, search_season, team, week)
+        elif week:
+            # Show specific week schedule
+            await self._show_week_schedule(interaction, search_season, week)
+        else:
+            # Show recent/upcoming games
+            await self._show_current_schedule(interaction, search_season)
     
     @discord.app_commands.command(
         name="results",
@@ -82,45 +73,35 @@ class ScheduleCommands(commands.Cog):
         """Display recent game results."""
         await interaction.response.defer()
         
-        try:
-            search_season = season or SBA_CURRENT_SEASON
+        search_season = season or SBA_CURRENT_SEASON
+        
+        if week:
+            # Show specific week results
+            games = await schedule_service.get_week_schedule(search_season, week)
+            completed_games = [game for game in games if game.is_completed]
             
-            if week:
-                # Show specific week results
-                games = await schedule_service.get_week_schedule(search_season, week)
-                completed_games = [game for game in games if game.is_completed]
-                
-                if not completed_games:
-                    await interaction.followup.send(
-                        f"❌ No completed games found for season {search_season}, week {week}.",
-                        ephemeral=True
-                    )
-                    return
-                
-                embed = await self._create_week_results_embed(completed_games, search_season, week)
-                await interaction.followup.send(embed=embed)
-            else:
-                # Show recent results
-                recent_games = await schedule_service.get_recent_games(search_season)
-                
-                if not recent_games:
-                    await interaction.followup.send(
-                        f"❌ No recent games found for season {search_season}.",
-                        ephemeral=True
-                    )
-                    return
-                
-                embed = await self._create_recent_results_embed(recent_games, search_season)
-                await interaction.followup.send(embed=embed)
-                
-        except Exception as e:
-            error_msg = f"❌ Error retrieving results: {str(e)}"
+            if not completed_games:
+                await interaction.followup.send(
+                    f"❌ No completed games found for season {search_season}, week {week}.",
+                    ephemeral=True
+                )
+                return
             
-            if interaction.response.is_done():
-                await interaction.followup.send(error_msg, ephemeral=True)
-            else:
-                await interaction.response.send_message(error_msg, ephemeral=True)
-            raise
+            embed = await self._create_week_results_embed(completed_games, search_season, week)
+            await interaction.followup.send(embed=embed)
+        else:
+            # Show recent results
+            recent_games = await schedule_service.get_recent_games(search_season)
+            
+            if not recent_games:
+                await interaction.followup.send(
+                    f"❌ No recent games found for season {search_season}.",
+                    ephemeral=True
+                )
+                return
+            
+            embed = await self._create_recent_results_embed(recent_games, search_season)
+            await interaction.followup.send(embed=embed)
     
     async def _show_week_schedule(self, interaction: discord.Interaction, season: int, week: int):
         """Show schedule for a specific week."""
@@ -169,8 +150,10 @@ class ScheduleCommands(commands.Cog):
         self.logger.debug("Fetching current schedule overview", season=season)
         
         # Get both recent and upcoming games
-        recent_games = await schedule_service.get_recent_games(season, weeks_back=1)
-        upcoming_games = await schedule_service.get_upcoming_games(season, weeks_ahead=1)
+        recent_games, upcoming_games = await asyncio.gather(
+            schedule_service.get_recent_games(season, weeks_back=1),
+            schedule_service.get_upcoming_games(season, weeks_ahead=1)
+        )
         
         if not recent_games and not upcoming_games:
             await interaction.followup.send(

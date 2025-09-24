@@ -133,15 +133,50 @@ class PlayerService(BaseService[Player]):
             logger.error(f"Error finding exact player match for '{name}': {e}")
             return None
     
+    async def search_players(self, query: str, limit: int = 10, season: Optional[int] = None) -> List[Player]:
+        """
+        Search for players using the dedicated /v3/players/search endpoint.
+
+        Args:
+            query: Search query for player name
+            limit: Maximum number of results to return (1-50)
+            season: Season to search in (defaults to current season)
+
+        Returns:
+            List of matching players (up to limit)
+        """
+        try:
+            params = [('q', query), ('limit', str(limit))]
+            if season is not None:
+                params.append(('season', str(season)))
+
+            client = await self.get_client()
+            data = await client.get('players/search', params=params)
+
+            if not data:
+                logger.debug(f"No players found for search query '{query}'")
+                return []
+
+            # Handle API response format: {'count': int, 'players': [...]}
+            items, count = self._extract_items_and_count_from_response(data)
+            players = [self.model_class.from_api_data(item) for item in items]
+
+            logger.debug(f"Search '{query}' returned {len(players)} of {count} matches")
+            return players
+
+        except Exception as e:
+            logger.error(f"Error in player search for '{query}': {e}")
+            return []
+
     async def search_players_fuzzy(self, query: str, limit: int = 10, season: Optional[int] = None) -> List[Player]:
         """
         Fuzzy search for players by name with limit using existing name search functionality.
-        
+
         Args:
             query: Search query
             limit: Maximum results to return
             season: Season to search in (defaults to current season)
-            
+
         Returns:
             List of matching players (up to limit)
         """
@@ -149,29 +184,29 @@ class PlayerService(BaseService[Player]):
             if season is None:
                 from constants import SBA_CURRENT_SEASON
                 season = SBA_CURRENT_SEASON
-                
+
             # Use the existing name-based search that actually works
             players = await self.get_players_by_name(query, season)
-            
+
             # Sort by relevance (exact matches first, then partial)
             query_lower = query.lower()
             exact_matches = []
             partial_matches = []
-            
+
             for player in players:
                 name_lower = player.name.lower()
                 if name_lower == query_lower:
                     exact_matches.append(player)
                 elif query_lower in name_lower:
                     partial_matches.append(player)
-            
+
             # Combine and limit results
             results = exact_matches + partial_matches
             limited_results = results[:limit]
-            
+
             logger.debug(f"Fuzzy search '{query}' returned {len(limited_results)} of {len(results)} matches")
             return limited_results
-            
+
         except Exception as e:
             logger.error(f"Error in fuzzy search for '{query}': {e}")
             return []

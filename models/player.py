@@ -82,20 +82,29 @@ class Player(SBABaseModel):
         # Make a copy to avoid modifying original data
         player_data = data.copy()
         
-        # Handle nested team structure
-        if 'team' in player_data and isinstance(player_data['team'], dict):
-            team_data = player_data['team']
-            # Extract team_id from nested team object
-            player_data['team_id'] = team_data.get('id')
-            # Keep team object for optional population
-            if team_data.get('id'):
-                from models.team import Team
-                player_data['team'] = Team.from_api_data(team_data)
-        
-        # Handle sbaplayer structure (convert to SBAPlayer model)
-        if 'sbaplayer' in player_data and isinstance(player_data['sbaplayer'], dict):
-            sba_data = player_data['sbaplayer']
-            player_data['sbaplayer'] = SBAPlayer.from_api_data(sba_data)
+        # Handle team structure - can be nested object or just ID
+        if 'team' in player_data:
+            if isinstance(player_data['team'], dict):
+                # Nested team object from regular endpoints
+                team_data = player_data['team']
+                player_data['team_id'] = team_data.get('id')
+                if team_data.get('id'):
+                    from models.team import Team
+                    player_data['team'] = Team.from_api_data(team_data)
+            elif isinstance(player_data['team'], int):
+                # Team ID only from search endpoints
+                player_data['team_id'] = player_data['team']
+                player_data['team'] = None  # No nested team object available
+
+        # Handle sbaplayer structure - can be nested object or just ID
+        if 'sbaplayer' in player_data:
+            if isinstance(player_data['sbaplayer'], dict):
+                # Nested sbaplayer object
+                sba_data = player_data['sbaplayer']
+                player_data['sbaplayer'] = SBAPlayer.from_api_data(sba_data)
+            elif isinstance(player_data['sbaplayer'], int):
+                # SBA player ID only from search endpoints
+                player_data['sbaplayer'] = None  # No nested object available
         
         return super().from_api_data(player_data)
     

@@ -4,10 +4,19 @@ Team model for SBA teams
 Represents a team in the league with all associated metadata.
 """
 from typing import Optional
+from enum import Enum
 from pydantic import Field
 
 from models.base import SBABaseModel
 from models.division import Division
+
+
+class RosterType(Enum):
+    """Roster designation types."""
+    MAJOR_LEAGUE = "ml"
+    MINOR_LEAGUE = "mil"
+    INJURED_LIST = "il"
+    FREE_AGENCY = "fa"
 
 
 class Team(SBABaseModel):
@@ -56,6 +65,33 @@ class Team(SBABaseModel):
                 team_data['division'] = Division.from_api_data(division_data)
         
         return super().from_api_data(team_data)
+    
+    def roster_type(self) -> RosterType:
+        """Determine the roster type based on team abbreviation."""
+        if len(self.abbrev) <= 3:
+            return RosterType.MAJOR_LEAGUE
+
+        # For teams with extended abbreviations, check suffix patterns
+        abbrev_lower = self.abbrev.lower()
+
+        # Pattern analysis:
+        # - Minor League: ends with 'mil' (e.g., NYYMIL, BHMMIL)
+        # - Injured List: ends with 'il' but not 'mil' (e.g., NYYIL, BOSIL)
+        # - Edge case: teams whose base abbrev ends in 'M' + 'IL' = 'MIL'
+        #   Only applies if removing 'IL' gives us exactly a 3-char base team
+
+        if abbrev_lower.endswith('mil'):
+            # Check if this is actually [BaseTeam]IL where BaseTeam ends in 'M'
+            # E.g., BHMIL = BHM + IL (injured list), not minor league
+            if len(self.abbrev) == 5:  # Exactly 5 chars: 3-char base + IL
+                potential_base = self.abbrev[:-2]  # Remove 'IL'
+                if len(potential_base) == 3 and potential_base.upper().endswith('M'):
+                    return RosterType.INJURED_LIST
+            return RosterType.MINOR_LEAGUE
+        elif abbrev_lower.endswith('il'):
+            return RosterType.INJURED_LIST
+        else:
+            return RosterType.MAJOR_LEAGUE
     
     def __str__(self):
         return f"{self.abbrev} - {self.lname}"

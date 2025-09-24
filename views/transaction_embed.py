@@ -1,0 +1,549 @@
+"""
+Interactive Transaction Embed Views
+
+Handles the Discord embed and button interfaces for the transaction builder.
+"""
+import discord
+from typing import Optional, List
+from datetime import datetime
+
+from services.transaction_builder import TransactionBuilder, RosterValidationResult
+from views.embeds import EmbedColors, EmbedTemplate
+
+
+class TransactionEmbedView(discord.ui.View):
+    """Interactive view for the transaction builder embed."""
+    
+    def __init__(self, builder: TransactionBuilder, user_id: int):
+        """
+        Initialize the transaction embed view.
+        
+        Args:
+            builder: TransactionBuilder instance
+            user_id: Discord user ID (for permission checking)
+        """
+        super().__init__(timeout=900.0)  # 15 minute timeout
+        self.builder = builder
+        self.user_id = user_id
+    
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        """Check if user has permission to interact with this view."""
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message(
+                "❌ You don't have permission to use this transaction builder.",
+                ephemeral=True
+            )
+            return False
+        return True
+    
+    async def on_timeout(self) -> None:
+        """Handle view timeout."""
+        # Disable all buttons when timeout occurs
+        for item in self.children:
+            if isinstance(item, discord.ui.Button):
+                item.disabled = True
+    
+    @discord.ui.button(label="Add Move", style=discord.ButtonStyle.green, emoji="➕")
+    async def add_move_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Handle add move button click."""
+        # Create modal for player selection
+        modal = PlayerSelectionModal(self.builder)
+        await interaction.response.send_modal(modal)
+    
+    @discord.ui.button(label="Remove Move", style=discord.ButtonStyle.red, emoji="➖")
+    async def remove_move_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Handle remove move button click."""
+        if self.builder.is_empty:
+            await interaction.response.send_message(
+                "❌ No moves to remove. Add some moves first!",
+                ephemeral=True
+            )
+            return
+        
+        # Create select menu for move removal
+        select_view = RemoveMoveView(self.builder, self.user_id)
+        embed = await create_transaction_embed(self.builder)
+        
+        await interaction.response.edit_message(embed=embed, view=select_view)
+    
+    @discord.ui.button(label="Preview", style=discord.ButtonStyle.blurple, emoji="👁️")
+    async def preview_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Handle preview button click."""
+        if self.builder.is_empty:
+            await interaction.response.send_message(
+                "❌ No moves to preview. Add some moves first!",
+                ephemeral=True
+            )
+            return
+        
+        # Show detailed preview
+        embed = await create_preview_embed(self.builder)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+    
+    @discord.ui.button(label="Submit Transaction", style=discord.ButtonStyle.primary, emoji="📤")
+    async def submit_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Handle submit transaction button click."""
+        if self.builder.is_empty:
+            await interaction.response.send_message(
+                "❌ Cannot submit empty transaction. Add some moves first!",
+                ephemeral=True
+            )
+            return
+        
+        # Validate before submission
+        validation = await self.builder.validate_transaction()
+        if not validation.is_legal:
+            error_msg = "❌ **Cannot submit illegal transaction:**\n"
+            error_msg += "\n".join([f"• {error}" for error in validation.errors])
+            
+            if validation.suggestions:
+                error_msg += "\n\n**Suggestions:**\n"
+                error_msg += "\n".join([f"💡 {suggestion}" for suggestion in validation.suggestions])
+            
+            await interaction.response.send_message(error_msg, ephemeral=True)
+            return
+        
+        # Show confirmation modal
+        modal = SubmitConfirmationModal(self.builder)
+        await interaction.response.send_modal(modal)
+    
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary, emoji="❌")
+    async def cancel_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Handle cancel button click."""
+        self.builder.clear_moves()
+        embed = await create_transaction_embed(self.builder)
+        
+        # Disable all buttons after cancellation
+        for item in self.children:
+            if isinstance(item, discord.ui.Button):
+                item.disabled = True
+        
+        await interaction.response.edit_message(
+            content="❌ **Transaction cancelled and cleared.**",
+            embed=embed,
+            view=self
+        )
+        self.stop()
+
+
+class RemoveMoveView(discord.ui.View):
+    """View for selecting which move to remove."""
+    
+    def __init__(self, builder: TransactionBuilder, user_id: int):
+        super().__init__(timeout=300.0)  # 5 minute timeout
+        self.builder = builder
+        self.user_id = user_id
+        
+        # Create select menu with current moves
+        if not builder.is_empty:
+            self.add_item(RemoveMoveSelect(builder))
+        
+        # Add back button
+        back_button = discord.ui.Button(label="Back", style=discord.ButtonStyle.secondary, emoji="⬅️")
+        back_button.callback = self.back_callback
+        self.add_item(back_button)
+    
+    async def back_callback(self, interaction: discord.Interaction):
+        """Handle back button to return to main view."""
+        main_view = TransactionEmbedView(self.builder, self.user_id)
+        embed = await create_transaction_embed(self.builder)
+        await interaction.response.edit_message(embed=embed, view=main_view)
+    
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        """Check if user has permission to interact with this view."""
+        return interaction.user.id == self.user_id
+
+
+class RemoveMoveSelect(discord.ui.Select):
+    """Select menu for choosing which move to remove."""
+    
+    def __init__(self, builder: TransactionBuilder):
+        self.builder = builder
+        
+        # Create options from current moves
+        options = []
+        for i, move in enumerate(builder.moves[:25]):  # Discord limit of 25 options
+            options.append(discord.SelectOption(
+                label=f"{move.player.name}",
+                description=move.description[:100],  # Discord description limit
+                value=str(move.player.id)
+            ))
+        
+        super().__init__(
+            placeholder="Select a move to remove...",
+            min_values=1,
+            max_values=1,
+            options=options
+        )
+    
+    async def callback(self, interaction: discord.Interaction):
+        """Handle move removal selection."""
+        player_id = int(self.values[0])
+        move = self.builder.get_move_for_player(player_id)
+        
+        if move:
+            self.builder.remove_move(player_id)
+            await interaction.response.send_message(
+                f"✅ Removed: {move.description}",
+                ephemeral=True
+            )
+            
+            # Update the embed
+            main_view = TransactionEmbedView(self.builder, interaction.user.id)
+            embed = await create_transaction_embed(self.builder)
+            
+            # Edit the original message
+            await interaction.edit_original_response(embed=embed, view=main_view)
+        else:
+            await interaction.response.send_message(
+                "❌ Could not find that move to remove.",
+                ephemeral=True
+            )
+
+
+class PlayerSelectionModal(discord.ui.Modal):
+    """Modal for selecting player and destination."""
+    
+    def __init__(self, builder: TransactionBuilder):
+        super().__init__(title=f"Add Move - {builder.team.abbrev}")
+        self.builder = builder
+        
+        # Player name input
+        self.player_name = discord.ui.TextInput(
+            label="Player Name",
+            placeholder="Enter player name (e.g., 'Mike Trout')",
+            required=True,
+            max_length=100
+        )
+        
+        # Destination input (required)
+        self.destination = discord.ui.TextInput(
+            label="Destination",
+            placeholder="ml (Major League), mil (Minor League), or fa (Free Agency)",
+            required=True,
+            max_length=3
+        )
+        
+        self.add_item(self.player_name)
+        self.add_item(self.destination)
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        """Handle modal submission."""
+        await interaction.response.defer()
+        
+        try:
+            from services.player_service import player_service
+            from models.team import RosterType
+            from services.transaction_builder import TransactionMove
+            
+            # Find player
+            players = await player_service.get_players_by_name(self.player_name.value, self.builder.season)
+            if not players:
+                await interaction.followup.send(
+                    f"❌ No players found matching '{self.player_name.value}'",
+                    ephemeral=True
+                )
+                return
+            
+            # Use exact match if available, otherwise first result
+            player = None
+            for p in players:
+                if p.name.lower() == self.player_name.value.lower():
+                    player = p
+                    break
+            
+            if not player:
+                player = players[0]  # Use first match
+            
+            # Parse destination
+            destination_map = {
+                "ml": RosterType.MAJOR_LEAGUE,
+                "mil": RosterType.MINOR_LEAGUE,
+                "il": RosterType.INJURED_LIST,
+                "fa": RosterType.FREE_AGENCY
+            }
+            
+            to_roster = destination_map.get(self.destination.value.lower())
+            if not to_roster:
+                await interaction.followup.send(
+                    f"❌ Invalid destination '{self.destination.value}'. Use: ml, mil, il, or fa",
+                    ephemeral=True
+                )
+                return
+            
+            # Determine player's current roster status based on their team
+            if player.team_id == self.builder.team.id:
+                # Player is on the user's team - need to determine which roster
+                # This would need to be enhanced to check actual roster data
+                # For now, we'll assume they're coming from Major League
+                from_roster = RosterType.MAJOR_LEAGUE
+            else:
+                # Player is on another team or free agency
+                from_roster = RosterType.FREE_AGENCY
+            
+            # Create move
+            move = TransactionMove(
+                player=player,
+                from_roster=from_roster,
+                to_roster=to_roster,
+                from_team=None if from_roster == RosterType.FREE_AGENCY else self.builder.team,
+                to_team=None if to_roster == RosterType.FREE_AGENCY else self.builder.team
+            )
+            
+            # Add move to builder
+            success, error_message = self.builder.add_move(move)
+            if success:
+                await interaction.followup.send(
+                    f"✅ Added: {move.description}",
+                    ephemeral=True
+                )
+
+                # Update the main embed
+                from views.transaction_embed import TransactionEmbedView
+                embed = await create_transaction_embed(self.builder)
+                view = TransactionEmbedView(self.builder, interaction.user.id)
+
+                # Find and update the original message
+                try:
+                    # Get the original interaction from the button press
+                    original_message = None
+                    async for message in interaction.channel.history(limit=50):
+                        if message.author == interaction.client.user and message.embeds:
+                            if "Transaction Builder" in message.embeds[0].title:
+                                original_message = message
+                                break
+
+                    if original_message:
+                        await original_message.edit(embed=embed, view=view)
+                except Exception as e:
+                    # If we can't update the original message, that's okay
+                    pass
+            else:
+                await interaction.followup.send(
+                    f"❌ {error_message}",
+                    ephemeral=True
+                )
+        
+        except Exception as e:
+            await interaction.followup.send(
+                f"❌ Error processing move: {str(e)}",
+                ephemeral=True
+            )
+
+
+class SubmitConfirmationModal(discord.ui.Modal):
+    """Modal for confirming transaction submission."""
+    
+    def __init__(self, builder: TransactionBuilder):
+        super().__init__(title="Confirm Transaction Submission")
+        self.builder = builder
+        
+        self.confirmation = discord.ui.TextInput(
+            label="Type 'CONFIRM' to submit",
+            placeholder="CONFIRM",
+            required=True,
+            max_length=7
+        )
+        
+        self.add_item(self.confirmation)
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        """Handle confirmation submission."""
+        if self.confirmation.value.upper() != "CONFIRM":
+            await interaction.response.send_message(
+                "❌ Transaction not submitted. You must type 'CONFIRM' exactly.",
+                ephemeral=True
+            )
+            return
+        
+        await interaction.response.defer(ephemeral=True)
+        
+        try:
+            from services.league_service import LeagueService
+            
+            # Get current league state
+            league_service = LeagueService()
+            current_state = await league_service.get_current_state()
+            
+            if not current_state:
+                await interaction.followup.send(
+                    "❌ Could not get current league state. Please try again later.",
+                    ephemeral=True
+                )
+                return
+            
+            # Submit the transaction (for next week)
+            transactions = await self.builder.submit_transaction(week=current_state.week + 1)
+            
+            # Create success message
+            success_msg = f"✅ **Transaction Submitted Successfully!**\n\n"
+            success_msg += f"**Move ID:** `{transactions[0].moveid}`\n"
+            success_msg += f"**Moves:** {len(transactions)}\n"
+            success_msg += f"**Effective Week:** {transactions[0].week}\n\n"
+            
+            success_msg += "**Transaction Details:**\n"
+            for move in self.builder.moves:
+                success_msg += f"• {move.description}\n"
+            
+            success_msg += f"\n💡 Use `/mymoves` to check transaction status"
+            
+            await interaction.followup.send(success_msg, ephemeral=True)
+            
+            # Clear the builder after successful submission
+            from services.transaction_builder import clear_transaction_builder
+            clear_transaction_builder(interaction.user.id)
+            
+            # Update the original embed to show completion
+            completion_embed = discord.Embed(
+                title="✅ Transaction Submitted",
+                description=f"Your transaction has been submitted successfully!\n\nMove ID: `{transactions[0].moveid}`",
+                color=0x00ff00
+            )
+            
+            # Disable all buttons
+            view = discord.ui.View()
+            
+            try:
+                # Find and update the original message
+                async for message in interaction.channel.history(limit=50):
+                    if message.author == interaction.client.user and message.embeds:
+                        if "Transaction Builder" in message.embeds[0].title:
+                            await message.edit(embed=completion_embed, view=view)
+                            break
+            except:
+                pass
+            
+        except Exception as e:
+            await interaction.followup.send(
+                f"❌ Error submitting transaction: {str(e)}",
+                ephemeral=True
+            )
+
+
+async def create_transaction_embed(builder: TransactionBuilder) -> discord.Embed:
+    """
+    Create the main transaction builder embed.
+    
+    Args:
+        builder: TransactionBuilder instance
+        
+    Returns:
+        Discord embed with current transaction state
+    """
+    embed = EmbedTemplate.create_base_embed(
+        title=f"📋 Transaction Builder - {builder.team.abbrev}",
+        description=f"Build your transaction for next week",
+        color=EmbedColors.PRIMARY
+    )
+    
+    # Add current moves section
+    if builder.is_empty:
+        embed.add_field(
+            name="Current Moves",
+            value="*No moves yet. Use the buttons below to build your transaction.*",
+            inline=False
+        )
+    else:
+        moves_text = ""
+        for i, move in enumerate(builder.moves[:10], 1):  # Limit display
+            moves_text += f"{i}. {move.description}\n"
+        
+        if len(builder.moves) > 10:
+            moves_text += f"... and {len(builder.moves) - 10} more moves"
+        
+        embed.add_field(
+            name=f"Current Moves ({builder.move_count})",
+            value=moves_text,
+            inline=False
+        )
+    
+    # Add roster validation
+    validation = await builder.validate_transaction()
+    
+    roster_status = f"{validation.major_league_status}\n{validation.minor_league_status}"
+    if not validation.is_legal:
+        roster_status += f"\n✅ Free Agency: Available"
+    else:
+        roster_status += f"\n✅ Free Agency: Available"
+    
+    embed.add_field(
+        name="Roster Status",
+        value=roster_status,
+        inline=False
+    )
+    
+    # Add suggestions/errors
+    if validation.errors:
+        error_text = "\n".join([f"• {error}" for error in validation.errors])
+        embed.add_field(
+            name="❌ Errors",
+            value=error_text,
+            inline=False
+        )
+    
+    if validation.suggestions:
+        suggestion_text = "\n".join([f"💡 {suggestion}" for suggestion in validation.suggestions])
+        embed.add_field(
+            name="Suggestions",
+            value=suggestion_text,
+            inline=False
+        )
+    
+    # Add footer with timestamp
+    embed.set_footer(text=f"Created at {builder.created_at.strftime('%H:%M:%S')}")
+    
+    return embed
+
+
+async def create_preview_embed(builder: TransactionBuilder) -> discord.Embed:
+    """
+    Create a detailed preview embed for the transaction.
+    
+    Args:
+        builder: TransactionBuilder instance
+        
+    Returns:
+        Discord embed with transaction preview
+    """
+    embed = EmbedTemplate.create_base_embed(
+        title=f"📋 Transaction Preview - {builder.team.abbrev}",
+        description="Complete transaction details before submission",
+        color=EmbedColors.WARNING
+    )
+    
+    # Add all moves
+    if builder.moves:
+        moves_text = ""
+        for i, move in enumerate(builder.moves, 1):
+            moves_text += f"{i}. {move.description}\n"
+        
+        embed.add_field(
+            name=f"All Moves ({len(builder.moves)})",
+            value=moves_text,
+            inline=False
+        )
+    
+    # Add validation results
+    validation = await builder.validate_transaction()
+    
+    status_text = f"{validation.major_league_status}\n{validation.minor_league_status}"
+    embed.add_field(
+        name="Final Roster Status",
+        value=status_text,
+        inline=False
+    )
+    
+    if validation.is_legal:
+        embed.add_field(
+            name="✅ Validation",
+            value="Transaction is legal and ready for submission!",
+            inline=False
+        )
+    else:
+        embed.add_field(
+            name="❌ Validation Issues",
+            value="\n".join([f"• {error}" for error in validation.errors]),
+            inline=False
+        )
+    
+    return embed
