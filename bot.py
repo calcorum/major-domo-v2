@@ -115,6 +115,7 @@ class SBABot(commands.Bot):
         from commands.admin import setup_admin
         from commands.transactions import setup_transactions
         from commands.dice import setup_dice
+        from commands.voice import setup_voice
         
         # Define command packages to load
         command_packages = [
@@ -125,6 +126,7 @@ class SBABot(commands.Bot):
             ("admin", setup_admin),
             ("transactions", setup_transactions),
             ("dice", setup_dice),
+            ("voice", setup_voice),
         ]
         
         total_successful = 0
@@ -156,13 +158,22 @@ class SBABot(commands.Bot):
         """Initialize background tasks for the bot."""
         try:
             self.logger.info("Setting up background tasks...")
-            
+
             # Initialize custom command cleanup task
             from tasks.custom_command_cleanup import setup_cleanup_task
             self.custom_command_cleanup = setup_cleanup_task(self)
-            
+
+            # Initialize voice channel cleanup service
+            from commands.voice.cleanup_service import VoiceChannelCleanupService
+            self.voice_cleanup_service = VoiceChannelCleanupService()
+
+            # Start voice channel monitoring (includes startup verification)
+            import asyncio
+            asyncio.create_task(self.voice_cleanup_service.start_monitoring(self))
+            self.logger.info("✅ Voice channel cleanup service started")
+
             self.logger.info("✅ Background tasks initialized successfully")
-            
+
         except Exception as e:
             self.logger.error(f"❌ Failed to initialize background tasks: {e}", exc_info=True)
     
@@ -300,6 +311,13 @@ class SBABot(commands.Bot):
                 self.logger.info("Custom command cleanup task stopped")
             except Exception as e:
                 self.logger.error(f"Error stopping cleanup task: {e}")
+
+        if hasattr(self, 'voice_cleanup_service'):
+            try:
+                self.voice_cleanup_service.stop_monitoring()
+                self.logger.info("Voice channel cleanup service stopped")
+            except Exception as e:
+                self.logger.error(f"Error stopping voice cleanup service: {e}")
         
         # Call parent close method
         await super().close()
