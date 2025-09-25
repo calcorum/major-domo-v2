@@ -40,24 +40,14 @@ class StandingsCommands(commands.Cog):
         """Display league standings by division."""
         await interaction.response.defer()
         
-        try:
-            search_season = season or SBA_CURRENT_SEASON
-            
-            if division:
-                # Show specific division
-                await self._show_division_standings(interaction, search_season, division)
-            else:
-                # Show all divisions
-                await self._show_all_standings(interaction, search_season)
-                
-        except Exception as e:
-            error_msg = f"❌ Error retrieving standings: {str(e)}"
-            
-            if interaction.response.is_done():
-                await interaction.followup.send(error_msg, ephemeral=True)
-            else:
-                await interaction.response.send_message(error_msg, ephemeral=True)
-            raise
+        search_season = season or SBA_CURRENT_SEASON
+        
+        if division:
+            # Show specific division
+            await self._show_division_standings(interaction, search_season, division)
+        else:
+            # Show all divisions
+            await self._show_all_standings(interaction, search_season)
     
     @discord.app_commands.command(
         name="playoff-picture",
@@ -75,30 +65,20 @@ class StandingsCommands(commands.Cog):
         """Display playoff picture with division leaders and wild card race."""
         await interaction.response.defer()
         
-        try:
-            search_season = season or SBA_CURRENT_SEASON
-            self.logger.debug("Fetching playoff picture", season=search_season)
-            
-            playoff_data = await standings_service.get_playoff_picture(search_season)
-            
-            if not playoff_data["division_leaders"] and not playoff_data["wild_card"]:
-                await interaction.followup.send(
-                    f"❌ No playoff data available for season {search_season}.",
-                    ephemeral=True
-                )
-                return
-            
-            embed = await self._create_playoff_picture_embed(playoff_data, search_season)
-            await interaction.followup.send(embed=embed)
-            
-        except Exception as e:
-            error_msg = f"❌ Error retrieving playoff picture: {str(e)}"
-            
-            if interaction.response.is_done():
-                await interaction.followup.send(error_msg, ephemeral=True)
-            else:
-                await interaction.response.send_message(error_msg, ephemeral=True)
-            raise
+        search_season = season or SBA_CURRENT_SEASON
+        self.logger.debug("Fetching playoff picture", season=search_season)
+        
+        playoff_data = await standings_service.get_playoff_picture(search_season)
+        
+        if not playoff_data["division_leaders"] and not playoff_data["wild_card"]:
+            await interaction.followup.send(
+                f"❌ No playoff data available for season {search_season}.",
+                ephemeral=True
+            )
+            return
+        
+        embed = await self._create_playoff_picture_embed(playoff_data, search_season)
+        await interaction.followup.send(embed=embed)
     
     async def _show_all_standings(self, interaction: discord.Interaction, season: int):
         """Show standings for all divisions."""
@@ -210,7 +190,7 @@ class StandingsCommands(commands.Cog):
                 inline=False
             )
         
-        embed.set_footer(text=f"Run differential shown as +/- • Season {season}")
+        embed.set_footer(text=f"Season {season}")
         return embed
     
     async def _create_playoff_picture_embed(self, playoff_data, season: int) -> discord.Embed:
@@ -264,7 +244,7 @@ class StandingsCommands(commands.Cog):
                 inline=False
             )
         
-        embed.set_footer(text=f"Updated standings • Season {season}")
+        embed.set_footer(text=f"Season {season}")
         return embed
 
 

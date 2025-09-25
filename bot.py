@@ -114,6 +114,7 @@ class SBABot(commands.Bot):
         from commands.custom_commands import setup_custom_commands
         from commands.admin import setup_admin
         from commands.transactions import setup_transactions
+        from commands.dice import setup_dice
         
         # Define command packages to load
         command_packages = [
@@ -123,6 +124,7 @@ class SBABot(commands.Bot):
             ("custom_commands", setup_custom_commands),
             ("admin", setup_admin),
             ("transactions", setup_transactions),
+            ("dice", setup_dice),
         ]
         
         total_successful = 0

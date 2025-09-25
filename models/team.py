@@ -92,6 +92,19 @@ class Team(SBABaseModel):
             return RosterType.INJURED_LIST
         else:
             return RosterType.MAJOR_LEAGUE
+
+    def get_major_league_affiliate(self) -> Optional[str]:
+        """
+        Get the Major League affiliate abbreviation for Minor League teams.
+
+        Returns:
+            Major League team abbreviation if this is a Minor League team, None otherwise
+        """
+        if self.roster_type() == RosterType.MINOR_LEAGUE:
+            # Minor League teams follow pattern: [MajorTeam]MIL (e.g., NYYMIL -> NYY)
+            if self.abbrev.upper().endswith('MIL'):
+                return self.abbrev[:-3]  # Remove 'MIL' suffix
+        return None
     
     def __str__(self):
         return f"{self.abbrev} - {self.lname}"

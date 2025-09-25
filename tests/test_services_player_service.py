@@ -163,7 +163,54 @@ class TestPlayerService:
         
         assert await player_service_instance.is_free_agent(free_agent) is True
         assert await player_service_instance.is_free_agent(regular_player) is False
-    
+
+    @pytest.mark.asyncio
+    async def test_search_players(self, player_service_instance, mock_client):
+        """Test new search_players functionality using /v3/players/search endpoint."""
+        mock_players = [
+            self.create_player_data(1, 'Mike Trout', pos_1='OF'),
+            self.create_player_data(2, 'Michael Harris', pos_1='OF')
+        ]
+
+        mock_client.get.return_value = {
+            'count': 2,
+            'players': mock_players
+        }
+
+        result = await player_service_instance.search_players('Mike', limit=10, season=12)
+
+        mock_client.get.assert_called_once_with('players/search', params=[('q', 'Mike'), ('limit', '10'), ('season', '12')])
+        assert len(result) == 2
+        assert all(isinstance(player, Player) for player in result)
+        assert result[0].name == 'Mike Trout'
+        assert result[1].name == 'Michael Harris'
+
+    @pytest.mark.asyncio
+    async def test_search_players_no_season(self, player_service_instance, mock_client):
+        """Test search_players without explicit season."""
+        mock_players = [self.create_player_data(1, 'Test Player', pos_1='C')]
+
+        mock_client.get.return_value = {
+            'count': 1,
+            'players': mock_players
+        }
+
+        result = await player_service_instance.search_players('Test', limit=5)
+
+        mock_client.get.assert_called_once_with('players/search', params=[('q', 'Test'), ('limit', '5')])
+        assert len(result) == 1
+        assert result[0].name == 'Test Player'
+
+    @pytest.mark.asyncio
+    async def test_search_players_empty_result(self, player_service_instance, mock_client):
+        """Test search_players with no results."""
+        mock_client.get.return_value = None
+
+        result = await player_service_instance.search_players('NonExistent')
+
+        mock_client.get.assert_called_once_with('players/search', params=[('q', 'NonExistent'), ('limit', '10')])
+        assert result == []
+
     @pytest.mark.asyncio
     async def test_search_players_fuzzy(self, player_service_instance, mock_client):
         """Test fuzzy search with relevance sorting."""
