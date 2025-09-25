@@ -45,7 +45,7 @@ This directory contains Discord slash commands for creating and managing voice c
 ### Public Voice Channels (`/voice-channel public`)
 - **Permissions**: Everyone can connect and speak
 - **Naming**: Random codename generation (e.g., "Gameplay Phoenix", "Gameplay Thunder")
-- **Requirements**: User must be on a current team
+- **Requirements**: User must own a Major League team (3-character abbreviations like NYY, BOS)
 - **Auto-cleanup**: Configurable threshold (default: empty for configured minutes)
 
 ### Private Voice Channels (`/voice-channel private`)
@@ -55,7 +55,7 @@ This directory contains Discord slash commands for creating and managing voice c
 - **Naming**: Automatic "{Away} vs {Home}" format based on current week's schedule
 - **Opponent Detection**: Uses current league week to find scheduled opponent
 - **Requirements**:
-  - User must be on a current team
+  - User must own a Major League team (3-character abbreviations like NYY, BOS)
   - Team must have upcoming games in current week
 - **Role Integration**: Finds Discord roles matching team full names (`team.lname`)
 
@@ -69,10 +69,31 @@ This directory contains Discord slash commands for creating and managing voice c
 ## Architecture
 
 ### Command Flow
-1. **Team Verification**: Check user has current team using `team_service`
+1. **Major League Team Verification**: Check user owns a Major League team using `team_service`
 2. **Channel Creation**: Create voice channel with appropriate permissions
 3. **Tracking Registration**: Add channel to cleanup service tracking
 4. **User Feedback**: Send success embed with channel details
+
+### Team Validation Logic
+The voice channel system validates that users own **Major League teams** specifically:
+
+```python
+async def _get_user_major_league_team(self, user_id: int, season: Optional[int] = None):
+    """Get the user's Major League team for schedule/game purposes."""
+    teams = await team_service.get_teams_by_owner(user_id, season)
+
+    # Filter to only Major League teams (3-character abbreviations)
+    major_league_teams = [team for team in teams if team.roster_type() == RosterType.MAJOR_LEAGUE]
+
+    return major_league_teams[0] if major_league_teams else None
+```
+
+**Team Types:**
+- **Major League**: 3-character abbreviations (e.g., NYY, BOS, LAD) - **Required for voice channels**
+- **Minor League**: 4+ characters ending in "MIL" (e.g., NYYMIL, BOSMIL) - **Not eligible**
+- **Injured List**: Ending in "IL" (e.g., NYYIL, BOSIL) - **Not eligible**
+
+**Rationale:** Only Major League teams participate in weekly scheduled games, so voice channel creation is restricted to active Major League team owners.
 
 ### Permission System
 ```python

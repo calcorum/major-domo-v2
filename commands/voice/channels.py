@@ -17,6 +17,7 @@ from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
 from constants import SBA_CURRENT_SEASON
 from views.embeds import EmbedTemplate
+from models.team import RosterType
 
 logger = logging.getLogger(f'{__name__}.VoiceChannelCommands')
 
@@ -63,6 +64,25 @@ class VoiceChannelCommands(commands.Cog):
         teams = await team_service.get_teams_by_owner(user_id, season)
         return teams[0] if teams else None
 
+    async def _get_user_major_league_team(self, user_id: int, season: Optional[int] = None):
+        """
+        Get the user's Major League team for schedule/game purposes.
+
+        Args:
+            user_id: Discord user ID
+            season: Season to check (defaults to current)
+
+        Returns:
+            Major League Team object or None if not found
+        """
+        season = season or SBA_CURRENT_SEASON
+        teams = await team_service.get_teams_by_owner(user_id, season)
+
+        # Filter to only Major League teams (3-character abbreviations)
+        major_league_teams = [team for team in teams if team.roster_type() == RosterType.MAJOR_LEAGUE]
+
+        return major_league_teams[0] if major_league_teams else None
+
     async def _create_tracked_channel(
         self,
         interaction: discord.Interaction,
@@ -107,12 +127,12 @@ class VoiceChannelCommands(commands.Cog):
         """Create a public voice channel for gameplay."""
         await interaction.response.defer()
 
-        # Verify user has a team
-        user_team = await self._get_user_team(interaction.user.id)
+        # Verify user has a Major League team
+        user_team = await self._get_user_major_league_team(interaction.user.id)
         if not user_team:
             embed = EmbedTemplate.error(
-                title="No Team Found",
-                description="❌ You must be on a team to create voice channels.\n\n"
+                title="No Major League Team Found",
+                description="❌ You must own a Major League team to create voice channels.\n\n"
                            "Contact a league administrator if you believe this is an error."
             )
             await interaction.followup.send(embed=embed, ephemeral=True)
@@ -166,12 +186,13 @@ class VoiceChannelCommands(commands.Cog):
         """Create a private voice channel for team matchup."""
         await interaction.response.defer()
 
-        # Verify user has a team
-        user_team = await self._get_user_team(interaction.user.id)
+        # Verify user has a Major League team
+        user_team = await self._get_user_major_league_team(interaction.user.id)
         if not user_team:
             embed = EmbedTemplate.error(
-                title="No Team Found",
-                description="❌ You must be on a team to create voice channels.\n\n"
+                title="No Major League Team Found",
+                description="❌ You must own a Major League team to create private voice channels.\n\n"
+                           "Private channels are for scheduled games between Major League teams.\n"
                            "Contact a league administrator if you believe this is an error."
             )
             await interaction.followup.send(embed=embed, ephemeral=True)

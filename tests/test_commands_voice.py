@@ -264,7 +264,7 @@ class TestVoiceChannelCleanupService:
         # Mock guild and channel
         mock_guild = MagicMock()
         mock_guild.id = 999
-        mock_channel = AsyncMock()
+        mock_channel = AsyncMock(spec=discord.VoiceChannel)
         mock_channel.id = 123
         mock_channel.members = []  # Empty channel
 
@@ -357,6 +357,9 @@ class TestVoiceChannelCommands:
         mock_team.id = 1
         mock_team.abbrev = "NYY"
         mock_team.lname = "New York Yankees"
+        # Mock roster_type method to return MAJOR_LEAGUE for NYY
+        from models.team import RosterType
+        mock_team.roster_type.return_value = RosterType.MAJOR_LEAGUE
 
         # Mock voice category
         mock_category = MagicMock()
@@ -372,7 +375,7 @@ class TestVoiceChannelCommands:
             with patch.object(mock_interaction.guild, 'create_voice_channel', return_value=mock_channel) as mock_create:
                 with patch('commands.voice.channels.random_codename', return_value="Phoenix"):
                     with patch('discord.utils.get', return_value=mock_category):
-                        mock_team_service.get_teams_by_owner.return_value = [mock_team]
+                        mock_team_service.get_teams_by_owner = AsyncMock(return_value=[mock_team])
 
                         await voice_cog.create_public_channel.callback(voice_cog, mock_interaction)
 
@@ -390,13 +393,13 @@ class TestVoiceChannelCommands:
                         call_args = mock_interaction.followup.send.call_args
                         assert 'embed' in call_args.kwargs
                         embed = call_args.kwargs['embed']
-                        assert "Created public voice channel" in embed.title
+                        assert "Voice Channel Created" in embed.title
 
     @pytest.mark.asyncio
     async def test_create_public_channel_no_team(self, voice_cog, mock_interaction):
         """Test public channel creation with no team."""
         with patch('commands.voice.channels.team_service') as mock_team_service:
-            mock_team_service.get_teams_by_owner.return_value = []
+            mock_team_service.get_teams_by_owner = AsyncMock(return_value=[])
 
             await voice_cog.create_public_channel.callback(voice_cog, mock_interaction)
 
@@ -408,7 +411,7 @@ class TestVoiceChannelCommands:
             call_args = mock_interaction.followup.send.call_args
             assert call_args.kwargs['ephemeral'] is True
             embed = call_args.kwargs['embed']
-            assert "No Team Found" in embed.title
+            assert "No Major League Team Found" in embed.title
 
     @pytest.mark.asyncio
     async def test_create_private_channel_success(self, voice_cog, mock_interaction):
@@ -419,6 +422,9 @@ class TestVoiceChannelCommands:
         mock_user_team.abbrev = "NYY"
         mock_user_team.lname = "New York Yankees"
         mock_user_team.sname = "Yankees"
+        # Mock roster_type method to return MAJOR_LEAGUE for NYY
+        from models.team import RosterType
+        mock_user_team.roster_type.return_value = RosterType.MAJOR_LEAGUE
 
         # Mock opponent team
         mock_opponent_team = MagicMock(spec=Team)
@@ -456,8 +462,8 @@ class TestVoiceChannelCommands:
                     with patch.object(mock_interaction.guild, 'create_voice_channel', return_value=mock_channel) as mock_create:
                         with patch('discord.utils.get') as mock_utils_get:
 
-                            mock_team_service.get_teams_by_owner.return_value = [mock_user_team]
-                            mock_league_service.get_current.return_value = mock_current
+                            mock_team_service.get_teams_by_owner = AsyncMock(return_value=[mock_user_team])
+                            mock_league_service.get_current_state = AsyncMock(return_value=mock_current)
                             mock_schedule.return_value = [mock_game]
 
                             # Mock discord.utils.get calls
