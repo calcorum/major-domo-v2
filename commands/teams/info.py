@@ -7,7 +7,7 @@ from typing import Optional
 import discord
 from discord.ext import commands
 
-from services import team_service
+from services import team_service, player_service
 from models.team import Team
 from constants import SBA_CURRENT_SEASON
 from utils.logging import get_contextual_logger
@@ -116,20 +116,20 @@ class TeamInfoCommands(commands.Cog):
             description=f"Season {team.season} Team Information",
             color=int(team.color, 16) if team.color else EmbedColors.PRIMARY
         )
-        
+
         # Basic team info
         embed.add_field(name="Short Name", value=team.sname, inline=True)
         embed.add_field(name="Abbreviation", value=team.abbrev, inline=True)
         embed.add_field(name="Season", value=str(team.season), inline=True)
-        
+
         # Stadium info
         if team.stadium:
             embed.add_field(name="Stadium", value=team.stadium, inline=True)
-        
+
         # Division info
         if team.division_id:
             embed.add_field(name="Division", value=f"Division {team.division_id}", inline=True)
-        
+
         # Standings info if available
         if standings_data:
             try:
@@ -137,20 +137,39 @@ class TeamInfoCommands(commands.Cog):
                 losses = standings_data.get('losses', 'N/A')
                 pct = standings_data.get('pct', 'N/A')
                 gb = standings_data.get('gb', 'N/A')
-                
+
                 standings_text = f"**Record:** {wins}-{losses}"
                 if pct != 'N/A':
                     standings_text += f" ({pct:.3f})"
                 if gb != 'N/A' and gb != 0:
                     standings_text += f"\n**GB:** {gb}"
-                
+
                 embed.add_field(name="Standings", value=standings_text, inline=False)
             except (KeyError, TypeError):
                 # Skip standings if data is malformed
                 pass
-        
+
+        # Core Players (6 most expensive)
+        try:
+            core_players = await player_service.get_players_by_team(team.id, team.season, sort='cost-desc')
+            if core_players:
+                # Take top 6 most expensive players
+                top_players = core_players[:6]
+
+                core_text = ""
+                for i, player in enumerate(top_players, 1):
+                    # Format: Position - Name (WARA)
+                    position = getattr(player, 'pos_1', 'N/A') or 'N/A'
+                    wara = getattr(player, 'wara', 0.0) or 0.0
+                    core_text += f"{i}. {position} - {player.name} ({wara:.1f})\n"
+
+                if core_text:
+                    embed.add_field(name="Core Players", value=core_text, inline=False)
+        except Exception as e:
+            self.logger.warning(f"Failed to load core players for team {team.id}: {e}")
+
         # Thumbnail if available
         if team.thumbnail:
             embed.set_thumbnail(url=team.thumbnail)
-        
+
         return embed

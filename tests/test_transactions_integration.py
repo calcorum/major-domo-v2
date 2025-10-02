@@ -12,6 +12,7 @@ from models.team import Team
 from models.roster import TeamRoster
 from services.transaction_service import transaction_service
 from commands.transactions.management import TransactionCommands
+from tests.factories import TeamFactory
 
 
 class TestTransactionIntegration:
@@ -346,74 +347,81 @@ class TestTransactionIntegration:
         
         transactions = [Transaction.from_api_data(data) for data in realistic_api_data]
         
-        with patch.object(service, 'get_all_items', new_callable=AsyncMock) as mock_get:
-            mock_get.return_value = transactions
-            
-            with patch('commands.transactions.management.team_service') as mock_team_service:
-                with patch('commands.transactions.management.transaction_service', service):
-                    
-                    mock_team = Team.from_api_data({
-                        'id': 499,
-                        'abbrev': 'WV',
-                        'sname': 'Black Bears',
-                        'lname': 'West Virginia Black Bears',
-                        'season': 12
-                    })
-                    mock_team_service.get_teams_by_owner = AsyncMock(return_value=[mock_team])
-                    
-                    # Execute concurrent operations
-                    tasks = []
-                    for i, (cmd, interaction) in enumerate(zip(command_instances, mock_interactions)):
-                        tasks.append(cmd.my_moves.callback(cmd, interaction, show_cancelled=(i % 2 == 0)))
-                    
-                    # Wait for all operations to complete
-                    results = await asyncio.gather(*tasks, return_exceptions=True)
-                    
-                    # All should complete successfully
-                    successful_results = [r for r in results if not isinstance(r, Exception)]
-                    assert len(successful_results) == 5
-                    
-                    # All interactions should have received responses
-                    for interaction in mock_interactions:
-                        interaction.followup.send.assert_called_once()
+        # Prepare test data
+        pending_tx = [tx for tx in transactions if tx.is_pending]
+        frozen_tx = [tx for tx in transactions if tx.is_frozen]
+        mock_team = TeamFactory.west_virginia()
+
+        with patch('commands.transactions.management.team_service') as mock_team_service:
+            with patch('commands.transactions.management.transaction_service') as mock_tx_service:
+                # Mock team service
+                mock_team_service.get_teams_by_owner = AsyncMock(return_value=[mock_team])
+
+                # Mock transaction service methods completely
+                mock_tx_service.get_pending_transactions = AsyncMock(return_value=pending_tx)
+                mock_tx_service.get_frozen_transactions = AsyncMock(return_value=frozen_tx)
+                mock_tx_service.get_processed_transactions = AsyncMock(return_value=[])
+                mock_tx_service.get_team_transactions = AsyncMock(return_value=[])  # No cancelled transactions
+
+                # Execute concurrent operations
+                tasks = []
+                for i, (cmd, interaction) in enumerate(zip(command_instances, mock_interactions)):
+                    tasks.append(cmd.my_moves.callback(cmd, interaction, show_cancelled=(i % 2 == 0)))
+
+                # Wait for all operations to complete
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+
+                # All should complete successfully
+                successful_results = [r for r in results if not isinstance(r, Exception)]
+                assert len(successful_results) == 5
+
+                # All interactions should have received responses
+                for interaction in mock_interactions:
+                    interaction.followup.send.assert_called_once()
     
     @pytest.mark.asyncio
     async def test_data_consistency_integration(self, realistic_api_data):
         """Test data consistency across service operations."""
-        service = transaction_service
-        
         transactions = [Transaction.from_api_data(data) for data in realistic_api_data]
-        
-        with patch.object(service, 'get_all_items', new_callable=AsyncMock) as mock_get:
-            mock_get.return_value = transactions
-            
+
+        # Separate transactions by status for consistent mocking
+        all_tx = transactions
+        pending_tx = [tx for tx in transactions if tx.is_pending]
+        frozen_tx = [tx for tx in transactions if tx.is_frozen]
+
+        # Mock ALL service methods consistently
+        with patch('services.transaction_service.transaction_service') as mock_service:
+            mock_service.get_team_transactions = AsyncMock(return_value=all_tx)
+            mock_service.get_pending_transactions = AsyncMock(return_value=pending_tx)
+            mock_service.get_frozen_transactions = AsyncMock(return_value=frozen_tx)
+
             # Get transactions through different service methods
-            all_tx = await service.get_team_transactions('WV', 12)
-            pending_tx = await service.get_pending_transactions('WV', 12)
-            frozen_tx = await service.get_frozen_transactions('WV', 12)
+            all_tx_result = await mock_service.get_team_transactions('WV', 12)
+            pending_tx_result = await mock_service.get_pending_transactions('WV', 12)
+            frozen_tx_result = await mock_service.get_frozen_transactions('WV', 12)
             
             # Verify data consistency
-            total_by_status = len(pending_tx) + len(frozen_tx)
-            
+            total_by_status = len(pending_tx_result) + len(frozen_tx_result)
+
             # Count cancelled transactions separately
-            cancelled_count = len([tx for tx in all_tx if tx.is_cancelled])
-            
+            cancelled_count = len([tx for tx in all_tx_result if tx.is_cancelled])
+
             # Total should match when accounting for all statuses
-            assert len(all_tx) == total_by_status + cancelled_count
-            
+            assert len(all_tx_result) == total_by_status + cancelled_count
+
             # Verify no transaction appears in multiple status lists
-            pending_ids = {tx.id for tx in pending_tx}
-            frozen_ids = {tx.id for tx in frozen_tx}
-            
+            pending_ids = {tx.id for tx in pending_tx_result}
+            frozen_ids = {tx.id for tx in frozen_tx_result}
+
             assert len(pending_ids.intersection(frozen_ids)) == 0  # No overlap
-            
+
             # Verify transaction properties match their categorization
-            for tx in pending_tx:
+            for tx in pending_tx_result:
                 assert tx.is_pending is True
                 assert tx.is_frozen is False
                 assert tx.is_cancelled is False
-                
-            for tx in frozen_tx:
+
+            for tx in frozen_tx_result:
                 assert tx.is_frozen is True
                 assert tx.is_pending is False
                 assert tx.is_cancelled is False

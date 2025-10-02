@@ -4,7 +4,7 @@ Custom Command Cleanup Task for Discord Bot v2.0
 Modern automated cleanup system with better notifications and logging.
 """
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import Dict, List, Optional
 
 import discord
@@ -368,7 +368,7 @@ class CustomCommandCleanupTask:
                 inline=True
             )
             
-            embed.set_footer(text=f"Next cleanup: {datetime.utcnow() + timedelta(days=1):%Y-%m-%d}")
+            embed.set_footer(text=f"Next cleanup: {datetime.now(UTC) + timedelta(days=1):%Y-%m-%d}")
             
             await admin_channel.send(embed=embed)
             

@@ -7,7 +7,8 @@ import logging
 from typing import Optional, List, Dict
 
 from services.base_service import BaseService
-from models.roster import TeamRoster, RosterPlayer
+from models.roster import TeamRoster
+from models.player import Player
 from models.transaction import RosterValidation
 from exceptions import APIException
 
@@ -137,11 +138,11 @@ class RosterService:
                 errors=[f"Validation error: {str(e)}"]
             )
     
-    def _count_positions(self, players: List[RosterPlayer]) -> Dict[str, int]:
+    def _count_positions(self, players: List[Player]) -> Dict[str, int]:
         """Count players by position."""
         position_counts = {}
         for player in players:
-            pos = player.position
+            pos = player.primary_position
             position_counts[pos] = position_counts.get(pos, 0) + 1
         return position_counts
     

@@ -17,14 +17,14 @@ from services.transaction_builder import (
 from models.team import RosterType
 from views.transaction_embed import (
     TransactionEmbedView,
-    PlayerSelectionModal,
     SubmitConfirmationModal
 )
 from models.team import Team
 from models.player import Player
-from models.roster import TeamRoster, RosterPlayer
+from models.roster import TeamRoster
 from models.transaction import Transaction
 from models.current import Current
+from tests.factories import PlayerFactory, TeamFactory
 
 
 class TestDropAddIntegration:
@@ -66,21 +66,15 @@ class TestDropAddIntegration:
     @pytest.fixture
     def mock_team(self):
         """Create mock team."""
-        return Team(
-            id=499,
-            abbrev='WV',
-            sname='Black Bears',
-            lname='West Virginia Black Bears',
-            season=12
-        )
+        return TeamFactory.west_virginia()
     
     @pytest.fixture
     def mock_players(self):
         """Create mock players."""
         return [
-            Player(id=12472, name='Mike Trout', season=12, primary_position='CF'),
-            Player(id=12473, name='Ronald Acuna Jr.', season=12, primary_position='OF'),
-            Player(id=12474, name='Mookie Betts', season=12, primary_position='RF')
+            PlayerFactory.mike_trout(),
+            PlayerFactory.ronald_acuna(),
+            PlayerFactory.mookie_betts()
         ]
     
     @pytest.fixture
@@ -89,30 +83,62 @@ class TestDropAddIntegration:
         # Create 24 ML players (under limit)
         ml_players = []
         for i in range(24):
-            ml_players.append(RosterPlayer(
+            ml_players.append(Player(
                 id=1000 + i,
                 name=f'ML Player {i}',
+                wara=3.0 + i * 0.1,
                 season=12,
-                primary_position='OF',
-                is_minor_league=False
+                team_id=499,
+                team=None,
+                image=None,
+                image2=None,
+                vanity_card=None,
+                headshot=None,
+                pos_1='OF',
+                pitcher_injury=None,
+                injury_rating=None,
+                il_return=None,
+                demotion_week=None,
+                last_game=None,
+                last_game2=None,
+                strat_code=None,
+                bbref_id=None,
+                sbaplayer=None
             ))
-        
+
         # Create 10 MiL players
         mil_players = []
         for i in range(10):
-            mil_players.append(RosterPlayer(
+            mil_players.append(Player(
                 id=2000 + i,
                 name=f'MiL Player {i}',
+                wara=1.0 + i * 0.1,
                 season=12,
-                primary_position='OF',
-                is_minor_league=True
+                team_id=499,
+                team=None,
+                image=None,
+                image2=None,
+                vanity_card=None,
+                headshot=None,
+                pos_1='OF',
+                pitcher_injury=None,
+                injury_rating=None,
+                il_return=None,
+                demotion_week=None,
+                last_game=None,
+                last_game2=None,
+                strat_code=None,
+                bbref_id=None,
+                sbaplayer=None
             ))
-        
+
         return TeamRoster(
             team_id=499,
+            team_abbrev='TST',
             week=10,
             season=12,
-            players=ml_players + mil_players
+            active_players=ml_players,
+            minor_league_players=mil_players
         )
     
     @pytest.fixture
@@ -135,14 +161,13 @@ class TestDropAddIntegration:
                 with patch('services.transaction_builder.roster_service') as mock_roster_service:
                     # Setup mocks
                     mock_team_service.get_teams_by_owner.return_value = [mock_team]
-                    mock_player_service.get_players_by_name.return_value = [mock_players[0]]  # Mike Trout
-                    mock_roster_service.get_current_roster.return_value = mock_roster
+                    mock_player_service.search_players = AsyncMock(return_value=[mock_players[0]])  # Mike Trout
+                    mock_roster_service.get_current_roster = AsyncMock(return_value=mock_roster)
                     
                     # Execute /dropadd command with quick move
-                    await commands_cog.dropadd(
+                    await commands_cog.dropadd.callback(commands_cog,
                         mock_interaction,
                         player='Mike Trout',
-                        action='add',
                         destination='ml'
                     )
                     
@@ -173,10 +198,10 @@ class TestDropAddIntegration:
         with patch('commands.transactions.dropadd.team_service') as mock_team_service:
             with patch('services.transaction_builder.roster_service') as mock_roster_service:
                 mock_team_service.get_teams_by_owner.return_value = [mock_team]
-                mock_roster_service.get_current_roster.return_value = mock_roster
+                mock_roster_service.get_current_roster = AsyncMock(return_value=mock_roster)
                 
                 # Start with /dropadd command
-                await commands_cog.dropadd(mock_interaction)
+                await commands_cog.dropadd.callback(commands_cog,mock_interaction)
                 
                 # Get the builder
                 builder = get_transaction_builder(mock_interaction.user.id, mock_team)
@@ -215,7 +240,7 @@ class TestDropAddIntegration:
                 with patch('services.league_service.LeagueService') as mock_league_service_class:
                     # Setup mocks
                     mock_team_service.get_teams_by_owner.return_value = [mock_team]
-                    mock_roster_service.get_current_roster.return_value = mock_roster
+                    mock_roster_service.get_current_roster = AsyncMock(return_value=mock_roster)
                     
                     mock_league_service = MagicMock()
                     mock_league_service_class.return_value = mock_league_service
@@ -243,37 +268,6 @@ class TestDropAddIntegration:
                     assert transaction.season == 12
                     assert "Season-012-Week-11-" in transaction.moveid
     
-    @pytest.mark.asyncio
-    async def test_modal_interaction_workflow(self, mock_interaction, mock_team, mock_players, mock_roster):
-        """Test modal interaction workflow."""
-        clear_transaction_builder(mock_interaction.user.id)
-        
-        with patch('services.transaction_builder.roster_service') as mock_roster_service:
-            with patch('services.player_service.player_service') as mock_player_service:
-                mock_roster_service.get_current_roster.return_value = mock_roster
-                mock_player_service.get_players_by_name.return_value = [mock_players[0]]
-                
-                # Create builder
-                builder = get_transaction_builder(mock_interaction.user.id, mock_team)
-                
-                # Create and test PlayerSelectionModal
-                modal = PlayerSelectionModal(builder)
-                modal.player_name.value = 'Mike Trout'
-                modal.action.value = 'add'
-                modal.destination.value = 'ml'
-                
-                await modal.on_submit(mock_interaction)
-                
-                # Verify move was added
-                assert builder.move_count == 1
-                move = builder.moves[0]
-                assert move.player.name == 'Mike Trout'
-                # Note: TransactionMove no longer has 'action' field
-                
-                # Verify success message
-                mock_interaction.followup.send.assert_called()
-                call_args = mock_interaction.followup.send.call_args
-                assert "✅ Added:" in call_args[0][0]
     
     @pytest.mark.asyncio
     async def test_submission_modal_workflow(self, mock_interaction, mock_team, mock_players, mock_roster, mock_current_state):
@@ -282,7 +276,7 @@ class TestDropAddIntegration:
         
         with patch('services.transaction_builder.roster_service') as mock_roster_service:
             with patch('services.league_service.LeagueService') as mock_league_service_class:
-                mock_roster_service.get_current_roster.return_value = mock_roster
+                mock_roster_service.get_current_roster = AsyncMock(return_value=mock_roster)
                 
                 mock_league_service = MagicMock()
                 mock_league_service_class.return_value = mock_league_service
@@ -325,7 +319,7 @@ class TestDropAddIntegration:
             mock_team_service.get_teams_by_owner.side_effect = Exception("API Error")
             
             # Should not raise exception
-            await commands_cog.dropadd(mock_interaction)
+            await commands_cog.dropadd.callback(commands_cog,mock_interaction)
             
             # Should still defer (error handling in decorator)
             mock_interaction.response.defer.assert_called_once()
@@ -335,28 +329,44 @@ class TestDropAddIntegration:
         """Test roster validation throughout workflow."""
         clear_transaction_builder(mock_interaction.user.id)
         
-        # Create roster at limit (25 ML players)
+        # Create roster at limit (26 ML players for week 10)
         ml_players = []
-        for i in range(25):
-            ml_players.append(RosterPlayer(
+        for i in range(26):
+            ml_players.append(Player(
                 id=1000 + i,
                 name=f'ML Player {i}',
+                wara=3.0 + i * 0.1,
                 season=12,
-                primary_position='OF',
-                is_minor_league=False
+                team_id=499,
+                team=None,
+                image=None,
+                image2=None,
+                vanity_card=None,
+                headshot=None,
+                pos_1='OF',
+                pitcher_injury=None,
+                injury_rating=None,
+                il_return=None,
+                demotion_week=None,
+                last_game=None,
+                last_game2=None,
+                strat_code=None,
+                bbref_id=None,
+                sbaplayer=None
             ))
-        
+
         full_roster = TeamRoster(
             team_id=499,
+            team_abbrev='TST',
             week=10,
             season=12,
-            players=ml_players
+            active_players=ml_players
         )
         
         with patch('commands.transactions.dropadd.team_service') as mock_team_service:
             with patch('services.transaction_builder.roster_service') as mock_roster_service:
                 mock_team_service.get_teams_by_owner.return_value = [mock_team]
-                mock_roster_service.get_current_roster.return_value = full_roster
+                mock_roster_service.get_current_roster = AsyncMock(return_value=full_roster)
                 
                 # Create builder and try to add player (should exceed limit)
                 builder = get_transaction_builder(mock_interaction.user.id, mock_team)
@@ -371,9 +381,9 @@ class TestDropAddIntegration:
                 # Test validation
                 validation = await builder.validate_transaction()
                 assert validation.is_legal is False
-                assert validation.major_league_count == 26  # Over limit
+                assert validation.major_league_count == 27  # Over limit (25 + 1 added)
                 assert len(validation.errors) > 0
-                assert "26 players (limit: 25)" in validation.errors[0]
+                assert "27 players (limit: 26)" in validation.errors[0]
                 assert len(validation.suggestions) > 0
                 assert "Drop 1 ML player" in validation.suggestions[0]
     
@@ -385,10 +395,10 @@ class TestDropAddIntegration:
         with patch('commands.transactions.dropadd.team_service') as mock_team_service:
             with patch('services.transaction_builder.roster_service') as mock_roster_service:
                 mock_team_service.get_teams_by_owner.return_value = [mock_team]
-                mock_roster_service.get_current_roster.return_value = mock_roster
+                mock_roster_service.get_current_roster = AsyncMock(return_value=mock_roster)
                 
                 # First command call
-                await commands_cog.dropadd(mock_interaction)
+                await commands_cog.dropadd.callback(commands_cog,mock_interaction)
                 builder1 = get_transaction_builder(mock_interaction.user.id, mock_team)
                 
                 # Add a move
@@ -402,7 +412,7 @@ class TestDropAddIntegration:
                 assert builder1.move_count == 1
                 
                 # Second command call should get same builder
-                await commands_cog.dropadd(mock_interaction)
+                await commands_cog.dropadd.callback(commands_cog,mock_interaction)
                 builder2 = get_transaction_builder(mock_interaction.user.id, mock_team)
                 
                 # Should be same instance with same moves
@@ -418,10 +428,10 @@ class TestDropAddIntegration:
         with patch('commands.transactions.dropadd.team_service') as mock_team_service:
             with patch('services.transaction_builder.roster_service') as mock_roster_service:
                 mock_team_service.get_teams_by_owner.return_value = [mock_team]
-                mock_roster_service.get_current_roster.return_value = mock_roster
+                mock_roster_service.get_current_roster = AsyncMock(return_value=mock_roster)
                 
                 # Test with empty builder
-                await commands_cog.transaction_status(mock_interaction)
+                await commands_cog.transaction_status.callback(commands_cog,mock_interaction)
                 
                 call_args = mock_interaction.followup.send.call_args
                 assert "transaction builder is empty" in call_args[0][0]
@@ -439,7 +449,7 @@ class TestDropAddIntegration:
                 # Reset mock
                 mock_interaction.followup.send.reset_mock()
                 
-                await commands_cog.transaction_status(mock_interaction)
+                await commands_cog.transaction_status.callback(commands_cog,mock_interaction)
                 
                 call_args = mock_interaction.followup.send.call_args
                 status_msg = call_args[0][0]

@@ -111,7 +111,7 @@ class TeamService(BaseService[Team]):
         try:
             season = season or SBA_CURRENT_SEASON
             params = [
-                ('abbrev', abbrev.upper()),
+                ('team_abbrev', abbrev.upper()),
                 ('season', str(season))
             ]
             

@@ -5,7 +5,7 @@ Handles transaction CRUD operations and business logic.
 """
 import logging
 from typing import Optional, List, Tuple
-from datetime import datetime
+from datetime import datetime, UTC
 
 from services.base_service import BaseService
 from models.transaction import Transaction, RosterValidation
@@ -193,7 +193,7 @@ class TransactionService(BaseService[Transaction]):
             # Update transaction status
             update_data = {
                 'cancelled': True,
-                'cancelled_at': datetime.utcnow().isoformat()
+                'cancelled_at': datetime.now(UTC).isoformat()
             }
             
             updated_transaction = await self.update(transaction_id, update_data)

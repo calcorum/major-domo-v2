@@ -5,7 +5,7 @@ Provides persistent tracking of bot-created voice channels using JSON file stora
 """
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
@@ -79,8 +79,8 @@ class VoiceChannelTracker:
             "guild_id": str(channel.guild.id),
             "name": channel.name,
             "type": channel_type,
-            "created_at": datetime.utcnow().isoformat(),
-            "last_checked": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
+            "last_checked": datetime.now(UTC).isoformat(),
             "empty_since": None,
             "creator_id": str(creator_id)
         }
@@ -100,11 +100,11 @@ class VoiceChannelTracker:
 
         if channel_key in channels:
             channel_data = channels[channel_key]
-            channel_data["last_checked"] = datetime.utcnow().isoformat()
+            channel_data["last_checked"] = datetime.now(UTC).isoformat()
 
             if is_empty and channel_data["empty_since"] is None:
                 # Channel just became empty
-                channel_data["empty_since"] = datetime.utcnow().isoformat()
+                channel_data["empty_since"] = datetime.now(UTC).isoformat()
                 logger.debug(f"Channel {channel_data['name']} became empty")
             elif not is_empty and channel_data["empty_since"] is not None:
                 # Channel is no longer empty
@@ -140,7 +140,9 @@ class VoiceChannelTracker:
             List of channel data dictionaries ready for cleanup
         """
         cleanup_candidates = []
-        cutoff_time = datetime.utcnow() - timedelta(minutes=empty_threshold_minutes)
+        cutoff_time = datetime.now(UTC) - timedelta(minutes=empty_threshold_minutes)
+        # Remove timezone info for comparison (to match existing naive timestamps)
+        cutoff_time = cutoff_time.replace(tzinfo=None)
 
         for channel_data in self._data.get("voice_channels", {}).values():
             if channel_data["empty_since"]:

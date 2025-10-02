@@ -93,11 +93,40 @@ class TestPlayerService:
         mock_client.get.return_value = mock_data
         
         result = await player_service_instance.get_players_by_team(5, season=12)
-        
+
         assert len(result) == 2
         assert all(isinstance(p, Player) for p in result)
         mock_client.get.assert_called_once_with('players', params=[('season', '12'), ('team_id', '5')])
-    
+
+    @pytest.mark.asyncio
+    async def test_get_players_by_team_with_sort(self, player_service_instance, mock_client):
+        """Test getting players by team with sort parameter."""
+        mock_data = {
+            'count': 2,
+            'players': [
+                self.create_player_data(1, 'Player1', team_id=5),
+                self.create_player_data(2, 'Player2', team_id=5)
+            ]
+        }
+        mock_client.get.return_value = mock_data
+
+        # Test with valid sort parameter
+        result = await player_service_instance.get_players_by_team(5, season=12, sort='cost-asc')
+
+        assert len(result) == 2
+        assert all(isinstance(p, Player) for p in result)
+        mock_client.get.assert_called_once_with('players', params=[('season', '12'), ('team_id', '5'), ('sort', 'cost-asc')])
+
+        # Reset mock for next test
+        mock_client.reset_mock()
+
+        # Test with invalid sort parameter (should be ignored)
+        result = await player_service_instance.get_players_by_team(5, season=12, sort='invalid-sort')
+
+        assert len(result) == 2
+        # Should not include sort parameter when invalid
+        mock_client.get.assert_called_once_with('players', params=[('season', '12'), ('team_id', '5')])
+
     @pytest.mark.asyncio
     async def test_get_players_by_name(self, player_service_instance, mock_client):
         """Test searching players by name."""

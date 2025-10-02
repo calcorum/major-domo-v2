@@ -17,8 +17,9 @@ from services.transaction_builder import (
 )
 from models.team import Team
 from models.player import Player
-from models.roster import TeamRoster, RosterPlayer
+from models.roster import TeamRoster
 from models.transaction import Transaction
+from tests.factories import PlayerFactory, TeamFactory
 
 
 class TestTransactionBuilder:
@@ -52,22 +53,52 @@ class TestTransactionBuilder:
         # Create roster players
         ml_players = []
         for i in range(24):  # 24 ML players (under limit)
-            ml_players.append(RosterPlayer(
-                player_id=1000 + i,
-                player_name=f'ML Player {i}',
-                position='OF',
+            ml_players.append(Player(
+                id=1000 + i,
+                name=f'ML Player {i}',
                 wara=1.5,
-                status='active'
+                season=12,
+                team_id=499,
+                team=None,
+                image=None,
+                image2=None,
+                vanity_card=None,
+                headshot=None,
+                pos_1='OF',
+                pitcher_injury=None,
+                injury_rating=None,
+                il_return=None,
+                demotion_week=None,
+                last_game=None,
+                last_game2=None,
+                strat_code=None,
+                bbref_id=None,
+                sbaplayer=None
             ))
         
         mil_players = []
-        for i in range(10):  # 10 MiL players
-            mil_players.append(RosterPlayer(
-                player_id=2000 + i,
-                player_name=f'MiL Player {i}',
-                position='OF',
+        for i in range(6):  # 6 MiL players (at limit)
+            mil_players.append(Player(
+                id=2000 + i,
+                name=f'MiL Player {i}',
                 wara=0.5,
-                status='minor'
+                season=12,
+                team_id=499,
+                team=None,
+                image=None,
+                image2=None,
+                vanity_card=None,
+                headshot=None,
+                pos_1='OF',
+                pitcher_injury=None,
+                injury_rating=None,
+                il_return=None,
+                demotion_week=None,
+                last_game=None,
+                last_game2=None,
+                strat_code=None,
+                bbref_id=None,
+                sbaplayer=None
             ))
         
         return TeamRoster(
@@ -331,8 +362,8 @@ class TestTransactionBuilder:
         """Test validation when transaction would exceed roster limit."""
         with patch.object(builder, '_current_roster', mock_roster):
             with patch.object(builder, '_roster_loaded', True):
-                # Add 2 players to exceed limit (24 + 2 = 26 > 25)
-                for i in range(2):
+                # Add 3 players to exceed limit (24 + 3 = 27 > 26)
+                for i in range(3):
                     player = Player(
                         id=3000 + i,
                         name=f'New Player {i}',
@@ -352,9 +383,9 @@ class TestTransactionBuilder:
                 validation = await builder.validate_transaction()
                 
                 assert validation.is_legal is False
-                assert validation.major_league_count == 26  # 24 + 2
+                assert validation.major_league_count == 27  # 24 + 3
                 assert len(validation.errors) == 1
-                assert "26 players (limit: 25)" in validation.errors[0]
+                assert "27 players (limit: 26)" in validation.errors[0]
                 assert len(validation.suggestions) == 1
                 assert "Drop 1 ML player" in validation.suggestions[0]
     
@@ -533,28 +564,28 @@ class TestRosterValidationResult:
         """Test status when over major league limit."""
         result = RosterValidationResult(
             is_legal=False,
-            major_league_count=26,
-            minor_league_count=10,
+            major_league_count=27,
+            minor_league_count=6,
             warnings=[],
             errors=[],
             suggestions=[]
         )
-        
-        expected = "❌ Major League: 26/25 (Over limit!)"
+
+        expected = "❌ Major League: 27/26 (Over limit!)"
         assert result.major_league_status == expected
     
     def test_major_league_status_at_limit(self):
         """Test status when at major league limit."""
         result = RosterValidationResult(
             is_legal=True,
-            major_league_count=25,
-            minor_league_count=10,
+            major_league_count=26,
+            minor_league_count=6,
             warnings=[],
             errors=[],
             suggestions=[]
         )
-        
-        expected = "✅ Major League: 25/25 (Legal)"
+
+        expected = "✅ Major League: 26/26 (Legal)"
         assert result.major_league_status == expected
     
     def test_major_league_status_under_limit(self):
@@ -562,27 +593,27 @@ class TestRosterValidationResult:
         result = RosterValidationResult(
             is_legal=True,
             major_league_count=23,
-            minor_league_count=10,
+            minor_league_count=6,
             warnings=[],
             errors=[],
             suggestions=[]
         )
-        
-        expected = "✅ Major League: 23/25 (Legal)"
+
+        expected = "✅ Major League: 23/26 (Legal)"
         assert result.major_league_status == expected
     
     def test_minor_league_status(self):
-        """Test minor league status (always unlimited)."""
+        """Test minor league status with limit."""
         result = RosterValidationResult(
-            is_legal=True,
+            is_legal=False,
             major_league_count=25,
-            minor_league_count=15,
+            minor_league_count=7,
             warnings=[],
             errors=[],
             suggestions=[]
         )
-        
-        expected = "✅ Minor League: 15/∞ (Legal)"
+
+        expected = "❌ Minor League: 7/6 (Over limit!)"
         assert result.minor_league_status == expected
 
 

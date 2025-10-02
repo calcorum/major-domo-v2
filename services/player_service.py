@@ -55,27 +55,37 @@ class PlayerService(BaseService[Player]):
             return None
     
     
-    async def get_players_by_team(self, team_id: int, season: int) -> List[Player]:
+    async def get_players_by_team(self, team_id: int, season: int, sort: Optional[str] = None) -> List[Player]:
         """
         Get all players for a specific team.
-        
+
         Args:
             team_id: Team identifier
             season: Season number (required)
-            
+            sort: Sort order - 'cost-asc', 'cost-desc', 'name-asc', 'name-desc' (optional)
+
         Returns:
-            List of players on the team
+            List of players on the team, optionally sorted
         """
         try:
             params = [
                 ('season', str(season)),
                 ('team_id', str(team_id))
             ]
-            
+
+            # Add sort parameter if specified
+            if sort:
+                valid_sorts = ['cost-asc', 'cost-desc', 'name-asc', 'name-desc']
+                if sort in valid_sorts:
+                    params.append(('sort', sort))
+                    logger.debug(f"Applying sort '{sort}' to team {team_id} players")
+                else:
+                    logger.warning(f"Invalid sort parameter '{sort}' - ignoring")
+
             players = await self.get_all_items(params=params)
             logger.debug(f"Retrieved {len(players)} players for team {team_id} in season {season}")
             return players
-            
+
         except Exception as e:
             logger.error(f"Failed to get players for team {team_id}: {e}")
             return []

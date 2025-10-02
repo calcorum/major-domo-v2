@@ -6,7 +6,7 @@ Validates voice channel creation, cleanup, and migration message functionality.
 import asyncio
 import json
 import tempfile
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -98,7 +98,7 @@ class TestVoiceChannelTracker:
             tracker = VoiceChannelTracker(str(data_file))
 
             # Create test data with different timestamps
-            current_time = datetime.utcnow()
+            current_time = datetime.now(UTC)
             old_empty_time = current_time - timedelta(minutes=20)
             recent_empty_time = current_time - timedelta(minutes=5)
 
