@@ -67,7 +67,7 @@ class TestTeamService:
         
         assert isinstance(result, Team)
         assert result.abbrev == 'NYY'
-        mock_client.get.assert_called_once_with('teams', params=[('abbrev', 'NYY'), ('season', '12')])
+        mock_client.get.assert_called_once_with('teams', params=[('team_abbrev', 'NYY'), ('season', '12')])
     
     @pytest.mark.asyncio
     async def test_get_team_by_abbrev_not_found(self, team_service_instance, mock_client):
@@ -307,7 +307,7 @@ class TestTeamService:
         assert result is not None
         assert result.abbrev == 'NYY'
         # Should call with uppercase
-        mock_client.get.assert_called_once_with('teams', params=[('abbrev', 'NYY'), ('season', '12')])
+        mock_client.get.assert_called_once_with('teams', params=[('team_abbrev', 'NYY'), ('season', '12')])
 
 
 class TestGlobalTeamServiceInstance:

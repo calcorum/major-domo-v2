@@ -706,7 +706,99 @@ utils/
 
 ---
 
-**Last Updated:** August 28, 2025 - Added Redis Caching Infrastructure and Enhanced Decorators  
+## 🔍 Autocomplete Functions
+
+**Location:** `utils/autocomplete.py`
+**Purpose:** Shared autocomplete functions for Discord slash command parameters.
+
+### **Available Functions**
+
+#### **Player Autocomplete**
+```python
+async def player_autocomplete(interaction: discord.Interaction, current: str) -> List[discord.app_commands.Choice]:
+    """Autocomplete for player names with priority ordering."""
+```
+
+**Features:**
+- Fuzzy name matching with word boundaries
+- Prioritizes exact matches and starts-with matches
+- Limits to 25 results (Discord limit)
+- Handles API errors gracefully
+
+#### **Team Autocomplete (All Teams)**
+```python
+async def team_autocomplete(interaction: discord.Interaction, current: str) -> List[discord.app_commands.Choice]:
+    """Autocomplete for all team abbreviations."""
+```
+
+**Features:**
+- Matches team abbreviations (e.g., "WV", "NY", "WVMIL")
+- Case-insensitive matching
+- Includes full team names in display
+
+#### **Major League Team Autocomplete**
+```python
+async def major_league_team_autocomplete(interaction: discord.Interaction, current: str) -> List[discord.app_commands.Choice]:
+    """Autocomplete for Major League teams only (filtered by roster type)."""
+```
+
+**Features:**
+- Filters to only Major League teams (≤3 character abbreviations)
+- Uses Team model's `roster_type()` method for accurate filtering
+- Excludes Minor League (MiL) and Injured List (IL) teams
+
+### **Usage in Commands**
+
+```python
+from utils.autocomplete import player_autocomplete, major_league_team_autocomplete
+
+class RosterCommands(commands.Cog):
+    @discord.app_commands.command(name="roster")
+    @discord.app_commands.describe(
+        team="Team abbreviation",
+        player="Player name (optional)"
+    )
+    async def roster_command(
+        self,
+        interaction: discord.Interaction,
+        team: str,
+        player: Optional[str] = None
+    ):
+        # Command logic here
+        pass
+
+    # Autocomplete decorators
+    @roster_command.autocomplete('team')
+    async def roster_team_autocomplete(self, interaction, current):
+        return await major_league_team_autocomplete(interaction, current)
+
+    @roster_command.autocomplete('player')
+    async def roster_player_autocomplete(self, interaction, current):
+        return await player_autocomplete(interaction, current)
+```
+
+### **Recent Fixes (January 2025)**
+
+#### **Team Filtering Issue**
+- **Problem**: `major_league_team_autocomplete` was passing invalid `roster_type` parameter to API
+- **Solution**: Removed parameter and implemented client-side filtering using `team.roster_type()` method
+- **Benefit**: More accurate team filtering that respects edge cases like "BHMIL" vs "BHMMIL"
+
+#### **Test Coverage**
+- Added comprehensive test suite in `tests/test_utils_autocomplete.py`
+- Tests cover all functions, error handling, and edge cases
+- Validates prioritization logic and result limits
+
+### **Implementation Notes**
+
+- **Shared Functions**: Autocomplete logic centralized to avoid duplication across commands
+- **Error Handling**: Functions return empty lists on API errors rather than crashing
+- **Performance**: Uses cached service calls where possible
+- **Discord Limits**: Respects 25-choice limit for autocomplete responses
+
+---
+
+**Last Updated:** January 2025 - Added Autocomplete Functions and Fixed Team Filtering
 **Next Update:** When additional utility modules are added
 
 For questions or improvements to the logging system, check the implementation in `utils/logging.py` or refer to the JSON log outputs in `logs/discord_bot_v2.json`.

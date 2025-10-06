@@ -180,6 +180,96 @@ Services respect environment configuration:
 - API error rates are monitored
 - Service response times are measured
 
+## Transaction Builder Enhancements (January 2025)
+
+### Enhanced sWAR Calculations
+The `TransactionBuilder` now includes comprehensive sWAR (sum of WARA) tracking for both current moves and pre-existing transactions:
+
+```python
+class TransactionBuilder:
+    async def validate_transaction(self, next_week: Optional[int] = None) -> RosterValidationResult:
+        """
+        Validate transaction with optional pre-existing transaction analysis.
+
+        Args:
+            next_week: Week to check for existing transactions (includes pre-existing analysis)
+
+        Returns:
+            RosterValidationResult with projected roster counts and sWAR values
+        """
+```
+
+### Pre-existing Transaction Support
+When `next_week` is provided, the transaction builder:
+- **Fetches existing transactions** for the specified week via API
+- **Calculates roster impact** of scheduled moves using organizational team matching
+- **Tracks sWAR changes** separately for Major League and Minor League rosters
+- **Provides contextual display** for user transparency
+
+#### Usage Examples
+```python
+# Basic validation (current functionality)
+validation = await builder.validate_transaction()
+
+# Enhanced validation with pre-existing transactions
+current_week = await league_service.get_current_week()
+validation = await builder.validate_transaction(next_week=current_week + 1)
+
+# Access enhanced data
+print(f"Projected ML sWAR: {validation.major_league_swar}")
+print(f"Pre-existing impact: {validation.pre_existing_transactions_note}")
+```
+
+### Enhanced RosterValidationResult
+New fields provide complete transaction context:
+
+```python
+@dataclass
+class RosterValidationResult:
+    # Existing fields...
+    major_league_swar: float = 0.0
+    minor_league_swar: float = 0.0
+    pre_existing_ml_swar_change: float = 0.0
+    pre_existing_mil_swar_change: float = 0.0
+    pre_existing_transaction_count: int = 0
+
+    @property
+    def major_league_swar_status(self) -> str:
+        """Formatted sWAR display with emoji."""
+
+    @property
+    def pre_existing_transactions_note(self) -> str:
+        """User-friendly note about pre-existing moves impact."""
+```
+
+### Organizational Team Matching
+Transaction processing now uses sophisticated team matching:
+
+```python
+# Enhanced logic using Team.is_same_organization()
+if transaction.oldteam.is_same_organization(self.team):
+    # Accurately determine which roster the player is leaving
+    from_roster_type = transaction.oldteam.roster_type()
+
+    if from_roster_type == RosterType.MAJOR_LEAGUE:
+        # Update ML roster and sWAR
+    elif from_roster_type == RosterType.MINOR_LEAGUE:
+        # Update MiL roster and sWAR
+```
+
+### Key Improvements
+- **Accurate Roster Detection**: Uses `Team.roster_type()` instead of assumptions
+- **Organization Awareness**: Properly handles PORMIL, PORIL transactions for POR team
+- **Separate sWAR Tracking**: ML and MiL sWAR changes tracked independently
+- **Performance Optimization**: Pre-existing transactions loaded once and cached
+- **User Transparency**: Clear display of how pre-existing moves affect calculations
+
+### Implementation Details
+- **Backwards Compatible**: All existing functionality preserved
+- **Optional Enhancement**: `next_week` parameter is optional
+- **Error Handling**: Graceful fallback if pre-existing transactions cannot be loaded
+- **Caching**: Transaction and roster data cached to avoid repeated API calls
+
 ---
 
 **Next Steps for AI Agents:**
@@ -188,3 +278,4 @@ Services respect environment configuration:
 3. Understand the caching decorators in `/utils/decorators.py`
 4. Follow the error handling patterns established in `BaseService`
 5. Use structured logging with contextual information
+6. Consider pre-existing transaction impact when building new transaction features

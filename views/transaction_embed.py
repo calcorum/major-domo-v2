@@ -311,17 +311,29 @@ async def create_transaction_embed(builder: TransactionBuilder) -> discord.Embed
     validation = await builder.validate_transaction()
     
     roster_status = f"{validation.major_league_status}\n{validation.minor_league_status}"
-    if not validation.is_legal:
-        roster_status += f"\n✅ Free Agency: Available"
-    else:
-        roster_status += f"\n✅ Free Agency: Available"
     
     embed.add_field(
         name="Roster Status",
         value=roster_status,
         inline=False
     )
-    
+
+    # Add sWAR status
+    swar_status = f"{validation.major_league_swar_status}\n{validation.minor_league_swar_status}"
+    embed.add_field(
+        name="Team sWAR",
+        value=swar_status,
+        inline=False
+    )
+
+    # Add pre-existing transactions note if applicable
+    if validation.pre_existing_transactions_note:
+        embed.add_field(
+            name="📋 Transaction Context",
+            value=validation.pre_existing_transactions_note,
+            inline=False
+        )
+
     # Add suggestions/errors
     if validation.errors:
         error_text = "\n".join([f"• {error}" for error in validation.errors])

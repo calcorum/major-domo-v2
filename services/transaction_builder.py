@@ -74,7 +74,7 @@ class TransactionMove:
             return f"{emoji} {self.player.name}: {from_desc} → {to_desc}"
 
 
-@dataclass 
+@dataclass
 class RosterValidationResult:
     """Results of roster validation."""
     is_legal: bool
@@ -85,14 +85,17 @@ class RosterValidationResult:
     suggestions: List[str]
     major_league_limit: int = 26
     minor_league_limit: int = 6
+    major_league_swar: float = 0.0
+    minor_league_swar: float = 0.0
+    pre_existing_ml_swar_change: float = 0.0
+    pre_existing_mil_swar_change: float = 0.0
+    pre_existing_transaction_count: int = 0
     
     @property
     def major_league_status(self) -> str:
         """Status string for major league roster."""
         if self.major_league_count > self.major_league_limit:
             return f"❌ Major League: {self.major_league_count}/{self.major_league_limit} (Over limit!)"
-        elif self.major_league_count == self.major_league_limit:
-            return f"✅ Major League: {self.major_league_count}/{self.major_league_limit} (Legal)"
         else:
             return f"✅ Major League: {self.major_league_count}/{self.major_league_limit} (Legal)"
     
@@ -101,10 +104,33 @@ class RosterValidationResult:
         """Status string for minor league roster."""
         if self.minor_league_count > self.minor_league_limit:
             return f"❌ Minor League: {self.minor_league_count}/{self.minor_league_limit} (Over limit!)"
-        elif self.minor_league_count == self.minor_league_limit:
-            return f"✅ Minor League: {self.minor_league_count}/{self.minor_league_limit} (Legal)"
         else:
             return f"✅ Minor League: {self.minor_league_count}/{self.minor_league_limit} (Legal)"
+
+    @property
+    def major_league_swar_status(self) -> str:
+        """Status string for major league sWAR."""
+        return f"📊 Major League sWAR: {self.major_league_swar:.2f}"
+
+    @property
+    def minor_league_swar_status(self) -> str:
+        """Status string for minor league sWAR."""
+        return f"📊 Minor League sWAR: {self.minor_league_swar:.2f}"
+
+    @property
+    def pre_existing_transactions_note(self) -> str:
+        """Note about pre-existing transactions affecting calculations."""
+        if self.pre_existing_transaction_count == 0:
+            return ""
+
+        total_swar_change = self.pre_existing_ml_swar_change + self.pre_existing_mil_swar_change
+
+        if total_swar_change == 0:
+            return f"ℹ️ **Pre-existing Moves**: {self.pre_existing_transaction_count} scheduled moves (no sWAR impact)"
+        elif total_swar_change > 0:
+            return f"ℹ️ **Pre-existing Moves**: {self.pre_existing_transaction_count} scheduled moves (+{total_swar_change:.2f} sWAR)"
+        else:
+            return f"ℹ️ **Pre-existing Moves**: {self.pre_existing_transaction_count} scheduled moves ({total_swar_change:.2f} sWAR)"
 
 
 class TransactionBuilder:
@@ -128,14 +154,18 @@ class TransactionBuilder:
         # Cache for roster data
         self._current_roster: Optional[TeamRoster] = None
         self._roster_loaded = False
-        
+
+        # Cache for pre-existing transactions
+        self._existing_transactions: Optional[List[Transaction]] = None
+        self._existing_transactions_loaded = False
+
         logger.info(f"TransactionBuilder initialized for {team.abbrev} by user {user_id}")
     
     async def load_roster_data(self) -> None:
         """Load current roster data for the team."""
         if self._roster_loaded:
             return
-            
+
         try:
             self._current_roster = await roster_service.get_current_roster(self.team.id)
             self._roster_loaded = True
@@ -144,6 +174,25 @@ class TransactionBuilder:
             logger.error(f"Failed to load roster data: {e}")
             self._current_roster = None
             self._roster_loaded = True
+
+    async def load_existing_transactions(self, next_week: int) -> None:
+        """Load pre-existing transactions for next week."""
+        if self._existing_transactions_loaded:
+            return
+
+        try:
+            self._existing_transactions = await transaction_service.get_team_transactions(
+                team_abbrev=self.team.abbrev,
+                season=self.season,
+                cancelled=False,
+                week_start=next_week
+            )
+            self._existing_transactions_loaded = True
+            logger.debug(f"Loaded {len(self._existing_transactions or [])} existing transactions for {self.team.abbrev} week {next_week}")
+        except Exception as e:
+            logger.error(f"Failed to load existing transactions: {e}")
+            self._existing_transactions = []
+            self._existing_transactions_loaded = True
     
     def add_move(self, move: TransactionMove) -> tuple[bool, str]:
         """
@@ -200,14 +249,21 @@ class TransactionBuilder:
                 return move
         return None
     
-    async def validate_transaction(self) -> RosterValidationResult:
+    async def validate_transaction(self, next_week: Optional[int] = None) -> RosterValidationResult:
         """
         Validate the current transaction and return detailed results.
-        
+
+        Args:
+            next_week: Week to check for existing transactions (optional)
+
         Returns:
             RosterValidationResult with validation details
         """
         await self.load_roster_data()
+
+        # Load existing transactions if next_week is provided
+        if next_week is not None:
+            await self.load_existing_transactions(next_week)
         
         if not self._current_roster:
             return RosterValidationResult(
@@ -225,28 +281,89 @@ class TransactionBuilder:
         errors = []
         warnings = []
         suggestions = []
-        
+
+        # Calculate current sWAR for each roster
+        current_ml_swar = sum(player.wara for player in self._current_roster.active_players)
+        current_mil_swar = sum(player.wara for player in self._current_roster.minor_league_players)
+
+        # Track sWAR changes from moves
+        ml_swar_changes = 0.0
+        mil_swar_changes = 0.0
+
+        # Track pre-existing transaction changes separately
+        pre_existing_ml_swar_change = 0.0
+        pre_existing_mil_swar_change = 0.0
+        pre_existing_count = 0
+
+        # Process existing transactions first
+        if self._existing_transactions:
+            for transaction in self._existing_transactions:
+                # Skip if this transaction was already processed or cancelled
+                if transaction.cancelled:
+                    continue
+
+                pre_existing_count += 1
+
+                # Determine roster changes from existing transaction
+                # Use Team.is_same_organization() to check if transaction affects our organization
+
+                # Leaving our organization (from any roster)
+                if transaction.oldteam.is_same_organization(self.team):
+                    # Player leaving our organization - determine which roster they're leaving from
+                    from_roster_type = transaction.oldteam.roster_type()
+
+                    if from_roster_type == RosterType.MAJOR_LEAGUE:
+                        ml_changes -= 1
+                        ml_swar_changes -= transaction.player.wara
+                        pre_existing_ml_swar_change -= transaction.player.wara
+                    elif from_roster_type == RosterType.MINOR_LEAGUE:
+                        mil_changes -= 1
+                        mil_swar_changes -= transaction.player.wara
+                        pre_existing_mil_swar_change -= transaction.player.wara
+                    # Note: IL players don't count toward roster limits, so no changes needed
+
+                # Joining our organization (to any roster)
+                if transaction.newteam.is_same_organization(self.team):
+                    # Player joining our organization - determine which roster they're joining
+                    to_roster_type = transaction.newteam.roster_type()
+
+                    if to_roster_type == RosterType.MAJOR_LEAGUE:
+                        ml_changes += 1
+                        ml_swar_changes += transaction.player.wara
+                        pre_existing_ml_swar_change += transaction.player.wara
+                    elif to_roster_type == RosterType.MINOR_LEAGUE:
+                        mil_changes += 1
+                        mil_swar_changes += transaction.player.wara
+                        pre_existing_mil_swar_change += transaction.player.wara
+                    # Note: IL players don't count toward roster limits, so no changes needed
+
         for move in self.moves:
             # Calculate roster changes based on from/to locations
             if move.from_roster == RosterType.MAJOR_LEAGUE:
                 ml_changes -= 1
+                ml_swar_changes -= move.player.wara
             elif move.from_roster == RosterType.MINOR_LEAGUE:
                 mil_changes -= 1
+                mil_swar_changes -= move.player.wara
             # Note: INJURED_LIST and FREE_AGENCY don't count toward ML roster limit
 
             if move.to_roster == RosterType.MAJOR_LEAGUE:
                 ml_changes += 1
+                ml_swar_changes += move.player.wara
             elif move.to_roster == RosterType.MINOR_LEAGUE:
                 mil_changes += 1
+                mil_swar_changes += move.player.wara
             # Note: INJURED_LIST and FREE_AGENCY don't count toward ML roster limit
         
-        # Calculate projected roster sizes
+        # Calculate projected roster sizes and sWAR
         # Only Major League players count toward ML roster limit (IL and MiL are separate)
         current_ml_size = len(self._current_roster.active_players)
         current_mil_size = len(self._current_roster.minor_league_players)
-        
+
         projected_ml_size = current_ml_size + ml_changes
         projected_mil_size = current_mil_size + mil_changes
+        projected_ml_swar = current_ml_swar + ml_swar_changes
+        projected_mil_swar = current_mil_swar + mil_swar_changes
         
         # Get current week to determine roster limits
         try:
@@ -296,7 +413,12 @@ class TransactionBuilder:
             errors=errors,
             suggestions=suggestions,
             major_league_limit=ml_limit,
-            minor_league_limit=mil_limit
+            minor_league_limit=mil_limit,
+            major_league_swar=projected_ml_swar,
+            minor_league_swar=projected_mil_swar,
+            pre_existing_ml_swar_change=pre_existing_ml_swar_change,
+            pre_existing_mil_swar_change=pre_existing_mil_swar_change,
+            pre_existing_transaction_count=pre_existing_count
         )
     
     async def submit_transaction(self, week: int) -> List[Transaction]:
@@ -312,7 +434,7 @@ class TransactionBuilder:
         if not self.moves:
             raise ValueError("Cannot submit empty transaction")
         
-        validation = await self.validate_transaction()
+        validation = await self.validate_transaction(next_week=week)
         if not validation.is_legal:
             raise ValueError(f"Cannot submit illegal transaction: {', '.join(validation.errors)}")
         
@@ -326,7 +448,7 @@ class TransactionBuilder:
             sname="Free Agents", 
             lname="Free Agency",
             season=self.season
-        )
+        ) # type: ignore
         
         for move in self.moves:
             # Determine old and new teams based on roster locations

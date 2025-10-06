@@ -13,6 +13,28 @@ This directory contains Discord slash commands for transaction management and ro
   - `roster_service` (roster validation and retrieval)
   - `team_service.get_teams_by_owner()` and `get_team_by_abbrev()`
 
+### `dropadd.py`
+- **Commands**:
+  - `/dropadd` - Interactive transaction builder for single-team roster moves
+  - `/cleartransaction` - Clear current transaction builder
+- **Service Dependencies**:
+  - `transaction_builder` (transaction creation and validation)
+  - `player_service.search_players()` (player autocomplete)
+  - `team_service.get_teams_by_owner()`
+
+### `trade.py` *(NEW)*
+- **Commands**:
+  - `/trade initiate` - Start a new multi-team trade
+  - `/trade add-team` - Add additional teams to trade (3+ team trades)
+  - `/trade add-player` - Add player exchanges between teams
+  - `/trade supplementary` - Add internal organizational moves for roster legality
+  - `/trade view` - View current trade status
+  - `/trade clear` - Clear current trade
+- **Service Dependencies**:
+  - `trade_builder` (multi-team trade management)
+  - `player_service.search_players()` (player autocomplete)
+  - `team_service.get_teams_by_owner()` and `get_team_by_abbrev()`
+
 ## Key Features
 
 ### Transaction Status Display (`/mymoves`)
@@ -39,6 +61,29 @@ This directory contains Discord slash commands for transaction management and ro
   - League rule compliance checking
   - Error and warning categorization
 - **Parallel Processing**: Roster retrieval and validation run concurrently
+
+### Multi-Team Trade System (`/trade`) *(NEW)*
+- **Trade Initiation**: Start trades between multiple teams using proper Discord command groups
+- **Team Management**: Add/remove teams to create complex multi-team trades (2+ teams supported)
+- **Player Exchanges**: Add cross-team player movements with source and destination validation
+- **Supplementary Moves**: Add internal organizational moves for roster legality compliance
+- **Interactive UI**: Rich Discord embeds with validation feedback and trade status
+- **Real-time Validation**: Live roster checking across all participating teams
+- **Authority Model**: Major League team owners control all players in their organization (ML/MiL/IL)
+
+#### Trade Command Workflow:
+1. **`/trade initiate other_team:LAA`** - Start trade between your team and LAA
+2. **`/trade add-team other_team:BOS`** - Add BOS for 3-team trade
+3. **`/trade add-player player_name:"Mike Trout" destination_team:BOS`** - Exchange players
+4. **`/trade supplementary player_name:"Player X" destination:ml`** - Internal roster moves
+5. **`/trade view`** - Review complete trade with validation
+6. **Submit via interactive UI** - Trade submission through Discord buttons
+
+#### Autocomplete System:
+- **Team Initiation**: Only Major League teams (ML team owners initiate trades)
+- **Player Destinations**: All roster types (ML/MiL/IL) available for player placement
+- **Player Search**: Prioritizes user's team players, supports fuzzy name matching
+- **Smart Filtering**: Context-aware suggestions based on user permissions
 
 ### Advanced Transaction Features
 - **Concurrent Data Fetching**: Multiple transaction types retrieved in parallel
@@ -100,14 +145,27 @@ This directory contains Discord slash commands for transaction management and ro
 - `services.team_service`:
   - `get_teams_by_owner()`
   - `get_team_by_abbrev()`
+  - `get_teams_by_season()` *(trade autocomplete)*
+- `services.trade_builder` *(NEW)*:
+  - `TradeBuilder` class for multi-team transaction management
+  - `get_trade_builder()` and `clear_trade_builder()` cache functions
+  - `TradeValidationResult` for comprehensive trade validation
+- `services.player_service`:
+  - `search_players()` for autocomplete functionality
 
 ### Core Dependencies
 - `utils.decorators.logged_command`
 - `views.embeds.EmbedTemplate`
+- `views.trade_embed` *(NEW)*: Trade-specific UI components
+- `utils.autocomplete` *(ENHANCED)*: Player and team autocomplete functions
+- `utils.team_utils` *(NEW)*: Shared team validation utilities
 - `constants.SBA_CURRENT_SEASON`
 
 ### Testing
-Run tests with: `python -m pytest tests/test_commands_transactions.py -v`
+Run tests with:
+- `python -m pytest tests/test_commands_transactions.py -v` (management commands)
+- `python -m pytest tests/test_models_trade.py -v` *(NEW)* (trade models)
+- `python -m pytest tests/test_services_trade_builder.py -v` *(NEW)* (trade builder service)
 
 ## Database Requirements
 - Team ownership mapping (Discord user ID to team)
@@ -116,12 +174,20 @@ Run tests with: `python -m pytest tests/test_commands_transactions.py -v`
 - Player assignments and position information
 - League rules and validation criteria
 
+## Recent Enhancements *(NEW)*
+- ✅ **Multi-Team Trade System**: Complete `/trade` command group for 2+ team trades
+- ✅ **Enhanced Autocomplete**: Major League team filtering and smart player suggestions
+- ✅ **Shared Utilities**: Reusable team validation and autocomplete functions
+- ✅ **Comprehensive Testing**: Factory-based tests for trade models and services
+- ✅ **Interactive Trade UI**: Rich Discord embeds with real-time validation
+
 ## Future Enhancements
-- Transaction submission and modification commands
-- Advanced transaction analytics and history
-- Roster optimization suggestions
-- Transaction approval workflow integration
-- Automated roster validation alerts
+- **Trade Submission Integration**: Connect trade system to transaction processing pipeline
+- **Advanced transaction analytics and history
+- **Trade Approval Workflow**: Multi-party trade approval system
+- **Roster optimization suggestions
+- **Automated roster validation alerts
+- **Trade History Tracking**: Complete audit trail for multi-team trades
 
 ## Security Considerations
 - User authentication via Discord IDs

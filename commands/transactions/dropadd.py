@@ -11,10 +11,12 @@ from discord import app_commands
 
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
+from utils.autocomplete import player_autocomplete
+from utils.team_utils import validate_user_has_team
 from constants import SBA_CURRENT_SEASON
 
 from services.transaction_builder import (
-    TransactionBuilder, 
+    TransactionBuilder,
     RosterType,
     TransactionMove,
     get_transaction_builder,
@@ -32,101 +34,19 @@ class DropAddCommands(commands.Cog):
         self.bot = bot
         self.logger = get_contextual_logger(f'{__name__}.DropAddCommands')
     
-    async def player_autocomplete(
-        self,
-        interaction: discord.Interaction,
-        current: str
-    ) -> List[app_commands.Choice[str]]:
-        """
-        Autocomplete for player names with team context prioritization.
-
-        Args:
-            interaction: Discord interaction
-            current: Current input from user
-
-        Returns:
-            List of player name choices (user's team players first)
-        """
-        if len(current) < 2:
-            return []
-
-        try:
-            # Get user's team for prioritization
-            user_team = None
-            try:
-                major_league_teams = await team_service.get_teams_by_owner(
-                    interaction.user.id,
-                    SBA_CURRENT_SEASON,
-                    roster_type="ml"
-                )
-                if major_league_teams:
-                    user_team = major_league_teams[0]
-            except Exception:
-                # If we can't get user's team, continue without prioritization
-                pass
-
-            # Search for players using the search endpoint
-            players = await player_service.search_players(current, limit=50, season=SBA_CURRENT_SEASON)
-
-            # Separate players by team (user's team vs others)
-            user_team_players = []
-            other_players = []
-
-            for player in players:
-                # Check if player belongs to user's team (any roster section)
-                is_users_player = False
-                if user_team and hasattr(player, 'team') and player.team:
-                    # Check if player is from user's major league team or has same base team
-                    if (player.team.id == user_team.id or
-                        (hasattr(player, 'team_id') and player.team_id == user_team.id)):
-                        is_users_player = True
-
-                if is_users_player:
-                    user_team_players.append(player)
-                else:
-                    other_players.append(player)
-
-            # Format choices with team context
-            choices = []
-
-            # Add user's team players first (prioritized)
-            for player in user_team_players[:15]:  # Limit user team players
-                team_info = f"{player.primary_position}"
-                if hasattr(player, 'team') and player.team:
-                    team_info += f" - {player.team.abbrev}"
-
-                choice_name = f"{player.name} ({team_info})"
-                choices.append(app_commands.Choice(name=choice_name, value=player.name))
-
-            # Add other players (remaining slots)
-            remaining_slots = 25 - len(choices)
-            for player in other_players[:remaining_slots]:
-                team_info = f"{player.primary_position}"
-                if hasattr(player, 'team') and player.team:
-                    team_info += f" - {player.team.abbrev}"
-
-                choice_name = f"{player.name} ({team_info})"
-                choices.append(app_commands.Choice(name=choice_name, value=player.name))
-
-            return choices
-
-        except Exception as e:
-            self.logger.error(f"Error in player autocomplete: {e}")
-            return []
     
     @app_commands.command(
         name="dropadd",
-        description="Interactive transaction builder for player moves"
+        description="Build a transaction for next week"
     )
     @app_commands.describe(
-        player="Player name (use autocomplete for best results)",
-        destination="Where to move the player: Major League, Minor League, Injured List, or Free Agency"
+        player="Player name; begin typing for autocomplete",
+        destination="Where to move the player: Major League, Minor League, or Free Agency"
     )
     @app_commands.autocomplete(player=player_autocomplete)
     @app_commands.choices(destination=[
         app_commands.Choice(name="Major League", value="ml"),
         app_commands.Choice(name="Minor League", value="mil"),
-        app_commands.Choice(name="Injured List", value="il"),
         app_commands.Choice(name="Free Agency", value="fa")
     ])
     @logged_command("/dropadd")
@@ -140,20 +60,9 @@ class DropAddCommands(commands.Cog):
         await interaction.response.defer(ephemeral=True)
 
         # Get user's major league team
-        major_league_teams = await team_service.get_teams_by_owner(
-            interaction.user.id,
-            SBA_CURRENT_SEASON,
-            roster_type="ml"
-        )
-
-        if not major_league_teams:
-            await interaction.followup.send(
-                "❌ You don't appear to own a major league team in the current season.",
-                ephemeral=True
-            )
+        team = await validate_user_has_team(interaction)
+        if not team:
             return
-
-        team = major_league_teams[0]  # Use first major league team
 
         # Get or create transaction builder
         builder = get_transaction_builder(interaction.user.id, team)

@@ -39,7 +39,7 @@ class SBABaseModel(BaseModel):
 ### Core Entities
 
 #### League Structure
-- **`team.py`** - Team information, abbreviations, divisions
+- **`team.py`** - Team information, abbreviations, divisions, and organizational affiliates
 - **`division.py`** - Division structure and organization
 - **`manager.py`** - Team managers and ownership
 - **`standings.py`** - Team standings and rankings
@@ -62,6 +62,9 @@ class SBABaseModel(BaseModel):
 
 #### Custom Features
 - **`custom_command.py`** - User-created Discord commands
+
+#### Trade System
+- **`trade.py`** - Multi-team trade structures and validation
 
 ### Legacy Models
 - **`current.py`** - Legacy model definitions for backward compatibility
@@ -303,6 +306,62 @@ except ValidationError as e:
 5. **Provide `from_api_data()` class method** if needed
 6. **Write comprehensive tests** covering edge cases
 
+## Team Model Enhancements (January 2025)
+
+### Organizational Affiliate Methods
+The Team model now includes methods to work with organizational affiliates (Major League, Minor League, and Injured List teams):
+
+```python
+class Team(SBABaseModel):
+    async def major_league_affiliate(self) -> 'Team':
+        """Get the major league team for this organization via API call."""
+
+    async def minor_league_affiliate(self) -> 'Team':
+        """Get the minor league team for this organization via API call."""
+
+    async def injured_list_affiliate(self) -> 'Team':
+        """Get the injured list team for this organization via API call."""
+
+    def is_same_organization(self, other_team: 'Team') -> bool:
+        """Check if this team and another team are from the same organization."""
+```
+
+### Usage Examples
+
+#### Organizational Relationships
+```python
+# Get affiliate teams
+por_team = await team_service.get_team_by_abbrev("POR", 12)
+por_mil = await por_team.minor_league_affiliate()  # Returns "PORMIL" team
+por_il = await por_team.injured_list_affiliate()   # Returns "PORIL" team
+
+# Check organizational relationships
+assert por_team.is_same_organization(por_mil)  # True
+assert por_team.is_same_organization(por_il)   # True
+
+# Different organizations
+nyy_team = await team_service.get_team_by_abbrev("NYY", 12)
+assert not por_team.is_same_organization(nyy_team)  # False
+```
+
+#### Roster Type Detection
+```python
+# Determine roster type from team abbreviation
+assert por_team.roster_type() == RosterType.MAJOR_LEAGUE  # "POR"
+assert por_mil.roster_type() == RosterType.MINOR_LEAGUE   # "PORMIL"
+assert por_il.roster_type() == RosterType.INJURED_LIST    # "PORIL"
+
+# Handle edge cases
+bhm_il = Team(abbrev="BHMIL")  # BHM + IL, not BH + MIL
+assert bhm_il.roster_type() == RosterType.INJURED_LIST
+```
+
+### Implementation Notes
+- **API Integration**: Affiliate methods make actual API calls to fetch team data
+- **Error Handling**: Methods raise `ValueError` if affiliate teams cannot be found
+- **Edge Cases**: Correctly handles teams like "BHMIL" (Birmingham IL)
+- **Performance**: Base abbreviation extraction is cached internally
+
 ### Model Evolution
 - **Backward compatibility** - Add optional fields for new features
 - **Migration patterns** - Handle schema changes gracefully
@@ -314,6 +373,111 @@ except ValidationError as e:
 - **Integration tests** with service layer
 - **Edge case testing** for validation rules
 - **Performance tests** for large data sets
+
+## Trade Model Enhancements (January 2025)
+
+### Multi-Team Trade Support
+The Trade model now supports complex multi-team player exchanges with proper organizational authority handling:
+
+```python
+class Trade(SBABaseModel):
+    def get_participant_by_organization(self, team: Team) -> Optional[TradeParticipant]:
+        """Find participant by organization affiliation.
+
+        Major League team owners control their entire organization (ML/MiL/IL),
+        so if a ML team is participating, their MiL and IL teams are also valid.
+        """
+
+    @property
+    def cross_team_moves(self) -> List[TradeMove]:
+        """Get all moves that cross team boundaries (deduplicated)."""
+```
+
+### Key Features
+
+#### Organizational Authority Model
+```python
+# ML team owners can trade from/to any affiliate
+wv_team = Team(abbrev="WV")     # Major League
+wv_mil = Team(abbrev="WVMIL")   # Minor League
+wv_il = Team(abbrev="WVIL")     # Injured List
+
+# If WV is participating in trade, WVMIL and WVIL moves are valid
+trade.add_participant(wv_team)  # Add ML team
+# Now can move players to/from WVMIL and WVIL
+```
+
+#### Deduplication Fix
+```python
+# Before: Each move appeared twice (giving + receiving perspective)
+cross_moves = trade.cross_team_moves  # Would show duplicates
+
+# After: Clean single view of each player exchange
+cross_moves = trade.cross_team_moves  # Shows each move once
+```
+
+### Trade Move Descriptions
+Enhanced move descriptions with clear team-to-team visualization:
+
+```python
+# Team-to-team trade
+"🔄 Mike Trout: WV (ML) → NY (ML)"
+
+# Free agency signing
+"➕ Mike Trout: FA → WV (ML)"
+
+# Release to free agency
+"➖ Mike Trout: WV (ML) → FA"
+```
+
+### Usage Examples
+
+#### Basic Trade Setup
+```python
+# Create trade
+trade = Trade(trade_id="abc123", participants=[], status=TradeStatus.DRAFT)
+
+# Add participating teams
+wv_participant = trade.add_participant(wv_team)
+ny_participant = trade.add_participant(ny_team)
+
+# Create player moves
+move = TradeMove(
+    player=player,
+    from_team=wv_team,
+    to_team=ny_team,
+    source_team=wv_team,
+    destination_team=ny_team
+)
+```
+
+#### Organizational Flexibility
+```python
+# Trade builder allows MiL/IL destinations when ML team participates
+builder = TradeBuilder(user_id, wv_team)  # WV is participating
+builder.add_team(ny_team)
+
+# This now works - can send player to NYMIL
+success, error = await builder.add_player_move(
+    player=player,
+    from_team=wv_team,
+    to_team=ny_mil_team,  # Minor league affiliate
+    from_roster=RosterType.MAJOR_LEAGUE,
+    to_roster=RosterType.MINOR_LEAGUE
+)
+assert success  # ✅ Works due to organizational authority
+```
+
+### Implementation Notes
+- **Deduplication**: `cross_team_moves` now uses only `moves_giving` to avoid showing same move twice
+- **Organizational Lookup**: Trade participants can be found by any team in the organization
+- **Validation**: Trade balance validation ensures moves are properly matched
+- **UI Integration**: Embeds show clean, deduplicated player exchange lists
+
+### Breaking Changes Fixed
+- **Team Roster Type Detection**: Updated logic to handle edge cases like "BHMIL" correctly
+- **Autocomplete Functions**: Fixed invalid parameter passing in team filtering
+- **Trade Participant Validation**: Now properly handles organizational affiliates
 
 ---
 

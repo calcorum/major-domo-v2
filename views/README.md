@@ -179,9 +179,10 @@ Views specific to custom command management:
 
 #### Transaction Management (`transaction_embed.py`)
 Views for player transaction interfaces:
-- Transaction proposal forms
-- Approval/rejection workflows
-- Transaction history displays
+- Transaction builder with interactive controls
+- Comprehensive validation and sWAR display
+- Pre-existing transaction context
+- Approval/submission workflows
 
 ## Styling Guidelines
 
@@ -412,6 +413,89 @@ async def test_custom_command_modal():
 - **Handle edge cases** gracefully
 - **Consider mobile users** in layout design
 
+## Transaction Embed Enhancements (January 2025)
+
+### Enhanced Display Features
+The transaction embed now provides comprehensive information for better decision-making:
+
+#### New Embed Sections
+```python
+async def create_transaction_embed(builder: TransactionBuilder) -> discord.Embed:
+    """
+    Creates enhanced transaction embed with sWAR and pre-existing transaction context.
+    """
+    # Existing sections...
+
+    # NEW: Team Cost (sWAR) Display
+    swar_status = f"{validation.major_league_swar_status}\n{validation.minor_league_swar_status}"
+    embed.add_field(name="Team sWAR", value=swar_status, inline=False)
+
+    # NEW: Pre-existing Transaction Context (when applicable)
+    if validation.pre_existing_transactions_note:
+        embed.add_field(
+            name="📋 Transaction Context",
+            value=validation.pre_existing_transactions_note,
+            inline=False
+        )
+```
+
+### Enhanced Information Display
+
+#### sWAR Tracking
+- **Major League sWAR**: Projected team cost for ML roster
+- **Minor League sWAR**: Projected team cost for MiL roster
+- **Formatted Display**: Uses 📊 emoji with 1 decimal precision
+
+#### Pre-existing Transaction Context
+Dynamic context display based on scheduled moves:
+
+```python
+# Example displays:
+"ℹ️ **Pre-existing Moves**: 3 scheduled moves (+3.7 sWAR)"
+"ℹ️ **Pre-existing Moves**: 2 scheduled moves (-2.5 sWAR)"
+"ℹ️ **Pre-existing Moves**: 1 scheduled moves (no sWAR impact)"
+# No display when no pre-existing moves (clean interface)
+```
+
+### Complete Embed Structure
+The enhanced transaction embed now includes:
+
+1. **Current Moves** - List of moves in transaction builder
+2. **Roster Status** - Legal/illegal roster counts with limits
+3. **Team Cost (sWAR)** - sWAR for both rosters
+4. **Transaction Context** - Pre-existing moves impact (conditional)
+5. **Errors/Suggestions** - Validation feedback and recommendations
+
+### Usage Examples
+
+#### Basic Transaction Display
+```python
+# Standard transaction without pre-existing moves
+builder = get_transaction_builder(user_id, team)
+embed = await create_transaction_embed(builder)
+# Shows: moves, roster status, sWAR, errors/suggestions
+```
+
+#### Enhanced Context Display
+```python
+# Transaction with pre-existing moves context
+validation = await builder.validate_transaction(next_week=current_week + 1)
+embed = await create_transaction_embed(builder)
+# Shows: all above + pre-existing transaction impact
+```
+
+### User Experience Improvements
+- **Complete Context**: Users see full impact including scheduled moves
+- **Visual Clarity**: Consistent emoji usage and formatting
+- **Conditional Display**: Context only shown when relevant
+- **Decision Support**: sWAR projections help strategic planning
+
+### Implementation Notes
+- **Backwards Compatible**: Existing embed functionality preserved
+- **Conditional Sections**: Pre-existing context only appears when applicable
+- **Performance**: Validation data cached to avoid repeated calculations
+- **Accessibility**: Clear visual hierarchy with emojis and formatting
+
 ---
 
 **Next Steps for AI Agents:**
@@ -421,3 +505,4 @@ async def test_custom_command_modal():
 4. Implement proper error handling and user validation
 5. Test interactive components thoroughly
 6. Consider accessibility and user experience in design
+7. Leverage enhanced transaction context for better user guidance

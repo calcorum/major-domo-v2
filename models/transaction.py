@@ -109,7 +109,7 @@ class RosterValidation(SBABaseModel):
     il_players: int = Field(default=0, description="Players on IL")
     minor_league_players: int = Field(default=0, description="Minor league players")
     
-    total_sWAR: float = Field(default=0.0, description="Total team sWAR")
+    total_sWAR: float = Field(default=0.00, description="Total team sWAR")
     
     @property
     def has_issues(self) -> bool:

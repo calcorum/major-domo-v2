@@ -62,12 +62,13 @@ class TestDropAddCommands:
             PlayerFactory.mike_trout(id=1),
             PlayerFactory.ronald_acuna(id=2)
         ]
-        
-        with patch('commands.transactions.dropadd.player_service') as mock_service:
+
+        with patch('utils.autocomplete.player_service') as mock_service:
             mock_service.search_players = AsyncMock(return_value=mock_players)
-            
-            choices = await commands_cog.player_autocomplete(mock_interaction, 'Trout')
-            
+
+            from utils.autocomplete import player_autocomplete
+            choices = await player_autocomplete(mock_interaction, 'Trout')
+
             assert len(choices) == 2
             assert choices[0].name == 'Mike Trout (CF)'
             assert choices[0].value == 'Mike Trout'
@@ -80,11 +81,13 @@ class TestDropAddCommands:
         mock_team = TeamFactory.create(id=499, abbrev='LAA', sname='Angels', lname='Los Angeles Angels')
         mock_player = PlayerFactory.mike_trout(id=1)
         mock_player.team = mock_team  # Add team info
-        
-        with patch('commands.transactions.dropadd.player_service') as mock_service:
+
+        with patch('utils.autocomplete.player_service') as mock_service:
             mock_service.search_players = AsyncMock(return_value=[mock_player])
-            choices = await commands_cog.player_autocomplete(mock_interaction, 'Trout')
-            
+
+            from utils.autocomplete import player_autocomplete
+            choices = await player_autocomplete(mock_interaction, 'Trout')
+
             assert len(choices) == 1
             assert choices[0].name == 'Mike Trout (CF - LAA)'
             assert choices[0].value == 'Mike Trout'
@@ -92,16 +95,18 @@ class TestDropAddCommands:
     @pytest.mark.asyncio
     async def test_player_autocomplete_short_input(self, commands_cog, mock_interaction):
         """Test player autocomplete with short input returns empty."""
-        choices = await commands_cog.player_autocomplete(mock_interaction, 'T')
+        from utils.autocomplete import player_autocomplete
+        choices = await player_autocomplete(mock_interaction, 'T')
         assert len(choices) == 0
     
     @pytest.mark.asyncio
     async def test_player_autocomplete_error_handling(self, commands_cog, mock_interaction):
         """Test player autocomplete error handling."""
-        with patch('commands.transactions.dropadd.player_service') as mock_service:
+        with patch('utils.autocomplete.player_service') as mock_service:
             mock_service.search_players.side_effect = Exception("API Error")
-            
-            choices = await commands_cog.player_autocomplete(mock_interaction, 'Trout')
+
+            from utils.autocomplete import player_autocomplete
+            choices = await player_autocomplete(mock_interaction, 'Trout')
             assert len(choices) == 0
     
     @pytest.mark.asyncio

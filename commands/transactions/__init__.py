@@ -11,6 +11,7 @@ from discord.ext import commands
 
 from .management import TransactionCommands
 from .dropadd import DropAddCommands
+from .trade import TradeCommands
 
 logger = logging.getLogger(f'{__name__}.setup_transactions')
 
@@ -25,6 +26,7 @@ async def setup_transactions(bot: commands.Bot) -> Tuple[int, int, List[str]]:
     transaction_cogs: List[Tuple[str, Type[commands.Cog]]] = [
         ("TransactionCommands", TransactionCommands),
         ("DropAddCommands", DropAddCommands),
+        ("TradeCommands", TradeCommands),
     ]
     
     successful = 0
