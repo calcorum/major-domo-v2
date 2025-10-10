@@ -15,7 +15,7 @@ from services.transaction_builder import TransactionBuilder, RosterValidationRes
 from services.team_service import team_service
 from services.roster_service import roster_service
 from services.league_service import league_service
-from constants import SBA_CURRENT_SEASON
+from constants import SBA_CURRENT_SEASON, FREE_AGENT_TEAM_ID
 
 logger = logging.getLogger(f'{__name__}.TradeBuilder')
 
@@ -189,6 +189,23 @@ class TradeBuilder:
         Returns:
             Tuple of (success: bool, error_message: str)
         """
+        # Validate player is not from Free Agency
+        if player.team_id == FREE_AGENT_TEAM_ID:
+            return False, f"Cannot add {player.name} from Free Agency. Players must be traded from teams within the organizations involved in the trade."
+
+        # Validate player has a valid team assignment
+        if not player.team_id:
+            return False, f"{player.name} does not have a valid team assignment"
+
+        # Validate that from_team matches the player's actual team organization
+        player_team = await team_service.get_team(player.team_id)
+        if not player_team:
+            return False, f"Could not find team for {player.name}"
+
+        # Check if player's team is in the same organization as from_team
+        if not player_team.is_same_organization(from_team):
+            return False, f"{player.name} is on {player_team.abbrev}, they are not eligible to be added to the trade."
+
         # Ensure both teams are participating (check by organization for ML authority)
         from_participant = self.trade.get_participant_by_organization(from_team)
         to_participant = self.trade.get_participant_by_organization(to_team)

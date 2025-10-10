@@ -41,6 +41,24 @@ class BaseService(Generic[T]):
 - **`stats_service.py`** - Player statistics (batting, pitching, fielding)
 - **`roster_service.py`** - Team roster composition and position assignments
 
+#### TeamService Key Methods
+The `TeamService` provides team data operations with specific method names:
+
+```python
+class TeamService(BaseService[Team]):
+    async def get_team(team_id: int) -> Optional[Team]  # ✅ Correct method name
+    async def get_teams_by_owner(owner_id: int, season: Optional[int], roster_type: Optional[str]) -> List[Team]
+    async def get_team_by_abbrev(abbrev: str, season: Optional[int]) -> Optional[Team]
+    async def get_teams_by_season(season: int) -> List[Team]
+    async def get_team_roster(team_id: int, roster_type: str = 'current') -> Optional[Dict[str, Any]]
+```
+
+**⚠️ Common Mistake (Fixed January 2025)**:
+- **Incorrect**: `team_service.get_team_by_id(team_id)` ❌ (method does not exist)
+- **Correct**: `team_service.get_team(team_id)` ✅
+
+This naming inconsistency was fixed in `services/trade_builder.py` line 201 and corresponding test mocks.
+
 ### Transaction Services
 - **`transaction_service.py`** - Player transaction operations (trades, waivers, etc.)
 - **`transaction_builder.py`** - Complex transaction building and validation

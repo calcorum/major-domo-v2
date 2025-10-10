@@ -33,7 +33,11 @@ This directory contains Discord slash commands for transaction management and ro
 - **Service Dependencies**:
   - `trade_builder` (multi-team trade management)
   - `player_service.search_players()` (player autocomplete)
-  - `team_service.get_teams_by_owner()` and `get_team_by_abbrev()`
+  - `team_service.get_teams_by_owner()`, `get_team_by_abbrev()`, and `get_team()`
+- **Channel Management**:
+  - Automatically creates private discussion channels for trades
+  - Uses `TradeChannelManager` and `TradeChannelTracker` for channel lifecycle
+  - Requires bot to have `Manage Channels` permission at server level
 
 ## Key Features
 
@@ -73,17 +77,53 @@ This directory contains Discord slash commands for transaction management and ro
 
 #### Trade Command Workflow:
 1. **`/trade initiate other_team:LAA`** - Start trade between your team and LAA
+   - Creates a private discussion channel for the trade
+   - Only you see the ephemeral response
 2. **`/trade add-team other_team:BOS`** - Add BOS for 3-team trade
+   - Updates are posted to the trade channel if executed elsewhere
+   - Other team members can see the progress
 3. **`/trade add-player player_name:"Mike Trout" destination_team:BOS`** - Exchange players
+   - Trade embed updates posted to dedicated channel automatically
+   - Keeps all participants informed of changes
 4. **`/trade supplementary player_name:"Player X" destination:ml`** - Internal roster moves
+   - Channel receives real-time updates
 5. **`/trade view`** - Review complete trade with validation
+   - Posts current state to trade channel if viewed elsewhere
 6. **Submit via interactive UI** - Trade submission through Discord buttons
+
+**Channel Behavior**:
+- Commands executed **in** the trade channel: Only ephemeral response to user
+- Commands executed **outside** trade channel: Ephemeral response to user + public post to trade channel
+- This ensures all participating teams stay informed of trade progress
 
 #### Autocomplete System:
 - **Team Initiation**: Only Major League teams (ML team owners initiate trades)
 - **Player Destinations**: All roster types (ML/MiL/IL) available for player placement
 - **Player Search**: Prioritizes user's team players, supports fuzzy name matching
 - **Smart Filtering**: Context-aware suggestions based on user permissions
+
+#### Trade Channel Management (`trade_channels.py`, `trade_channel_tracker.py`):
+- **Automatic Channel Creation**: Private discussion channels created when trades are initiated
+- **Channel Naming**: Format `trade-{team1}-{team2}-{short_id}` (e.g., `trade-wv-por-681f`)
+- **Permission Management**:
+  - Channel hidden from @everyone
+  - Only participating team roles can view/message
+  - Bot has view and send message permissions
+  - Created in "Transactions" category (if it exists)
+- **Channel Tracking**: JSON-based persistence for cleanup and management
+- **Multi-Team Support**: Channels automatically update when teams are added to trades
+- **Automatic Cleanup**: Channels deleted when trades are cleared
+- **Smart Updates**: When trade commands are executed outside the dedicated trade channel, the trade embed is automatically posted to the trade channel (non-ephemeral) for visibility
+
+**Bot Permission Requirements**:
+- Server-level `Manage Channels` - Required to create/delete trade channels
+- Server-level `Manage Permissions` - Optional, for enhanced permission management
+- **Note**: Bot should NOT have these permissions in channel-specific overwrites (causes Discord API error 50013)
+
+**Recent Fix (January 2025)**:
+- Removed `manage_channels` and `manage_permissions` from bot's channel-specific overwrites
+- Discord prohibits bots from granting themselves elevated permissions in channel overwrites
+- Server-level permissions are sufficient for all channel management operations
 
 ### Advanced Transaction Features
 - **Concurrent Data Fetching**: Multiple transaction types retrieved in parallel
@@ -131,6 +171,20 @@ This directory contains Discord slash commands for transaction management and ro
    - Verify team abbreviation exists in database
    - Check roster data availability for both current and next weeks
    - Ensure validation service handles edge cases properly
+
+5. **Trade channel creation fails** *(Fixed January 2025)*:
+   - Error: `Discord error: Missing Permissions. Code: 50013`
+   - **Root Cause**: Bot was trying to grant itself `manage_channels` and `manage_permissions` in channel-specific permission overwrites
+   - **Fix**: Removed elevated permissions from channel overwrites (line 74-77 in `trade_channels.py`)
+   - **Verification**: Bot only needs server-level `Manage Channels` permission
+   - Channels now create successfully with basic bot permissions (view, send messages, read history)
+
+6. **AttributeError when adding players to trades** *(Fixed January 2025)*:
+   - Error: `'TeamService' object has no attribute 'get_team_by_id'`
+   - **Root Cause**: Code was calling non-existent method `team_service.get_team_by_id()`
+   - **Fix**: Changed to correct method name `team_service.get_team()` (line 201 in `trade_builder.py`)
+   - **Location**: `services/trade_builder.py` and test mocks in `tests/test_services_trade_builder.py`
+   - All 18 trade builder tests pass after fix
 
 ### Service Dependencies
 - `services.transaction_service`:

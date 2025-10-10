@@ -15,7 +15,8 @@ from services.trade_builder import (
     _active_trade_builders
 )
 from models.trade import TradeStatus
-from models.team import RosterType
+from models.team import RosterType, Team
+from constants import FREE_AGENT_TEAM_ID
 from tests.factories import PlayerFactory, TeamFactory
 
 
@@ -101,38 +102,167 @@ class TestTradeBuilder:
         builder = TradeBuilder(self.user_id, self.team1, season=12)
         await builder.add_team(self.team2)
 
-        # Add player move from team1 to team2
+        # Set player's team_id to team1
+        self.player1.team_id = self.team1.id
+
+        # Mock team_service to return team1 for this player
+        with patch('services.trade_builder.team_service') as mock_team_service:
+            mock_team_service.get_team = AsyncMock(return_value=self.team1)
+
+            # Don't mock is_same_organization - let the real method work
+            # Add player move from team1 to team2
+            success, error = await builder.add_player_move(
+                player=self.player1,
+                from_team=self.team1,
+                to_team=self.team2,
+                from_roster=RosterType.MAJOR_LEAGUE,
+                to_roster=RosterType.MAJOR_LEAGUE
+            )
+
+            assert success
+            assert error == ""
+            assert not builder.is_empty
+            assert builder.move_count > 0
+
+            # Check that move appears in both teams' lists
+            team1_participant = builder.trade.get_participant_by_team_id(self.team1.id)
+            team2_participant = builder.trade.get_participant_by_team_id(self.team2.id)
+
+            assert len(team1_participant.moves_giving) == 1
+            assert len(team2_participant.moves_receiving) == 1
+
+            # Try to add same player again (should fail - either because already involved
+            # or because team mismatch)
+            success, error = await builder.add_player_move(
+                player=self.player1,
+                from_team=self.team2,
+                to_team=self.team1,
+                from_roster=RosterType.MAJOR_LEAGUE,
+                to_roster=RosterType.MAJOR_LEAGUE
+            )
+
+            assert not success
+            # Could fail for either reason - player already in trade or team mismatch
+            assert ("already involved" in error) or ("not eligible" in error.lower())
+
+    @pytest.mark.asyncio
+    async def test_add_player_move_from_free_agency_fails(self):
+        """Test that adding a player from Free Agency fails."""
+        builder = TradeBuilder(self.user_id, self.team1, season=12)
+        await builder.add_team(self.team2)
+
+        # Create a player on Free Agency
+        fa_player = PlayerFactory.create(
+            id=100,
+            name="FA Player",
+            team_id=FREE_AGENT_TEAM_ID
+        )
+
+        # Try to add player from FA (should fail)
         success, error = await builder.add_player_move(
-            player=self.player1,
+            player=fa_player,
             from_team=self.team1,
             to_team=self.team2,
             from_roster=RosterType.MAJOR_LEAGUE,
             to_roster=RosterType.MAJOR_LEAGUE
         )
 
-        assert success
-        assert error == ""
-        assert not builder.is_empty
-        assert builder.move_count > 0
+        assert not success
+        assert "Free Agency" in error
+        assert builder.is_empty  # No moves should be added
 
-        # Check that move appears in both teams' lists
-        team1_participant = builder.trade.get_participant_by_team_id(self.team1.id)
-        team2_participant = builder.trade.get_participant_by_team_id(self.team2.id)
+    @pytest.mark.asyncio
+    async def test_add_player_move_no_team_fails(self):
+        """Test that adding a player without a team assignment fails."""
+        builder = TradeBuilder(self.user_id, self.team1, season=12)
+        await builder.add_team(self.team2)
 
-        assert len(team1_participant.moves_giving) == 1
-        assert len(team2_participant.moves_receiving) == 1
+        # Create a player without a team
+        no_team_player = PlayerFactory.create(
+            id=101,
+            name="No Team Player",
+            team_id=None
+        )
 
-        # Try to add same player again (should fail)
+        # Try to add player without team (should fail)
         success, error = await builder.add_player_move(
-            player=self.player1,
-            from_team=self.team2,
-            to_team=self.team1,
+            player=no_team_player,
+            from_team=self.team1,
+            to_team=self.team2,
             from_roster=RosterType.MAJOR_LEAGUE,
             to_roster=RosterType.MAJOR_LEAGUE
         )
 
         assert not success
-        assert "already involved" in error
+        assert "does not have a valid team assignment" in error
+        assert builder.is_empty
+
+    @pytest.mark.asyncio
+    async def test_add_player_move_wrong_organization_fails(self):
+        """Test that adding a player from wrong organization fails."""
+        builder = TradeBuilder(self.user_id, self.team1, season=12)
+        await builder.add_team(self.team2)
+
+        # Create a player on team3 (not in trade)
+        player_on_team3 = PlayerFactory.create(
+            id=102,
+            name="Team3 Player",
+            team_id=self.team3.id
+        )
+
+        # Mock team_service to return team3 for this player
+        with patch('services.trade_builder.team_service') as mock_team_service:
+            mock_team_service.get_team = AsyncMock(return_value=self.team3)
+
+            # Mock is_same_organization to return False (different organization, sync method)
+            with patch('models.team.Team.is_same_organization', return_value=False):
+                # Try to add player from team3 claiming it's from team1 (should fail)
+                success, error = await builder.add_player_move(
+                    player=player_on_team3,
+                    from_team=self.team1,
+                    to_team=self.team2,
+                    from_roster=RosterType.MAJOR_LEAGUE,
+                    to_roster=RosterType.MAJOR_LEAGUE
+                )
+
+                assert not success
+                assert "BOS" in error  # Team3's abbreviation
+                assert "not eligible" in error.lower()
+                assert builder.is_empty
+
+    @pytest.mark.asyncio
+    async def test_add_player_move_from_same_organization_succeeds(self):
+        """Test that adding a player from correct organization succeeds."""
+        builder = TradeBuilder(self.user_id, self.team1, season=12)
+        await builder.add_team(self.team2)
+
+        # Create a player on team1's minor league affiliate
+        player_on_team1_mil = PlayerFactory.create(
+            id=103,
+            name="Team1 MiL Player",
+            team_id=999  # Some MiL team ID
+        )
+
+        # Mock team_service to return the MiL team
+        mil_team = TeamFactory.create(id=999, abbrev="WVMiL", sname="West Virginia MiL")
+
+        with patch('services.trade_builder.team_service') as mock_team_service:
+            mock_team_service.get_team = AsyncMock(return_value=mil_team)
+
+            # Mock is_same_organization to return True (same organization, sync method)
+            with patch('models.team.Team.is_same_organization', return_value=True):
+                # Add player from WVMiL (should succeed because it's same organization as WV)
+                success, error = await builder.add_player_move(
+                    player=player_on_team1_mil,
+                    from_team=self.team1,
+                    to_team=self.team2,
+                    from_roster=RosterType.MINOR_LEAGUE,
+                    to_roster=RosterType.MAJOR_LEAGUE
+                )
+
+                assert success
+                assert error == ""
+                assert not builder.is_empty
 
     @pytest.mark.asyncio
     async def test_add_supplementary_move(self):
@@ -172,14 +302,21 @@ class TestTradeBuilder:
         builder = TradeBuilder(self.user_id, self.team1, season=12)
         await builder.add_team(self.team2)
 
-        # Add a player move
-        await builder.add_player_move(
-            player=self.player1,
-            from_team=self.team1,
-            to_team=self.team2,
-            from_roster=RosterType.MAJOR_LEAGUE,
-            to_roster=RosterType.MAJOR_LEAGUE
-        )
+        # Set player's team_id to team1
+        self.player1.team_id = self.team1.id
+
+        # Mock team_service for adding the player
+        with patch('services.trade_builder.team_service') as mock_team_service:
+            mock_team_service.get_team = AsyncMock(return_value=self.team1)
+
+            # Add a player move
+            await builder.add_player_move(
+                player=self.player1,
+                from_team=self.team1,
+                to_team=self.team2,
+                from_roster=RosterType.MAJOR_LEAGUE,
+                to_roster=RosterType.MAJOR_LEAGUE
+            )
 
         assert not builder.is_empty
 
@@ -287,22 +424,37 @@ class TestTradeBuilder:
             builder._team_builders[self.team1.id] = mock_builder1
             builder._team_builders[self.team2.id] = mock_builder2
 
-            # Add balanced moves
-            await builder.add_player_move(
-                player=self.player1,
-                from_team=self.team1,
-                to_team=self.team2,
-                from_roster=RosterType.MAJOR_LEAGUE,
-                to_roster=RosterType.MAJOR_LEAGUE
-            )
+            # Set player team_ids
+            self.player1.team_id = self.team1.id
+            self.player2.team_id = self.team2.id
 
-            await builder.add_player_move(
-                player=self.player2,
-                from_team=self.team2,
-                to_team=self.team1,
-                from_roster=RosterType.MAJOR_LEAGUE,
-                to_roster=RosterType.MAJOR_LEAGUE
-            )
+            # Mock team_service for validation
+            async def get_team_side_effect(team_id):
+                if team_id == self.team1.id:
+                    return self.team1
+                elif team_id == self.team2.id:
+                    return self.team2
+                return None
+
+            with patch('services.trade_builder.team_service') as mock_team_service:
+                mock_team_service.get_team = AsyncMock(side_effect=get_team_side_effect)
+
+                # Add balanced moves - no need to mock is_same_organization
+                await builder.add_player_move(
+                    player=self.player1,
+                    from_team=self.team1,
+                    to_team=self.team2,
+                    from_roster=RosterType.MAJOR_LEAGUE,
+                    to_roster=RosterType.MAJOR_LEAGUE
+                )
+
+                await builder.add_player_move(
+                    player=self.player2,
+                    from_team=self.team2,
+                    to_team=self.team1,
+                    from_roster=RosterType.MAJOR_LEAGUE,
+                    to_roster=RosterType.MAJOR_LEAGUE
+                )
 
             # Validate balanced trade
             validation = await builder.validate_trade()
