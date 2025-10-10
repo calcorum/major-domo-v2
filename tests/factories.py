@@ -10,6 +10,8 @@ from typing import Optional, Dict, Any
 from models.player import Player
 from models.team import Team, RosterType
 from models.transaction import Transaction
+from models.game import Game
+from models.current import Current
 
 
 class PlayerFactory:
@@ -164,6 +166,93 @@ class TransactionFactory:
         }
         defaults.update(kwargs)
         return Transaction(**defaults)
+
+
+class GameFactory:
+    """Factory for creating Game test instances."""
+
+    @staticmethod
+    def create(
+        id: int = 1,
+        season: int = 12,
+        week: int = 1,
+        game_num: int = 1,
+        season_type: str = "regular",
+        away_team: Optional[Team] = None,
+        home_team: Optional[Team] = None,
+        away_score: Optional[int] = None,
+        home_score: Optional[int] = None,
+        **kwargs
+    ) -> Game:
+        """Create a Game instance with sensible defaults."""
+        # Use default teams if none provided
+        if away_team is None:
+            away_team = TeamFactory.create(id=1, abbrev="AWY", sname="Away", lname="Away Team")
+        if home_team is None:
+            home_team = TeamFactory.create(id=2, abbrev="HOM", sname="Home", lname="Home Team")
+
+        defaults = {
+            "id": id,
+            "season": season,
+            "week": week,
+            "game_num": game_num,
+            "season_type": season_type,
+            "away_team": away_team,
+            "home_team": home_team,
+            "away_score": away_score,
+            "home_score": home_score,
+        }
+        defaults.update(kwargs)
+        return Game(**defaults)
+
+    @staticmethod
+    def completed(
+        id: int = 1,
+        away_score: int = 5,
+        home_score: int = 3,
+        **kwargs
+    ) -> Game:
+        """Create a completed game with scores."""
+        return GameFactory.create(
+            id=id,
+            away_score=away_score,
+            home_score=home_score,
+            **kwargs
+        )
+
+    @staticmethod
+    def upcoming(id: int = 1, **kwargs) -> Game:
+        """Create an upcoming game (no scores)."""
+        return GameFactory.create(
+            id=id,
+            away_score=None,
+            home_score=None,
+            **kwargs
+        )
+
+
+class CurrentFactory:
+    """Factory for creating Current league state instances."""
+
+    @staticmethod
+    def create(
+        week: int = 10,
+        season: int = 12,
+        freeze: bool = False,
+        trade_deadline: int = 14,
+        playoffs_begin: int = 19,
+        **kwargs
+    ) -> Current:
+        """Create a Current instance with sensible defaults."""
+        defaults = {
+            "week": week,
+            "season": season,
+            "freeze": freeze,
+            "trade_deadline": trade_deadline,
+            "playoffs_begin": playoffs_begin,
+        }
+        defaults.update(kwargs)
+        return Current(**defaults)
 
 
 # Convenience functions for common test scenarios

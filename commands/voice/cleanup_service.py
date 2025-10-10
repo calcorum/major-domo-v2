@@ -25,7 +25,7 @@ class VoiceChannelCleanupService:
     - Stale entry removal and recovery
     """
 
-    def __init__(self, data_file: str = "data/voice_channels.json"):
+    def __init__(self, data_file: str = "storage/voice_channels.json"):
         """
         Initialize the cleanup service.
 

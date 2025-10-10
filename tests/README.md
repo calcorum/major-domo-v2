@@ -21,7 +21,7 @@ tests/
 
 ## Key Testing Patterns
 
-### 1. HTTP Testing with aioresponses
+### 1. HTTP Testing with aioresponsesf
 
 **✅ Recommended Approach:**
 ```python

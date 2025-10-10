@@ -116,7 +116,8 @@ class SBABot(commands.Bot):
         from commands.transactions import setup_transactions
         from commands.dice import setup_dice
         from commands.voice import setup_voice
-        
+        from commands.utilities import setup_utilities
+
         # Define command packages to load
         command_packages = [
             ("players", setup_players),
@@ -127,6 +128,7 @@ class SBABot(commands.Bot):
             ("transactions", setup_transactions),
             ("dice", setup_dice),
             ("voice", setup_voice),
+            ("utilities", setup_utilities),
         ]
         
         total_successful = 0

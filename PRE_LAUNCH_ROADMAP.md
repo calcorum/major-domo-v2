@@ -1,8 +1,8 @@
 # Discord Bot v2.0 - Pre-Launch Roadmap
 
-**Last Updated:** September 2025
+**Last Updated:** January 2025
 **Target Launch:** TBD
-**Current Status:** Core functionality complete, utility commands needed
+**Current Status:** Core functionality complete including trading system, remaining utility commands needed
 
 ## 🎯 Overview
 
@@ -14,7 +14,9 @@ This document outlines the remaining functionality required before the Discord B
 - **Team Management** (`/team`, `/teams`, `/roster`) - Team information and roster breakdown
 - **League Operations** (`/league`, `/standings`, `/schedule`) - League-wide information
 - **Transaction Management** (`/mymoves`, `/legal`) - Player transaction tracking
+- **Trading System** (`/trade`) - Full interactive trading with validation and dedicated channels
 - **Voice Channels** (`/voice-channel`) - Automatic gameplay channel creation with cleanup
+- **Custom Commands** (`/custom-command`) - User-created custom text commands
 - **Admin Commands** - League administration and management tools
 - **Background Services** - Automated cleanup, monitoring, and maintenance
 
@@ -22,37 +24,40 @@ This document outlines the remaining functionality required before the Discord B
 
 ### 🔧 Critical Fixes Required
 
-#### 1. Custom Command Backend Support **[HIGH PRIORITY]**
-- **Status**: Currently failing
-- **Issue**: Custom commands system is not functioning properly
-- **Impact**: Users cannot create/manage custom text commands
+#### 1. Custom Command Backend Support **✅ COMPLETED**
+- **Status**: Complete and functional
+- **Implementation**: Custom commands system fully operational
+- **Features**: Users can create/manage custom text commands
 - **Files**: `commands/custom_commands/`, `services/custom_command_service.py`
-- **Dependencies**: Database integration, permissions system
-- **Estimated Effort**: 2-3 hours (debugging + fixes)
+- **Completed**: January 2025
 
 ### 🎮 Utility Commands
 
-#### 2. Weather Command
-- **Command**: `/weather [location]`
-- **Description**: Display current weather conditions and forecast
-- **Features**:
-  - Current conditions (temp, humidity, conditions)
-  - 3-day forecast
-  - Location autocomplete/search
-  - Weather icons in embeds
-- **API Integration**: OpenWeatherMap or similar service
-- **Estimated Effort**: 3-4 hours
+#### 2. Weather Command **✅ COMPLETED**
+- **Command**: `/weather [team_abbrev]`
+- **Status**: Complete and fully functional
+- **Implementation**: Ballpark weather rolling system for gameplay
+- **Features Implemented**:
+  - Smart team resolution (explicit param → channel name → user owned team)
+  - Season display (Spring/Summer/Fall based on week)
+  - Time of day logic (division weeks, games played tracking)
+  - D20 weather roll with formatted display
+  - Stadium image and team color styling
+- **Completed**: January 2025
 
-#### 3. Charts Display System
+#### 3. Charts Display System **✅ COMPLETED**
 - **Command**: `/charts <chart-name>`
-- **Description**: Display league charts and infographics by URL
-- **Features**:
-  - Predefined chart library (standings, stats, schedules)
-  - URL-based image display in embeds
-  - Chart category organization
-  - Admin management of chart URLs
-- **Data Storage**: JSON config file or database entries
-- **Estimated Effort**: 2-3 hours
+- **Status**: Complete and fully functional
+- **Implementation**: Chart display and management system
+- **Features Implemented**:
+  - Autocomplete chart selection with category display
+  - Multi-image chart support
+  - JSON-based chart library (12 charts migrated from legacy bot)
+  - Admin commands for chart management (add, remove, list, update)
+  - Category organization (gameplay, defense, reference, stats)
+  - Proper embed formatting with descriptions
+- **Data Storage**: `storage/charts.json` with JSON persistence
+- **Completed**: January 2025
 
 #### 4. League Resources Links
 - **Command**: `/links <resource-name>`
@@ -104,36 +109,37 @@ This document outlines the remaining functionality required before the Discord B
 - **Complexity**: Custom probability algorithms
 - **Estimated Effort**: 3-4 hours
 
-#### 8. Trading System
+#### 8. Trading System **✅ COMPLETED**
 - **Command**: `/trade [parameters]`
-- **Description**: Interactive trading interface and management
-- **Features**:
-  - Trade proposal system
-  - Multi-party trade support
-  - Trade validation (roster limits, salary caps)
+- **Status**: Complete and fully functional
+- **Implementation**: Full interactive trading system with comprehensive features
+- **Features Implemented**:
+  - Trade proposal system with interactive UI
+  - Multi-party trade support (up to 2 teams)
+  - Trade validation (roster limits, salary caps, sWAR tracking)
   - Trade history and tracking
   - Integration with transaction system
-- **Complexity**: High - multi-user interactions, complex validation
-- **Database**: Trade proposals, approvals, completions
-- **Estimated Effort**: 6-8 hours
+  - Dedicated trade discussion channels with smart permissions
+  - Pre-existing transaction awareness for accurate projections
+- **Completed**: January 2025
 
 ## 📋 Implementation Priority
 
-### Phase 1: Critical Fixes (Week 1)
-1. **Custom Command Backend** - Fix existing broken functionality
+### Phase 1: Critical Fixes ✅ COMPLETED
+1. ✅ **Custom Command Backend** - Fixed and fully operational (January 2025)
 
-### Phase 2: Core Utilities (Week 1-2)
-2. **Weather Command** - Popular utility feature
-3. **Charts System** - Essential for league management
+### Phase 2: Core Utilities
+2. ✅ **Weather Command** - Complete with smart team resolution (January 2025)
+3. ✅ **Charts System** - Complete with admin management and 12 charts (January 2025)
 4. **Links System** - Administrative convenience
 
 ### Phase 3: User Features (Week 2)
 5. **Image Management** - User profile customization
 6. **Meme Commands** - Community engagement
 
-### Phase 4: Advanced Features (Week 3)
+### Phase 4: Advanced Features
 7. **Scout Command** - Complex gaming mechanics
-8. **Trade Command** - Most complex system
+8. ✅ **Trade Command** - Complete with comprehensive features (January 2025)
 
 ## 🏗️ Architecture Considerations
 
@@ -157,13 +163,13 @@ commands/
 - **ResourceService**: Chart and link management
 - **ProfileService**: User image management
 - **ScoutingService**: Dice mechanics and probability
-- **TradingService**: Complex trade logic and validation
+- ✅ **TradingService**: Complete - complex trade logic and validation implemented (January 2025)
 
 ### Database Schema Updates
-- **Custom commands**: Fix existing schema issues
+- ✅ **Custom commands**: Complete and operational (January 2025)
 - **Resources**: Chart/link storage tables
 - **Player images**: Image URL fields
-- **Trades**: Trade proposal and history tables
+- ✅ **Trades**: Complete - trade proposal and history tables implemented (January 2025)
 
 ## 🧪 Testing Requirements
 
@@ -177,7 +183,7 @@ commands/
 - **Weather**: API mocking, error handling, rate limiting
 - **Charts/Links**: URL validation, admin permissions
 - **Images**: URL validation, permission checks
-- **Trading**: Complex multi-user scenarios, validation logic
+- ✅ **Trading**: Complete - complex multi-user scenarios, validation logic all tested (January 2025)
 
 ## 📚 Documentation Updates
 
@@ -252,18 +258,24 @@ commands/
 - **Documentation**: Thorough README files and architectural docs
 
 ### Technical Debt Considerations
-- **Custom Commands**: Address existing backend issues
+- ✅ **Custom Commands**: Resolved - backend fully operational (January 2025)
+- ✅ **Trading System**: Complete with comprehensive validation (January 2025)
 - **Database Performance**: Monitor query performance with new features
 - **External Dependencies**: Manage API dependencies and rate limits
 - **Cache Management**: Implement caching for expensive operations
 
 ### Resource Requirements
-- **Development Time**: Estimated 20-25 hours total
-- **API Costs**: Weather API subscription required
+- **Development Time**: ~6-9 hours remaining (reduced from 20-25 hours)
+  - ✅ Custom Commands: Complete (saved 2-3 hours)
+  - ✅ Trading System: Complete (saved 6-8 hours)
+  - ✅ Weather Command: Complete (saved 3-4 hours)
+  - ✅ Charts System: Complete (saved 2-3 hours)
+  - Remaining: Links (2-3h), Images (2-3h), Memes (1-2h), Scout (3-4h)
+- **API Costs**: None required (weather is gameplay dice rolling, not real weather)
 - **Database Storage**: Minimal increase for new features
 - **Hosting Resources**: Current infrastructure sufficient
 
 ---
 
-**Target Timeline: 2-3 weeks for complete pre-launch readiness**
-**Next Steps: Begin with Custom Command backend fixes, then proceed with utility commands**
+**Target Timeline: 1 week for complete pre-launch readiness**
+**Next Steps: Proceed with Links system, then user features (image management, meme commands)**
