@@ -117,6 +117,7 @@ class SBABot(commands.Bot):
         from commands.dice import setup_dice
         from commands.voice import setup_voice
         from commands.utilities import setup_utilities
+        from commands.help import setup_help_commands
 
         # Define command packages to load
         command_packages = [
@@ -129,6 +130,7 @@ class SBABot(commands.Bot):
             ("dice", setup_dice),
             ("voice", setup_voice),
             ("utilities", setup_utilities),
+            ("help", setup_help_commands),
         ]
         
         total_successful = 0

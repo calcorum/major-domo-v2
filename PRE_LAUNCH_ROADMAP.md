@@ -59,16 +59,25 @@ This document outlines the remaining functionality required before the Discord B
 - **Data Storage**: `storage/charts.json` with JSON persistence
 - **Completed**: January 2025
 
-#### 4. League Resources Links
-- **Command**: `/links <resource-name>`
-- **Description**: Quick access to league resources and external links
-- **Features**:
-  - Categorized resource library (rules, schedules, tools)
-  - URL validation and testing
-  - Admin management interface
-  - Search/autocomplete for resource names
-- **Data Storage**: JSON config file or database entries
-- **Estimated Effort**: 2-3 hours
+#### 4. Custom Help System **✅ COMPLETED**
+- **Commands**: `/help [topic]`, `/help-create`, `/help-edit`, `/help-delete`, `/help-list`
+- **Status**: Complete and ready for deployment (requires database migration)
+- **Description**: Comprehensive help system for league documentation, resources, FAQs, and guides
+- **Features Implemented**:
+  - Create/edit/delete help topics (admin + "Help Editor" role)
+  - Categorized help library (rules, guides, resources, info, faq)
+  - Autocomplete for topic discovery
+  - Markdown-formatted content
+  - View tracking and analytics
+  - Soft delete with restore capability
+  - Full audit trail (who created, who modified)
+  - Interactive modals for creation/editing
+  - Paginated list views
+  - Permission-based access control
+- **Data Storage**: PostgreSQL table `help_commands` via API
+- **Replaces**: Planned `/links` command (more flexible solution)
+- **Documentation**: See `commands/help/README.md` and `.claude/DATABASE_MIGRATION_HELP_COMMANDS.md`
+- **Completed**: January 2025
 
 ### 🖼️ User Profile Management
 
@@ -131,7 +140,7 @@ This document outlines the remaining functionality required before the Discord B
 ### Phase 2: Core Utilities
 2. ✅ **Weather Command** - Complete with smart team resolution (January 2025)
 3. ✅ **Charts System** - Complete with admin management and 12 charts (January 2025)
-4. **Links System** - Administrative convenience
+4. 🚧 **Help System** - In progress - comprehensive help topics with CRUD capabilities
 
 ### Phase 3: User Features (Week 2)
 5. **Image Management** - User profile customization
@@ -270,7 +279,7 @@ commands/
   - ✅ Trading System: Complete (saved 6-8 hours)
   - ✅ Weather Command: Complete (saved 3-4 hours)
   - ✅ Charts System: Complete (saved 2-3 hours)
-  - Remaining: Links (2-3h), Images (2-3h), Memes (1-2h), Scout (3-4h)
+  - Remaining: Help System (2-3h), Images (2-3h), Memes (1-2h), Scout (3-4h)
 - **API Costs**: None required (weather is gameplay dice rolling, not real weather)
 - **Database Storage**: Minimal increase for new features
 - **Hosting Resources**: Current infrastructure sufficient
@@ -278,4 +287,4 @@ commands/
 ---
 
 **Target Timeline: 1 week for complete pre-launch readiness**
-**Next Steps: Proceed with Links system, then user features (image management, meme commands)**
+**Next Steps: Implement Help system (replaces /links with more flexible solution), then user features (image management, meme commands)**

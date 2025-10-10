@@ -32,3 +32,6 @@ DRAFT_ROUNDS = 25
 
 # Special Team IDs
 FREE_AGENT_TEAM_ID = 31  # Generic free agent team ID (same per season)
+
+# Role Names
+HELP_EDITOR_ROLE_NAME = "Help Editor"  # Users with this role can edit help commands
