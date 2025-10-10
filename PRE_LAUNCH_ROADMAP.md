@@ -81,19 +81,26 @@ This document outlines the remaining functionality required before the Discord B
 
 ### 🖼️ User Profile Management
 
-#### 5. Image Management Commands
-- **Commands**:
-  - `/set-headshot <url>` - Set player headshot image
-  - `/set-fancy-card <url>` - Set player fancy card image
-- **Description**: Allow users to customize their player profile images
-- **Features**:
-  - Image URL validation
-  - Size/format checking
-  - Preview in response embed
+#### 5. Image Management Commands **✅ COMPLETED**
+- **Command**: `/set-image <image_type> <player_name> <image_url>`
+- **Status**: Complete and fully functional
+- **Description**: Allow users to update player fancy card and headshot images
+- **Features Implemented**:
+  - Single command with fancy-card/headshot choice parameter
+  - Player name autocomplete (prioritizes user's team)
+  - Comprehensive URL validation (format + accessibility testing)
+  - Preview embed with confirmation dialog
+  - Permission system (users can edit org players, admins can edit anyone)
   - Integration with existing player card system
-- **Permissions**: User can only modify their own player images
-- **Database**: Update player image URLs in database
-- **Estimated Effort**: 2-3 hours
+  - HTTP HEAD request to test URL accessibility
+  - Content-type verification (must be image/*)
+- **Permissions**:
+  - Regular users: Can update players in their organization (ML/MiL/IL)
+  - Administrators: Can update any player's images
+- **Database**: Updates `vanity_card` or `headshot` fields in player model
+- **Documentation**: See `commands/profile/README.md`
+- **Tests**: Comprehensive test coverage (22 tests) in `tests/test_commands_profile_images.py`
+- **Completed**: January 2025
 
 ### 🎯 Gaming & Entertainment
 
@@ -142,8 +149,8 @@ This document outlines the remaining functionality required before the Discord B
 3. ✅ **Charts System** - Complete with admin management and 12 charts (January 2025)
 4. ✅ **Help System** - Complete with comprehensive help topics and CRUD capabilities (January 2025)
 
-### Phase 3: User Features (Week 2)
-5. **Image Management** - User profile customization
+### Phase 3: User Features
+5. ✅ **Image Management** - Complete with URL validation and permissions (January 2025)
 6. **Meme Commands** - Community engagement
 
 ### Phase 4: Advanced Features
@@ -274,13 +281,14 @@ commands/
 - **Cache Management**: Implement caching for expensive operations
 
 ### Resource Requirements
-- **Development Time**: ~6-9 hours remaining (reduced from 20-25 hours)
+- **Development Time**: ~4-6 hours remaining (reduced from 20-25 hours)
   - ✅ Custom Commands: Complete (saved 2-3 hours)
   - ✅ Trading System: Complete (saved 6-8 hours)
   - ✅ Weather Command: Complete (saved 3-4 hours)
   - ✅ Charts System: Complete (saved 2-3 hours)
   - ✅ Help System: Complete (saved 2-3 hours)
-  - Remaining: Images (2-3h), Memes (1-2h), Scout (3-4h)
+  - ✅ Image Management: Complete (saved 2-3 hours)
+  - Remaining: Memes (1-2h), Scout (3-4h)
 - **API Costs**: None required (weather is gameplay dice rolling, not real weather)
 - **Database Storage**: Minimal increase for new features
 - **Hosting Resources**: Current infrastructure sufficient
@@ -288,4 +296,4 @@ commands/
 ---
 
 **Target Timeline: 1 week for complete pre-launch readiness**
-**Next Steps: Implement user features (image management, meme commands) and scouting system**
+**Next Steps: Implement remaining features (meme commands and scouting system)**

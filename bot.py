@@ -118,6 +118,7 @@ class SBABot(commands.Bot):
         from commands.voice import setup_voice
         from commands.utilities import setup_utilities
         from commands.help import setup_help_commands
+        from commands.profile import setup_profile_commands
 
         # Define command packages to load
         command_packages = [
@@ -131,6 +132,7 @@ class SBABot(commands.Bot):
             ("voice", setup_voice),
             ("utilities", setup_utilities),
             ("help", setup_help_commands),
+            ("profile", setup_profile_commands),
         ]
         
         total_successful = 0
