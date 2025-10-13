@@ -189,27 +189,12 @@ async def player_name_autocomplete(
         return []
 
     try:
-        from utils.autocomplete import player_autocomplete_with_team_priority
-        return await player_autocomplete_with_team_priority(interaction, current)
+        # Use the shared autocomplete utility with team prioritization
+        from utils.autocomplete import player_autocomplete
+        return await player_autocomplete(interaction, current)
     except Exception:
-        # Fallback to basic autocomplete
-        try:
-            players = await player_service.search_players(current, limit=25, season=SBA_CURRENT_SEASON)
-
-            choices = []
-            for player in players[:25]:
-                display_name = f"{player.name} ({player.primary_position})"
-                if hasattr(player, 'team') and player.team:
-                    display_name += f" - {player.team.abbrev}"
-
-                choices.append(app_commands.Choice(
-                    name=display_name,
-                    value=player.name
-                ))
-
-            return choices
-        except Exception:
-            return []
+        # Return empty list on error to avoid breaking autocomplete
+        return []
 
 
 # Main Command Cog

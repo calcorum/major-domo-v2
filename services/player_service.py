@@ -281,16 +281,20 @@ class PlayerService(BaseService[Player]):
     async def update_player(self, player_id: int, updates: dict) -> Optional[Player]:
         """
         Update player information.
-        
+
         Args:
             player_id: Player ID to update
             updates: Dictionary of fields to update
-            
+
         Returns:
             Updated player instance or None
+
+        Note:
+            The player PATCH endpoint uses query parameters instead of JSON body,
+            so we pass use_query_params=True to the patch method.
         """
         try:
-            return await self.update(player_id, updates)
+            return await self.patch(player_id, updates, use_query_params=True)
         except Exception as e:
             logger.error(f"Failed to update player {player_id}: {e}")
             return None

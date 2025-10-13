@@ -27,7 +27,26 @@ class BaseService(Generic[T]):
     async def get_all(self, params: Optional[List[tuple]] = None) -> Tuple[List[T], int]
     async def create(self, model_data: Dict[str, Any]) -> Optional[T]
     async def update(self, object_id: int, model_data: Dict[str, Any]) -> Optional[T]
+    async def patch(self, object_id: int, model_data: Dict[str, Any], use_query_params: bool = False) -> Optional[T]
     async def delete(self, object_id: int) -> bool
+```
+
+**PATCH vs PUT Operations:**
+- `update()` uses HTTP PUT for full resource replacement
+- `patch()` uses HTTP PATCH for partial updates
+- `use_query_params=True` sends data as URL query parameters instead of JSON body
+
+**When to use `use_query_params=True`:**
+Some API endpoints (notably the player PATCH endpoint) expect data as query parameters instead of JSON body. Example:
+
+```python
+# Standard PATCH with JSON body
+await base_service.patch(object_id, {"field": "value"})
+# → PATCH /api/v3/endpoint/{id} with JSON: {"field": "value"}
+
+# PATCH with query parameters
+await base_service.patch(object_id, {"field": "value"}, use_query_params=True)
+# → PATCH /api/v3/endpoint/{id}?field=value
 ```
 
 ## Service Files

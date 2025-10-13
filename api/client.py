@@ -310,43 +310,50 @@ class APIClient:
             raise APIException(f"PUT failed: {e}")
     
     async def patch(
-        self, 
-        endpoint: str, 
+        self,
+        endpoint: str,
         data: Optional[Dict[str, Any]] = None,
         object_id: Optional[int] = None,
         api_version: int = 3,
-        timeout: Optional[int] = None
+        timeout: Optional[int] = None,
+        use_query_params: bool = False
     ) -> Optional[Dict[str, Any]]:
         """
         Make PATCH request to API.
-        
+
         Args:
             endpoint: API endpoint
             data: Request payload (optional for some PATCH operations)
             object_id: Optional object ID
             api_version: API version (default: 3)
             timeout: Request timeout override
-            
+            use_query_params: If True, send data as query parameters instead of JSON body (default: False)
+
         Returns:
             JSON response data
-            
+
         Raises:
             APIException: For HTTP errors or network issues
         """
         url = self._build_url(endpoint, api_version, object_id)
-        
+
+        # Add data as query parameters if requested
+        if use_query_params and data:
+            params = [(k, str(v)) for k, v in data.items()]
+            url = self._add_params(url, params)
+
         await self._ensure_session()
-        
+
         try:
-            logger.debug(f"PATCH: {endpoint} id: {object_id} data: {data}")
-            
+            logger.debug(f"PATCH: {endpoint} id: {object_id} data: {data} use_query_params: {use_query_params}")
+
             request_timeout = aiohttp.ClientTimeout(total=timeout) if timeout else None
-            
-            # Use json=data if data is provided, otherwise send empty body
+
+            # Use json=data if data is provided and not using query params
             kwargs = {}
-            if data is not None:
+            if data is not None and not use_query_params:
                 kwargs['json'] = data
-            
+
             async with self._session.patch(url, timeout=request_timeout, **kwargs) as response:
                 if response.status == 401:
                     logger.error(f"Authentication failed for PATCH: {url}")
@@ -361,11 +368,11 @@ class APIClient:
                     error_text = await response.text()
                     logger.error(f"PATCH error {response.status}: {url} - {error_text}")
                     raise APIException(f"PATCH request failed with status {response.status}: {error_text}")
-                
+
                 result = await response.json()
                 logger.debug(f"PATCH Response: {str(result)[:1200]}{'...' if len(str(result)) > 1200 else ''}")
                 return result
-                
+
         except aiohttp.ClientError as e:
             logger.error(f"HTTP client error for PATCH {url}: {e}")
             raise APIException(f"Network error: {e}")

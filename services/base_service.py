@@ -307,6 +307,41 @@ class BaseService(Generic[T]):
         
         return await self.update(model.id, model.to_dict(exclude_none=True))
     
+    async def patch(self, object_id: int, model_data: Dict[str, Any], use_query_params: bool = False) -> Optional[T]:
+        """
+        Update existing object with HTTP PATCH.
+
+        Args:
+            object_id: ID of object to update
+            model_data: Dictionary of fields to update
+            use_query_params: If True, send data as query parameters instead of JSON body
+
+        Returns:
+            Updated model instance or None if not found
+
+        Raises:
+            APIException: For API errors
+        """
+        try:
+            client = await self.get_client()
+            response = await client.patch(self.endpoint, model_data, object_id, use_query_params=use_query_params)
+
+            if not response:
+                logger.debug(f"{self.model_class.__name__} {object_id} not found for update")
+                return None
+
+            model = self.model_class.from_api_data(response)
+            logger.debug(f"Updated {self.model_class.__name__} {object_id}: {model}")
+            return model
+
+        except APIException:
+            logger.error(f"API error updating {self.model_class.__name__} {object_id}")
+            raise
+        except Exception as e:
+            logger.error(f"Error updating {self.model_class.__name__} {object_id}: {e}")
+            raise APIException(f"Failed to update {self.model_class.__name__}: {e}")
+
+    
     async def delete(self, object_id: int) -> bool:
         """
         Delete object by ID.

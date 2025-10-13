@@ -315,8 +315,11 @@ updated_player = await player_service.update_player(player_id, update_data)
 
 **Endpoints Used:**
 - `GET /api/v3/players?name={name}&season={season}` - Player search
-- `PUT /api/v3/players/{player_id}` - Update player data
+- `PATCH /api/v3/players/{player_id}?vanity_card={url}` - Update player data
 - `GET /api/v3/teams?owner_id={user_id}&season={season}` - User's teams
+
+**Important Note:**
+The player PATCH endpoint uses **query parameters** instead of JSON body for data updates. The `player_service.update_player()` method automatically handles this by setting `use_query_params=True` when calling the API client.
 
 ## Testing
 
