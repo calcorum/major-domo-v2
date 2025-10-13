@@ -30,7 +30,7 @@ def sample_help_command() -> HelpCommand:
         title='Trading Rules & Guidelines',
         content='Complete trading rules for the league...',
         category='rules',
-        created_by_discord_id=123456789,
+        created_by_discord_id='123456789',
         created_at=now,
         updated_at=None,
         last_modified_by=None,
@@ -130,7 +130,7 @@ class TestHelpCommandsServiceCRUD:
             name="test-topic",
             title="Test Topic",
             content="This is test content for the help topic.",
-            creator_discord_id=123456789,
+            creator_discord_id='123456789',
             category="info"
         )
 
@@ -154,7 +154,7 @@ class TestHelpCommandsServiceCRUD:
                 name="trading-rules",
                 title="Trading Rules",
                 content="Rules content",
-                creator_discord_id=123456789
+                creator_discord_id='123456789'
             )
 
     @pytest.mark.asyncio
@@ -220,7 +220,7 @@ class TestHelpCommandsServiceCRUD:
             created_by_discord_id=sample_help_command.created_by_discord_id,
             created_at=sample_help_command.created_at,
             updated_at=datetime.now(timezone.utc),
-            last_modified_by=987654321,
+            last_modified_by='987654321',
             is_active=sample_help_command.is_active,
             view_count=sample_help_command.view_count,
             display_order=sample_help_command.display_order
@@ -242,7 +242,7 @@ class TestHelpCommandsServiceCRUD:
             name="trading-rules",
             new_title="Updated Trading Rules",
             new_content="Updated content",
-            updater_discord_id=987654321
+            updater_discord_id='987654321'
         )
 
         assert isinstance(result, HelpCommand)
@@ -275,7 +275,7 @@ class TestHelpCommandsServiceCRUD:
             name='deleted-topic',
             title='Deleted Topic',
             content='Content',
-            created_by_discord_id=123456789,
+            created_by_discord_id='123456789',
             created_at=datetime.now(timezone.utc),
             is_active=False
         )
@@ -327,7 +327,7 @@ class TestHelpCommandsServiceSearch:
                     'title': 'Trading Rules',
                     'content': 'Content',
                     'category': 'rules',
-                    'created_by_discord_id': 123,
+                    'created_by_discord_id': '123',
                     'created_at': datetime.now(timezone.utc).isoformat(),
                     'is_active': True,
                     'view_count': 100,
@@ -362,7 +362,7 @@ class TestHelpCommandsServiceSearch:
                     'title': f'Topic {i}',
                     'content': f'Content {i}',
                     'category': 'rules' if i % 2 == 0 else 'guides',
-                    'created_by_discord_id': 123,
+                    'created_by_discord_id': '123',
                     'created_at': datetime.now(timezone.utc).isoformat(),
                     'is_active': True,
                     'view_count': i * 10,
@@ -467,7 +467,7 @@ class TestHelpCommandsServiceStatistics:
                 'name': 'popular-topic',
                 'title': 'Popular Topic',
                 'content': 'Content',
-                'created_by_discord_id': 123,
+                'created_by_discord_id': '123',
                 'created_at': datetime.now(timezone.utc).isoformat(),
                 'is_active': True,
                 'view_count': 500,

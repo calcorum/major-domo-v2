@@ -455,14 +455,23 @@ class CustomCommandsService(BaseService[CustomCommand]):
             ('sort', '-use_count'),
             ('limit', limit)
         ]
-        
+
         commands_data = await self.get_items_with_params(params)
-        
+
         commands = []
         for cmd_data in commands_data:
-            creator = await self.get_creator_by_id(cmd_data.creator_id)
-            commands.append(CustomCommand(**cmd_data.model_dump(), creator=creator))
-        
+            try:
+                creator = await self.get_creator_by_id(cmd_data.creator_id)
+                commands.append(CustomCommand(**cmd_data.model_dump(), creator=creator))
+            except BotException as e:
+                # Handle missing creator gracefully
+                self.logger.warning("Skipping popular command with missing creator",
+                                  command_id=cmd_data.id,
+                                  command_name=cmd_data.name,
+                                  creator_id=cmd_data.creator_id,
+                                  error=str(e))
+                continue
+
         return commands
     
     async def get_command_names_for_autocomplete(
@@ -633,38 +642,56 @@ class CustomCommandsService(BaseService[CustomCommand]):
     async def get_commands_needing_warning(self) -> List[CustomCommand]:
         """Get commands that need deletion warning (60+ days unused)."""
         cutoff_date = datetime.now() - timedelta(days=60)
-        
+
         params = [
             ('last_used__lt', cutoff_date.isoformat()),
             ('warning_sent', False),
             ('is_active', True)
         ]
-        
+
         commands_data = await self.get_items_with_params(params)
-        
+
         commands = []
         for cmd_data in commands_data:
-            creator = await self.get_creator_by_id(cmd_data.creator_id)
-            commands.append(CustomCommand(**cmd_data.model_dump(), creator=creator))
-        
+            try:
+                creator = await self.get_creator_by_id(cmd_data.creator_id)
+                commands.append(CustomCommand(**cmd_data.model_dump(), creator=creator))
+            except BotException as e:
+                # Handle missing creator gracefully
+                self.logger.warning("Skipping command with missing creator",
+                                  command_id=cmd_data.id,
+                                  command_name=cmd_data.name,
+                                  creator_id=cmd_data.creator_id,
+                                  error=str(e))
+                continue
+
         return commands
     
     async def get_commands_eligible_for_deletion(self) -> List[CustomCommand]:
         """Get commands eligible for deletion (90+ days unused)."""
         cutoff_date = datetime.now() - timedelta(days=90)
-        
+
         params = [
             ('last_used__lt', cutoff_date.isoformat()),
             ('is_active', True)
         ]
-        
+
         commands_data = await self.get_items_with_params(params)
-        
+
         commands = []
         for cmd_data in commands_data:
-            creator = await self.get_creator_by_id(cmd_data.creator_id)
-            commands.append(CustomCommand(**cmd_data.model_dump(), creator=creator))
-        
+            try:
+                creator = await self.get_creator_by_id(cmd_data.creator_id)
+                commands.append(CustomCommand(**cmd_data.model_dump(), creator=creator))
+            except BotException as e:
+                # Handle missing creator gracefully
+                self.logger.warning("Skipping command with missing creator",
+                                  command_id=cmd_data.id,
+                                  command_name=cmd_data.name,
+                                  creator_id=cmd_data.creator_id,
+                                  error=str(e))
+                continue
+
         return commands
     
     async def mark_warning_sent(self, command_name: str) -> bool:

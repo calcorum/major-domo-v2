@@ -163,7 +163,7 @@ class HelpCommands(commands.Cog):
 
             # Success embed
             embed = EmbedTemplate.success(
-                title="✅ Help Topic Created!",
+                title="Help Topic Created!",
                 description=f"The help topic `/help {help_cmd.name}` has been created successfully."
             )
 

@@ -25,7 +25,7 @@ class TestHelpCommandModel:
             name='test-topic',
             title='Test Topic',
             content='This is test content',
-            created_by_discord_id=123456789,
+            created_by_discord_id='123456789',
             created_at=datetime.now()
         )
 
@@ -33,7 +33,7 @@ class TestHelpCommandModel:
         assert help_cmd.name == 'test-topic'
         assert help_cmd.title == 'Test Topic'
         assert help_cmd.content == 'This is test content'
-        assert help_cmd.created_by_discord_id == 123456789
+        assert help_cmd.created_by_discord_id == '123456789'
         assert help_cmd.is_active is True
         assert help_cmd.view_count == 0
 
@@ -46,10 +46,10 @@ class TestHelpCommandModel:
             title='Trading Rules & Guidelines',
             content='Complete trading rules...',
             category='rules',
-            created_by_discord_id=123456789,
+            created_by_discord_id='123456789',
             created_at=now,
             updated_at=now,
-            last_modified_by=987654321,
+            last_modified_by='987654321',
             is_active=True,
             view_count=100,
             display_order=10
@@ -57,7 +57,7 @@ class TestHelpCommandModel:
 
         assert help_cmd.category == 'rules'
         assert help_cmd.updated_at == now
-        assert help_cmd.last_modified_by == 987654321
+        assert help_cmd.last_modified_by == '987654321'
         assert help_cmd.view_count == 100
         assert help_cmd.display_order == 10
 
@@ -67,7 +67,7 @@ class TestHelpCommandModel:
             'id': 3,
             'title': 'Test',
             'content': 'Content',
-            'created_by_discord_id': 123,
+            'created_by_discord_id': '123',
             'created_at': datetime.now()
         }
 
@@ -98,7 +98,7 @@ class TestHelpCommandModel:
             'id': 4,
             'name': 'test',
             'content': 'Content',
-            'created_by_discord_id': 123,
+            'created_by_discord_id': '123',
             'created_at': datetime.now()
         }
 
@@ -120,7 +120,7 @@ class TestHelpCommandModel:
             'id': 5,
             'name': 'test',
             'title': 'Test',
-            'created_by_discord_id': 123,
+            'created_by_discord_id': '123',
             'created_at': datetime.now()
         }
 
@@ -143,7 +143,7 @@ class TestHelpCommandModel:
             'name': 'test',
             'title': 'Test',
             'content': 'Content',
-            'created_by_discord_id': 123,
+            'created_by_discord_id': '123',
             'created_at': datetime.now()
         }
 
@@ -168,7 +168,7 @@ class TestHelpCommandModel:
             name='active',
             title='Active Topic',
             content='Content',
-            created_by_discord_id=123,
+            created_by_discord_id='123',
             created_at=datetime.now(),
             is_active=True
         )
@@ -178,7 +178,7 @@ class TestHelpCommandModel:
             name='deleted',
             title='Deleted Topic',
             content='Content',
-            created_by_discord_id=123,
+            created_by_discord_id='123',
             created_at=datetime.now(),
             is_active=False
         )
@@ -194,7 +194,7 @@ class TestHelpCommandModel:
             name='test',
             title='Test',
             content='Content',
-            created_by_discord_id=123,
+            created_by_discord_id='123',
             created_at=datetime.now(),
             updated_at=None
         )
@@ -206,7 +206,7 @@ class TestHelpCommandModel:
             name='test',
             title='Test',
             content='Content',
-            created_by_discord_id=123,
+            created_by_discord_id='123',
             created_at=datetime.now(),
             updated_at=datetime.now() - timedelta(days=5)
         )
@@ -219,7 +219,7 @@ class TestHelpCommandModel:
             name='test',
             title='Test',
             content='Content',
-            created_by_discord_id=123,
+            created_by_discord_id='123',
             created_at=datetime.now() - timedelta(days=30)
         )
         assert old.days_since_creation == 30
@@ -232,7 +232,7 @@ class TestHelpCommandModel:
             name='test',
             title='Test',
             content='Content',
-            created_by_discord_id=123,
+            created_by_discord_id='123',
             created_at=datetime.now(),
             view_count=0
         )
@@ -244,7 +244,7 @@ class TestHelpCommandModel:
             name='test',
             title='Test',
             content='Content',
-            created_by_discord_id=123,
+            created_by_discord_id='123',
             created_at=datetime.now() - timedelta(days=5),
             view_count=50
         )
@@ -257,7 +257,7 @@ class TestHelpCommandModel:
             name='test',
             title='Test',
             content='Content',
-            created_by_discord_id=123,
+            created_by_discord_id='123',
             created_at=datetime.now() - timedelta(days=100),
             view_count=50
         )
@@ -356,7 +356,7 @@ class TestHelpCommandSearchResult:
                 name=f'topic-{i}',
                 title=f'Topic {i}',
                 content=f'Content {i}',
-                created_by_discord_id=123,
+                created_by_discord_id='123',
                 created_at=datetime.now()
             )
             for i in range(1, 11)
@@ -444,7 +444,7 @@ class TestHelpCommandStats:
             name='popular-topic',
             title='Popular Topic',
             content='Content',
-            created_by_discord_id=123,
+            created_by_discord_id='123',
             created_at=datetime.now(),
             view_count=500
         )
@@ -497,10 +497,10 @@ class TestHelpCommandFromAPIData:
             'title': 'Trading Rules & Guidelines',
             'content': 'Complete trading rules...',
             'category': 'rules',
-            'created_by_discord_id': 123456789,
+            'created_by_discord_id': '123456789',
             'created_at': '2025-01-01T12:00:00',
             'updated_at': '2025-01-10T15:30:00',
-            'last_modified_by': 987654321,
+            'last_modified_by': '987654321',
             'is_active': True,
             'view_count': 100,
             'display_order': 10
@@ -522,7 +522,7 @@ class TestHelpCommandFromAPIData:
             'name': 'simple-topic',
             'title': 'Simple Topic',
             'content': 'Simple content',
-            'created_by_discord_id': 123456789,
+            'created_by_discord_id': '123456789',
             'created_at': '2025-01-01T12:00:00'
         }
 
