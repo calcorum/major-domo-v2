@@ -95,7 +95,7 @@ class HelpCommands(commands.Cog):
 
                 if not all_topics:
                     embed = EmbedTemplate.info(
-                        title="📚 Help Topics",
+                        title="Help Topics",
                         description="No help topics are currently available.\nAdmins can create topics using `/help-create`."
                     )
                     await interaction.followup.send(embed=embed)
@@ -247,7 +247,7 @@ class HelpCommands(commands.Cog):
 
             # Success embed
             embed = EmbedTemplate.success(
-                title="✅ Help Topic Updated!",
+                title="Help Topic Updated!",
                 description=f"The help topic `/help {updated_help.name}` has been updated successfully."
             )
 
@@ -303,7 +303,7 @@ class HelpCommands(commands.Cog):
 
             # Show deletion confirmation
             embed = EmbedTemplate.warning(
-                title="⚠️ Delete Help Topic",
+                title="Delete Help Topic",
                 description=f"Are you sure you want to delete `/help {help_cmd.name}`?"
             )
 
@@ -389,7 +389,7 @@ class HelpCommands(commands.Cog):
 
             if not all_topics:
                 embed = EmbedTemplate.info(
-                    title="📚 Help Topics",
+                    title="Help Topics",
                     description="No help topics found matching your criteria."
                 )
 

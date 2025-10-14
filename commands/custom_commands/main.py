@@ -119,7 +119,7 @@ class CustomCommandsCommands(commands.Cog):
             
             # Success embed
             embed = EmbedTemplate.success(
-                title="✅ Custom Command Created!",
+                title="Custom Command Created!",
                 description=f"Your command `/cc {command.name}` has been created successfully."
             )
             
@@ -200,7 +200,7 @@ class CustomCommandsCommands(commands.Cog):
             
             # Success embed
             embed = EmbedTemplate.success(
-                title="✅ Command Updated!",
+                title="Command Updated!",
                 description=f"Your command `/cc {updated_command.name}` has been updated successfully."
             )
             
@@ -349,7 +349,7 @@ class CustomCommandsCommands(commands.Cog):
             
             if not search_result.commands:
                 embed = EmbedTemplate.info(
-                    title="📝 Your Custom Commands",
+                    title="Your Custom Commands",
                     description="You haven't created any custom commands yet!"
                 )
                 

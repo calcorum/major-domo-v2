@@ -34,7 +34,7 @@ class SoakInfoCommands(commands.Cog):
         # Handle case where soak has never been mentioned
         if not last_soak:
             embed = EmbedTemplate.info(
-                title="📊 Last Soak",
+                title="Last Soak",
                 description="No one has said the forbidden word yet. 🤫"
             )
             embed.add_field(

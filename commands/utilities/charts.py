@@ -169,7 +169,7 @@ class ChartAdminCommands(commands.Cog):
 
         # Success response
         embed = EmbedTemplate.success(
-            title="✅ Chart Added",
+            title="Chart Added",
             description=f"Successfully added chart '{name}'"
         )
         embed.add_field(name="Key", value=key, inline=True)
@@ -207,7 +207,7 @@ class ChartAdminCommands(commands.Cog):
 
         # Success response
         embed = EmbedTemplate.success(
-            title="✅ Chart Removed",
+            title="Chart Removed",
             description=f"Successfully removed chart '{chart.name}'"
         )
         embed.add_field(name="Key", value=key, inline=True)
@@ -335,7 +335,7 @@ class ChartAdminCommands(commands.Cog):
 
         # Success response
         embed = EmbedTemplate.success(
-            title="✅ Chart Updated",
+            title="Chart Updated",
             description=f"Successfully updated chart '{chart.name}'"
         )
         embed.add_field(name="Key", value=key, inline=True)

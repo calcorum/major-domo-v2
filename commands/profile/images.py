@@ -427,7 +427,7 @@ class ImageCommands(commands.Cog):
         )
 
         success_embed = EmbedTemplate.success(
-            title="✅ Image Updated Successfully!",
+            title="Image Updated Successfully!",
             description=f"**{display_name}** for **{player.name}** has been updated."
         )
 

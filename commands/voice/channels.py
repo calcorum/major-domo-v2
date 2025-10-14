@@ -339,7 +339,7 @@ class VoiceChannelCommands(commands.Cog):
     async def deprecated_public_voice(self, ctx: commands.Context):
         """Deprecated command - redirect to new slash command."""
         embed = EmbedTemplate.info(
-            title="📢 Command Deprecated",
+            title="Command Deprecated",
             description=(
                 "The `!vc` command has been deprecated.\n\n"
                 "**Please use:** `/voice-channel public` for your voice channel needs.\n\n"
@@ -353,7 +353,7 @@ class VoiceChannelCommands(commands.Cog):
     async def deprecated_private_voice(self, ctx: commands.Context):
         """Deprecated command - redirect to new slash command."""
         embed = EmbedTemplate.info(
-            title="📢 Command Deprecated",
+            title="Command Deprecated",
             description=(
                 "The `!private` command has been deprecated.\n\n"
                 "**Please use:** `/voice-channel private` for your private team channel needs.\n\n"
