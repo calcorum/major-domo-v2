@@ -552,3 +552,99 @@ class TestDiceRollCommands:
         assert results[1]['dice_notation'] == '3d6'
         assert results[1]['num_dice'] == 3
         assert results[1]['die_sides'] == 6
+
+    def test_weighted_scout_dice_batter(self, dice_cog):
+        """Test that batter scout dice always rolls 1-3 for first d6."""
+        # Roll 20 times to ensure consistency
+        for _ in range(20):
+            results = dice_cog._roll_weighted_scout_dice("batter")
+
+            # Should have 3 dice groups (1d6, 2d6, 1d20)
+            assert len(results) == 3
+
+            # First d6 should ALWAYS be 1-3 for batter
+            first_d6 = results[0]['rolls'][0]
+            assert 1 <= first_d6 <= 3, f"Batter first d6 was {first_d6}, expected 1-3"
+
+            # Second roll (2d6) should be normal
+            assert results[1]['num_dice'] == 2
+            assert results[1]['die_sides'] == 6
+            assert all(1 <= roll <= 6 for roll in results[1]['rolls'])
+
+            # Third roll (1d20) should be normal
+            assert results[2]['num_dice'] == 1
+            assert results[2]['die_sides'] == 20
+            assert 1 <= results[2]['rolls'][0] <= 20
+
+    def test_weighted_scout_dice_pitcher(self, dice_cog):
+        """Test that pitcher scout dice always rolls 4-6 for first d6."""
+        # Roll 20 times to ensure consistency
+        for _ in range(20):
+            results = dice_cog._roll_weighted_scout_dice("pitcher")
+
+            # Should have 3 dice groups (1d6, 2d6, 1d20)
+            assert len(results) == 3
+
+            # First d6 should ALWAYS be 4-6 for pitcher
+            first_d6 = results[0]['rolls'][0]
+            assert 4 <= first_d6 <= 6, f"Pitcher first d6 was {first_d6}, expected 4-6"
+
+            # Second roll (2d6) should be normal
+            assert results[1]['num_dice'] == 2
+            assert results[1]['die_sides'] == 6
+            assert all(1 <= roll <= 6 for roll in results[1]['rolls'])
+
+            # Third roll (1d20) should be normal
+            assert results[2]['num_dice'] == 1
+            assert results[2]['die_sides'] == 20
+            assert 1 <= results[2]['rolls'][0] <= 20
+
+    @pytest.mark.asyncio
+    async def test_scout_command_batter(self, dice_cog, mock_interaction):
+        """Test scout slash command with batter card type."""
+        # Mock a card_type choice
+        card_type_choice = MagicMock()
+        card_type_choice.value = 'batter'
+        card_type_choice.name = 'Batter'
+
+        await dice_cog.scout_dice.callback(dice_cog, mock_interaction, card_type_choice)
+
+        # Verify response was deferred
+        mock_interaction.response.defer.assert_called_once()
+
+        # Verify followup was sent with embed
+        mock_interaction.followup.send.assert_called_once()
+        call_args = mock_interaction.followup.send.call_args
+        assert 'embed' in call_args.kwargs
+
+        # Verify embed has the correct format
+        embed = call_args.kwargs['embed']
+        assert isinstance(embed, discord.Embed)
+        assert embed.title == "Scouting roll for TestUser (Batter)"
+        assert len(embed.fields) == 1
+        assert "Details:[1d6;2d6;1d20" in embed.fields[0].value
+
+    @pytest.mark.asyncio
+    async def test_scout_command_pitcher(self, dice_cog, mock_interaction):
+        """Test scout slash command with pitcher card type."""
+        # Mock a card_type choice
+        card_type_choice = MagicMock()
+        card_type_choice.value = 'pitcher'
+        card_type_choice.name = 'Pitcher'
+
+        await dice_cog.scout_dice.callback(dice_cog, mock_interaction, card_type_choice)
+
+        # Verify response was deferred
+        mock_interaction.response.defer.assert_called_once()
+
+        # Verify followup was sent with embed
+        mock_interaction.followup.send.assert_called_once()
+        call_args = mock_interaction.followup.send.call_args
+        assert 'embed' in call_args.kwargs
+
+        # Verify embed has the correct format
+        embed = call_args.kwargs['embed']
+        assert isinstance(embed, discord.Embed)
+        assert embed.title == "Scouting roll for TestUser (Pitcher)"
+        assert len(embed.fields) == 1
+        assert "Details:[1d6;2d6;1d20" in embed.fields[0].value

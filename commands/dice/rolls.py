@@ -109,6 +109,37 @@ class DiceRollCommands(commands.Cog):
         await ctx.send(embed=embed)
 
     @discord.app_commands.command(
+        name="scout",
+        description="Roll weighted scouting dice (1d6;2d6;1d20) based on card type"
+    )
+    @discord.app_commands.describe(
+        card_type="Type of card being scouted"
+    )
+    @discord.app_commands.choices(card_type=[
+        discord.app_commands.Choice(name="Batter", value="batter"),
+        discord.app_commands.Choice(name="Pitcher", value="pitcher")
+    ])
+    @logged_command("/scout")
+    async def scout_dice(
+        self,
+        interaction: discord.Interaction,
+        card_type: discord.app_commands.Choice[str]
+    ):
+        """Roll weighted scouting dice based on card type (batter or pitcher)."""
+        await interaction.response.defer()
+
+        # Get the card type value
+        card_type_value = card_type.value
+
+        # Roll weighted scouting dice
+        roll_results = self._roll_weighted_scout_dice(card_type_value)
+
+        # Create embed for the roll results
+        embed = self._create_multi_roll_embed("1d6;2d6;1d20", roll_results, interaction.user)
+        embed.title = f'Scouting roll for {interaction.user.display_name} ({card_type.name})'
+        await interaction.followup.send(embed=embed)
+
+    @discord.app_commands.command(
         name="fielding",
         description="Roll Super Advanced fielding dice for a defensive position"
     )
@@ -562,6 +593,38 @@ class DiceRollCommands(commands.Cog):
             'rolls': rolls,
             'total': total
         }
+
+    def _roll_weighted_scout_dice(self, card_type: str) -> list[dict]:
+        """
+        Roll scouting dice with weighted first d6 based on card type.
+
+        Args:
+            card_type: Either "batter" (1-3) or "pitcher" (4-6) for first d6
+
+        Returns:
+            List of 3 roll result dicts: weighted 1d6, normal 2d6, normal 1d20
+        """
+        # First die (1d6) - weighted based on card type
+        if card_type == "batter":
+            first_roll = random.randint(1, 3)
+        else:  # pitcher
+            first_roll = random.randint(4, 6)
+
+        first_d6_result = {
+            'dice_notation': '1d6',
+            'num_dice': 1,
+            'die_sides': 6,
+            'rolls': [first_roll],
+            'total': first_roll
+        }
+
+        # Second roll (2d6) - normal
+        second_result = self._parse_and_roll_single_dice("2d6")
+
+        # Third roll (1d20) - normal
+        third_result = self._parse_and_roll_single_dice("1d20")
+
+        return [first_d6_result, second_result, third_result]
 
     def _create_multi_roll_embed(self, dice_notation: str, roll_results: list[dict], user: discord.User | discord.Member) -> discord.Embed:
         """Create an embed for multiple dice roll results."""
