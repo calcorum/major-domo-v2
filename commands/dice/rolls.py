@@ -6,6 +6,7 @@ Implements slash commands for dice rolling functionality required for gameplay.
 import random
 import re
 from typing import Optional
+from dataclasses import dataclass
 
 import discord
 from discord.ext import commands
@@ -13,6 +14,16 @@ from discord.ext import commands
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
 from views.embeds import EmbedColors, EmbedTemplate
+
+
+@dataclass
+class DiceRoll:
+    """Represents the result of a dice roll."""
+    dice_notation: str
+    num_dice: int
+    die_sides: int
+    rolls: list[int]
+    total: int
 
 
 class DiceRollCommands(commands.Cog):
@@ -195,7 +206,7 @@ class DiceRollCommands(commands.Cog):
         dice_notation = "1d20;3d6"
         roll_results = self._parse_and_roll_multiple_dice(dice_notation)
 
-        self.logger.info("SA Fielding dice rolled successfully", position=parsed_position, d20=roll_results[0]['total'], d6_total=roll_results[1]['total'])
+        self.logger.info("SA Fielding dice rolled successfully", position=parsed_position, d20=roll_results[0].total, d6_total=roll_results[1].total)
 
         # Create fielding embed
         embed = self._create_fielding_embed(parsed_position, roll_results, ctx.author)
@@ -222,11 +233,11 @@ class DiceRollCommands(commands.Cog):
 
         return position_map.get(pos)
 
-    def _create_fielding_embed(self, position: str, roll_results: list[dict], user) -> discord.Embed:
+    def _create_fielding_embed(self, position: str, roll_results: list[DiceRoll], user) -> discord.Embed:
         """Create an embed for fielding roll results."""
-        d20_result = roll_results[0]['total']
-        d6_total = roll_results[1]['total']
-        d6_rolls = roll_results[1]['rolls']
+        d20_result = roll_results[0].total
+        d6_total = roll_results[1].total
+        d6_rolls = roll_results[1].rolls
 
         # Create base embed
         embed = EmbedTemplate.create_base_embed(
@@ -549,7 +560,7 @@ class DiceRollCommands(commands.Cog):
         }
         return errors.get(d6_total, 'No error')
 
-    def _parse_and_roll_multiple_dice(self, dice_notation: str) -> list[dict]:
+    def _parse_and_roll_multiple_dice(self, dice_notation: str) -> list[DiceRoll]:
         """Parse dice notation (supports multiple rolls) and return roll results."""
         # Split by semicolon for multiple rolls
         dice_parts = [part.strip() for part in dice_notation.split(';')]
@@ -563,7 +574,7 @@ class DiceRollCommands(commands.Cog):
 
         return results
 
-    def _parse_and_roll_single_dice(self, dice_notation: str) -> Optional[dict]:
+    def _parse_and_roll_single_dice(self, dice_notation: str) -> Optional[DiceRoll]:
         """Parse single dice notation and return roll results."""
         # Clean the input
         dice_notation = dice_notation.strip().lower().replace(' ', '')
@@ -586,15 +597,15 @@ class DiceRollCommands(commands.Cog):
         rolls = [random.randint(1, die_sides) for _ in range(num_dice)]
         total = sum(rolls)
 
-        return {
-            'dice_notation': dice_notation,
-            'num_dice': num_dice,
-            'die_sides': die_sides,
-            'rolls': rolls,
-            'total': total
-        }
+        return DiceRoll(
+            dice_notation=dice_notation,
+            num_dice=num_dice,
+            die_sides=die_sides,
+            rolls=rolls,
+            total=total
+        )
 
-    def _roll_weighted_scout_dice(self, card_type: str) -> list[dict]:
+    def _roll_weighted_scout_dice(self, card_type: str) -> list[DiceRoll]:
         """
         Roll scouting dice with weighted first d6 based on card type.
 
@@ -602,7 +613,7 @@ class DiceRollCommands(commands.Cog):
             card_type: Either "batter" (1-3) or "pitcher" (4-6) for first d6
 
         Returns:
-            List of 3 roll result dicts: weighted 1d6, normal 2d6, normal 1d20
+            List of 3 roll result dataclasses: weighted 1d6, normal 2d6, normal 1d20
         """
         # First die (1d6) - weighted based on card type
         if card_type == "batter":
@@ -610,13 +621,13 @@ class DiceRollCommands(commands.Cog):
         else:  # pitcher
             first_roll = random.randint(4, 6)
 
-        first_d6_result = {
-            'dice_notation': '1d6',
-            'num_dice': 1,
-            'die_sides': 6,
-            'rolls': [first_roll],
-            'total': first_roll
-        }
+        first_d6_result = DiceRoll(
+            dice_notation='1d6',
+            num_dice=1,
+            die_sides=6,
+            rolls=[first_roll],
+            total=first_roll
+        )
 
         # Second roll (2d6) - normal
         second_result = self._parse_and_roll_single_dice("2d6")
@@ -626,7 +637,7 @@ class DiceRollCommands(commands.Cog):
 
         return [first_d6_result, second_result, third_result]
 
-    def _create_multi_roll_embed(self, dice_notation: str, roll_results: list[dict], user: discord.User | discord.Member) -> discord.Embed:
+    def _create_multi_roll_embed(self, dice_notation: str, roll_results: list[DiceRoll], user: discord.User | discord.Member) -> discord.Embed:
         """Create an embed for multiple dice roll results."""
         embed = EmbedTemplate.create_base_embed(
             title="🎲 Dice Roll",
@@ -640,16 +651,16 @@ class DiceRollCommands(commands.Cog):
         )
 
         # Create summary line with totals
-        totals = [str(result['total']) for result in roll_results]
+        totals = [str(result.total) for result in roll_results]
         summary = f"# {','.join(totals)}"
 
         # Create details line in the specified format: Details:[1d6;2d6;1d20 (5 - 5 6 - 13)]
-        dice_notations = [result['dice_notation'] for result in roll_results]
+        dice_notations = [result.dice_notation for result in roll_results]
 
         # Create the rolls breakdown part - group dice within each roll, separate roll groups with dashes
         roll_groups = []
         for result in roll_results:
-            rolls = result['rolls']
+            rolls = result.rolls
             if len(rolls) == 1:
                 # Single die: just the number
                 roll_groups.append(str(rolls[0]))
