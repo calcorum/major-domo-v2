@@ -4,7 +4,7 @@ Redis caching utilities for Discord Bot v2.0
 Provides optional Redis caching functionality for API responses.
 """
 import logging
-from typing import Optional
+from typing import Optional, Any
 import json
 
 try:
@@ -108,15 +108,15 @@ class CacheManager:
         """
         return f"{prefix}:{identifier}"
         
-    async def get(self, key: str) -> Optional[dict]:
+    async def get(self, key: str) -> Optional[Any]:
         """
         Get cached data.
-        
+
         Args:
             key: Cache key
-            
+
         Returns:
-            Cached data as dict or None if not found/error
+            Cached data (any JSON-serializable type) or None if not found/error
         """
         client = await self._get_client()
         if not client:
@@ -134,13 +134,13 @@ class CacheManager:
         logger.debug(f"Cache miss: {key}")
         return None
         
-    async def set(self, key: str, data: dict, ttl: Optional[int] = None) -> None:
+    async def set(self, key: str, data: Any, ttl: Optional[int] = None) -> None:
         """
         Set cached data.
-        
+
         Args:
             key: Cache key
-            data: Data to cache (must be JSON serializable)
+            data: Data to cache (any JSON-serializable type: dict, list, str, int, bool, None)
             ttl: Time-to-live override (uses default if None)
         """
         client = await self._get_client()
