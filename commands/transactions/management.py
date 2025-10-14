@@ -12,13 +12,90 @@ from discord import app_commands
 
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
+from utils.team_utils import get_user_major_league_team
 from views.embeds import EmbedColors, EmbedTemplate
+from views.base import PaginationView
 from constants import SBA_CURRENT_SEASON
 
 from services.transaction_service import transaction_service
 from services.roster_service import roster_service
 from services.team_service import team_service
 # No longer need TransactionStatus enum
+
+
+class TransactionPaginationView(PaginationView):
+    """Custom pagination view with Show Move IDs button."""
+
+    def __init__(
+        self,
+        *,
+        pages: list[discord.Embed],
+        all_transactions: list,
+        user_id: int,
+        timeout: float = 300.0,
+        show_page_numbers: bool = True
+    ):
+        super().__init__(
+            pages=pages,
+            user_id=user_id,
+            timeout=timeout,
+            show_page_numbers=show_page_numbers
+        )
+        self.all_transactions = all_transactions
+
+    @discord.ui.button(label="Show Move IDs", style=discord.ButtonStyle.secondary, emoji="🔍", row=1)
+    async def show_move_ids(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Show all move IDs in an ephemeral message."""
+        self.increment_interaction_count()
+
+        if not self.all_transactions:
+            await interaction.response.send_message(
+                "No transactions to show.",
+                ephemeral=True
+            )
+            return
+
+        # Build the move ID list
+        header = "📋 **Move IDs for Your Transactions**\n"
+        lines = []
+
+        for transaction in self.all_transactions:
+            lines.append(
+                f"• Week {transaction.week}: {transaction.player.name} → `{transaction.moveid}`"
+            )
+
+        # Discord has a 2000 character limit for messages
+        # Chunk messages to stay under the limit
+        messages = []
+        current_message = header
+
+        for line in lines:
+            # Check if adding this line would exceed limit (leave 50 char buffer)
+            if len(current_message) + len(line) + 1 > 1950:
+                messages.append(current_message)
+                current_message = line + "\n"
+            else:
+                current_message += line + "\n"
+
+        # Add the last message if it has content beyond the header
+        if current_message.strip() != header.strip():
+            messages.append(current_message)
+
+        # Send the messages
+        if not messages:
+            await interaction.response.send_message(
+                "No transactions to display.",
+                ephemeral=True
+            )
+            return
+
+        # Send first message as response
+        await interaction.response.send_message(messages[0], ephemeral=True)
+
+        # Send remaining messages as followups
+        if len(messages) > 1:
+            for msg in messages[1:]:
+                await interaction.followup.send(msg, ephemeral=True)
 
 
 class TransactionCommands(commands.Cog):
@@ -45,16 +122,14 @@ class TransactionCommands(commands.Cog):
         await interaction.response.defer()
         
         # Get user's team
-        user_teams = await team_service.get_teams_by_owner(interaction.user.id, SBA_CURRENT_SEASON)
+        team = await get_user_major_league_team(interaction.user.id, SBA_CURRENT_SEASON)
         
-        if not user_teams:
+        if not team:
             await interaction.followup.send(
                 "❌ You don't appear to own a team in the current season.",
                 ephemeral=True
             )
             return
-        
-        team = user_teams[0]  # Use first team if multiple
         
         # Get transactions in parallel
         pending_task = transaction_service.get_pending_transactions(team.abbrev, SBA_CURRENT_SEASON)
@@ -69,20 +144,40 @@ class TransactionCommands(commands.Cog):
         cancelled_transactions = []
         if show_cancelled:
             cancelled_transactions = await transaction_service.get_team_transactions(
-                team.abbrev, 
+                team.abbrev,
                 SBA_CURRENT_SEASON,
                 cancelled=True
             )
-        
-        embed = await self._create_my_moves_embed(
-            team, 
-            pending_transactions, 
-            frozen_transactions, 
+
+        pages = self._create_my_moves_pages(
+            team,
+            pending_transactions,
+            frozen_transactions,
             processed_transactions,
             cancelled_transactions
         )
-        
-        await interaction.followup.send(embed=embed)
+
+        # Collect all transactions for the "Show Move IDs" button
+        all_transactions = (
+            pending_transactions +
+            frozen_transactions +
+            processed_transactions +
+            cancelled_transactions
+        )
+
+        # If only one page and no transactions, send without any buttons
+        if len(pages) == 1 and not all_transactions:
+            await interaction.followup.send(embed=pages[0])
+        else:
+            # Use custom pagination view with "Show Move IDs" button
+            view = TransactionPaginationView(
+                pages=pages,
+                all_transactions=all_transactions,
+                user_id=interaction.user.id,
+                timeout=300.0,
+                show_page_numbers=True
+            )
+            await interaction.followup.send(embed=view.get_current_embed(), view=view)
     
     @app_commands.command(
         name="legal",
@@ -159,106 +254,166 @@ class TransactionCommands(commands.Cog):
         
         await interaction.followup.send(embed=embed)
     
-    async def _create_my_moves_embed(
+    def _create_my_moves_pages(
         self,
         team,
         pending_transactions,
         frozen_transactions,
         processed_transactions,
         cancelled_transactions
-    ) -> discord.Embed:
-        """Create embed showing user's transaction status."""
-        
-        embed = EmbedTemplate.create_base_embed(
-            title=f"📋 Transaction Status - {team.abbrev}",
-            description=f"{team.lname} • Season {SBA_CURRENT_SEASON}",
-            color=EmbedColors.INFO
-        )
-        
-        # Add team thumbnail if available
-        if hasattr(team, 'thumbnail') and team.thumbnail:
-            embed.set_thumbnail(url=team.thumbnail)
-        
-        # Pending transactions
+    ) -> list[discord.Embed]:
+        """Create paginated embeds showing user's transaction status."""
+
+        pages = []
+        transactions_per_page = 10
+
+        # Helper function to create transaction lines without emojis
+        def format_transaction(transaction):
+            return f"Week {transaction.week}: {transaction.move_description}"
+
+        # Page 1: Summary + Pending Transactions
         if pending_transactions:
-            pending_lines = []
-            for transaction in pending_transactions[-5:]:  # Show last 5
-                pending_lines.append(
-                    f"{transaction.status_emoji} Week {transaction.week}: {transaction.move_description}"
+            total_pending = len(pending_transactions)
+            total_pages = (total_pending + transactions_per_page - 1) // transactions_per_page
+
+            for page_num in range(total_pages):
+                start_idx = page_num * transactions_per_page
+                end_idx = min(start_idx + transactions_per_page, total_pending)
+                page_transactions = pending_transactions[start_idx:end_idx]
+
+                embed = EmbedTemplate.create_base_embed(
+                    title=f"📋 Transaction Status - {team.abbrev}",
+                    description=f"{team.lname} • Season {SBA_CURRENT_SEASON}",
+                    color=EmbedColors.INFO
                 )
-            
+
+                # Add team thumbnail if available
+                if hasattr(team, 'thumbnail') and team.thumbnail:
+                    embed.set_thumbnail(url=team.thumbnail)
+
+                # Pending transactions for this page
+                pending_lines = [format_transaction(tx) for tx in page_transactions]
+
+                embed.add_field(
+                    name=f"⏳ Pending Transactions ({total_pending} total)",
+                    value="\n".join(pending_lines),
+                    inline=False
+                )
+
+                # Add summary only on first page
+                if page_num == 0:
+                    total_frozen = len(frozen_transactions)
+                    status_text = []
+                    if total_pending > 0:
+                        status_text.append(f"{total_pending} pending")
+                    if total_frozen > 0:
+                        status_text.append(f"{total_frozen} scheduled")
+
+                    embed.add_field(
+                        name="Summary",
+                        value=", ".join(status_text) if status_text else "No active transactions",
+                        inline=True
+                    )
+
+                pages.append(embed)
+        else:
+            # No pending transactions - create single page
+            embed = EmbedTemplate.create_base_embed(
+                title=f"📋 Transaction Status - {team.abbrev}",
+                description=f"{team.lname} • Season {SBA_CURRENT_SEASON}",
+                color=EmbedColors.INFO
+            )
+
+            if hasattr(team, 'thumbnail') and team.thumbnail:
+                embed.set_thumbnail(url=team.thumbnail)
+
             embed.add_field(
                 name="⏳ Pending Transactions",
-                value="\n".join(pending_lines),
-                inline=False
-            )
-        else:
-            embed.add_field(
-                name="⏳ Pending Transactions", 
                 value="No pending transactions",
                 inline=False
             )
-        
-        # Frozen transactions (scheduled for processing)
-        if frozen_transactions:
-            frozen_lines = []
-            for transaction in frozen_transactions[-3:]:  # Show last 3
-                frozen_lines.append(
-                    f"{transaction.status_emoji} Week {transaction.week}: {transaction.move_description}"
-                )
-            
+
+            total_frozen = len(frozen_transactions)
+            status_text = []
+            if total_frozen > 0:
+                status_text.append(f"{total_frozen} scheduled")
+
             embed.add_field(
-                name="❄️ Scheduled for Processing",
+                name="Summary",
+                value=", ".join(status_text) if status_text else "No active transactions",
+                inline=True
+            )
+
+            pages.append(embed)
+
+        # Additional page: Frozen transactions
+        if frozen_transactions:
+            embed = EmbedTemplate.create_base_embed(
+                title=f"📋 Transaction Status - {team.abbrev}",
+                description=f"{team.lname} • Season {SBA_CURRENT_SEASON}",
+                color=EmbedColors.INFO
+            )
+
+            if hasattr(team, 'thumbnail') and team.thumbnail:
+                embed.set_thumbnail(url=team.thumbnail)
+
+            frozen_lines = [format_transaction(tx) for tx in frozen_transactions]
+
+            embed.add_field(
+                name=f"❄️ Scheduled for Processing ({len(frozen_transactions)} total)",
                 value="\n".join(frozen_lines),
                 inline=False
             )
-        
-        # Recent processed transactions
+
+            pages.append(embed)
+
+        # Additional page: Recently processed transactions
         if processed_transactions:
-            processed_lines = []
-            for transaction in processed_transactions[-3:]:  # Show last 3
-                processed_lines.append(
-                    f"{transaction.status_emoji} Week {transaction.week}: {transaction.move_description}"
-                )
-            
+            embed = EmbedTemplate.create_base_embed(
+                title=f"📋 Transaction Status - {team.abbrev}",
+                description=f"{team.lname} • Season {SBA_CURRENT_SEASON}",
+                color=EmbedColors.INFO
+            )
+
+            if hasattr(team, 'thumbnail') and team.thumbnail:
+                embed.set_thumbnail(url=team.thumbnail)
+
+            processed_lines = [format_transaction(tx) for tx in processed_transactions[-20:]]  # Last 20
+
             embed.add_field(
-                name="✅ Recently Processed",
+                name=f"✅ Recently Processed ({len(processed_transactions[-20:])} shown)",
                 value="\n".join(processed_lines),
                 inline=False
             )
-        
-        # Cancelled transactions (if requested)
+
+            pages.append(embed)
+
+        # Additional page: Cancelled transactions (if requested)
         if cancelled_transactions:
-            cancelled_lines = []
-            for transaction in cancelled_transactions[-2:]:  # Show last 2
-                cancelled_lines.append(
-                    f"{transaction.status_emoji} Week {transaction.week}: {transaction.move_description}"
-                )
-            
+            embed = EmbedTemplate.create_base_embed(
+                title=f"📋 Transaction Status - {team.abbrev}",
+                description=f"{team.lname} • Season {SBA_CURRENT_SEASON}",
+                color=EmbedColors.INFO
+            )
+
+            if hasattr(team, 'thumbnail') and team.thumbnail:
+                embed.set_thumbnail(url=team.thumbnail)
+
+            cancelled_lines = [format_transaction(tx) for tx in cancelled_transactions[-20:]]  # Last 20
+
             embed.add_field(
-                name="❌ Cancelled Transactions",
+                name=f"❌ Cancelled Transactions ({len(cancelled_transactions[-20:])} shown)",
                 value="\n".join(cancelled_lines),
                 inline=False
             )
-        
-        # Transaction summary
-        total_pending = len(pending_transactions)
-        total_frozen = len(frozen_transactions)
-        
-        status_text = []
-        if total_pending > 0:
-            status_text.append(f"{total_pending} pending")
-        if total_frozen > 0:
-            status_text.append(f"{total_frozen} scheduled")
-        
-        embed.add_field(
-            name="Summary",
-            value=", ".join(status_text) if status_text else "No active transactions",
-            inline=True
-        )
-        
-        embed.set_footer(text="Use /legal to check roster legality")
-        return embed
+
+            pages.append(embed)
+
+        # Add footer to all pages
+        for page in pages:
+            page.set_footer(text="Use /legal to check roster legality")
+
+        return pages
     
     async def _create_legal_embed(
         self,

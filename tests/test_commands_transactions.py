@@ -113,31 +113,28 @@ class TestTransactionCommands:
         pending_tx = [tx for tx in mock_transactions if tx.is_pending]
         frozen_tx = [tx for tx in mock_transactions if tx.is_frozen]
         cancelled_tx = [tx for tx in mock_transactions if tx.is_cancelled]
-        
-        with patch('commands.transactions.management.team_service') as mock_team_service:
+
+        with patch('utils.team_utils.team_service') as mock_team_utils_service:
             with patch('commands.transactions.management.transaction_service') as mock_tx_service:
-                
+
                 # Mock service responses
-                mock_team_service.get_teams_by_owner = AsyncMock(return_value=[mock_team])
+                mock_team_utils_service.get_teams_by_owner = AsyncMock(return_value=[mock_team])
                 mock_tx_service.get_pending_transactions = AsyncMock(return_value=pending_tx)
                 mock_tx_service.get_frozen_transactions = AsyncMock(return_value=frozen_tx)
                 mock_tx_service.get_processed_transactions = AsyncMock(return_value=[])
-                
+
                 # Execute command
                 await commands_cog.my_moves.callback(commands_cog, mock_interaction, show_cancelled=False)
-                
+
                 # Verify interaction flow
                 mock_interaction.response.defer.assert_called_once()
                 mock_interaction.followup.send.assert_called_once()
-                
+
                 # Verify service calls
-                mock_team_service.get_teams_by_owner.assert_called_once_with(
-                    mock_interaction.user.id, 12
-                )
                 mock_tx_service.get_pending_transactions.assert_called_once_with('WV', 12)
                 mock_tx_service.get_frozen_transactions.assert_called_once_with('WV', 12)
                 mock_tx_service.get_processed_transactions.assert_called_once_with('WV', 12)
-                
+
                 # Check embed was sent
                 embed_call = mock_interaction.followup.send.call_args
                 assert 'embed' in embed_call.kwargs
@@ -146,18 +143,18 @@ class TestTransactionCommands:
     async def test_my_moves_with_cancelled(self, commands_cog, mock_interaction, mock_team, mock_transactions):
         """Test /mymoves command with cancelled transactions shown."""
         cancelled_tx = [tx for tx in mock_transactions if tx.is_cancelled]
-        
-        with patch('commands.transactions.management.team_service') as mock_team_service:
+
+        with patch('utils.team_utils.team_service') as mock_team_service:
             with patch('commands.transactions.management.transaction_service') as mock_tx_service:
-                
+
                 mock_team_service.get_teams_by_owner = AsyncMock(return_value=[mock_team])
                 mock_tx_service.get_pending_transactions = AsyncMock(return_value=[])
                 mock_tx_service.get_frozen_transactions = AsyncMock(return_value=[])
                 mock_tx_service.get_processed_transactions = AsyncMock(return_value=[])
                 mock_tx_service.get_team_transactions = AsyncMock(return_value=cancelled_tx)
-                
+
                 await commands_cog.my_moves.callback(commands_cog, mock_interaction, show_cancelled=True)
-                
+
                 # Verify cancelled transactions were requested
                 mock_tx_service.get_team_transactions.assert_called_once_with(
                     'WV', 12, cancelled=True
@@ -166,11 +163,11 @@ class TestTransactionCommands:
     @pytest.mark.asyncio
     async def test_my_moves_no_team(self, commands_cog, mock_interaction):
         """Test /mymoves command when user has no team."""
-        with patch('commands.transactions.management.team_service') as mock_team_service:
+        with patch('utils.team_utils.team_service') as mock_team_service:
             mock_team_service.get_teams_by_owner = AsyncMock(return_value=[])
-            
+
             await commands_cog.my_moves.callback(commands_cog, mock_interaction)
-            
+
             # Should send error message
             mock_interaction.followup.send.assert_called_once()
             call_args = mock_interaction.followup.send.call_args
@@ -180,12 +177,12 @@ class TestTransactionCommands:
     @pytest.mark.asyncio
     async def test_my_moves_api_error(self, commands_cog, mock_interaction, mock_team):
         """Test /mymoves command with API error."""
-        with patch('commands.transactions.management.team_service') as mock_team_service:
+        with patch('utils.team_utils.team_service') as mock_team_service:
             with patch('commands.transactions.management.transaction_service') as mock_tx_service:
-                
+
                 mock_team_service.get_teams_by_owner = AsyncMock(return_value=[mock_team])
                 mock_tx_service.get_pending_transactions.side_effect = APIException("API Error")
-                
+
                 # Should raise the exception (logged_command decorator handles it)
                 with pytest.raises(APIException):
                     await commands_cog.my_moves.callback(commands_cog, mock_interaction)
@@ -308,45 +305,167 @@ class TestTransactionCommands:
                 assert "Could not retrieve roster data" in call_args.args[0]
     
     @pytest.mark.asyncio
-    async def test_create_my_moves_embed(self, commands_cog, mock_team, mock_transactions):
-        """Test embed creation for /mymoves command."""
+    async def test_create_my_moves_pages(self, commands_cog, mock_team, mock_transactions):
+        """Test paginated embed creation for /mymoves command."""
         pending_tx = [tx for tx in mock_transactions if tx.is_pending]
         frozen_tx = [tx for tx in mock_transactions if tx.is_frozen]
         processed_tx = []
         cancelled_tx = [tx for tx in mock_transactions if tx.is_cancelled]
-        
-        embed = await commands_cog._create_my_moves_embed(
+
+        pages = commands_cog._create_my_moves_pages(
             mock_team, pending_tx, frozen_tx, processed_tx, cancelled_tx
         )
-        
-        assert isinstance(embed, discord.Embed)
-        assert embed.title == "📋 Transaction Status - WV"
-        assert "West Virginia Black Bears • Season 12" in embed.description
-        
-        # Check that fields are created for each transaction type
-        field_names = [field.name for field in embed.fields]
-        assert "⏳ Pending Transactions" in field_names
-        assert "❄️ Scheduled for Processing" in field_names
-        assert "❌ Cancelled Transactions" in field_names
-        assert "Summary" in field_names
-        
+
+        assert len(pages) > 0
+        first_page = pages[0]
+        assert isinstance(first_page, discord.Embed)
+        assert first_page.title == "📋 Transaction Status - WV"
+        assert "West Virginia Black Bears • Season 12" in first_page.description
+
+        # Check that fields are created for transaction types
+        field_names = [field.name for field in first_page.fields]
+        assert any("Pending Transactions" in name for name in field_names)
+
         # Verify thumbnail is set
-        assert embed.thumbnail.url == mock_team.thumbnail
+        assert first_page.thumbnail.url == mock_team.thumbnail
+
+        # Verify emoji is NOT in individual transaction lines
+        for page in pages:
+            for field in page.fields:
+                if "Pending" in field.name or "Scheduled" in field.name or "Cancelled" in field.name:
+                    # Check that emojis (⏳, ❄️, ❌) are NOT in the field value
+                    assert "⏳" not in field.value
+                    assert "❄️" not in field.value
+                    assert "✅" not in field.value
     
     @pytest.mark.asyncio
-    async def test_create_my_moves_embed_no_transactions(self, commands_cog, mock_team):
-        """Test embed creation with no transactions."""
-        embed = await commands_cog._create_my_moves_embed(
+    async def test_create_my_moves_pages_no_transactions(self, commands_cog, mock_team):
+        """Test paginated embed creation with no transactions."""
+        pages = commands_cog._create_my_moves_pages(
             mock_team, [], [], [], []
         )
-        
+
+        assert len(pages) == 1  # Should have single page
+        embed = pages[0]
+
         # Find the pending transactions field
         pending_field = next(f for f in embed.fields if "Pending" in f.name)
         assert pending_field.value == "No pending transactions"
-        
+
         # Summary should show no active transactions
         summary_field = next(f for f in embed.fields if f.name == "Summary")
         assert summary_field.value == "No active transactions"
+
+    @pytest.mark.asyncio
+    async def test_transaction_pagination_view_with_move_ids(self, commands_cog, mock_interaction, mock_team, mock_transactions):
+        """Test that TransactionPaginationView is created with move IDs button."""
+        from commands.transactions.management import TransactionPaginationView
+
+        pending_tx = [tx for tx in mock_transactions if tx.is_pending]
+
+        with patch('utils.team_utils.team_service') as mock_team_service:
+            with patch('commands.transactions.management.transaction_service') as mock_tx_service:
+
+                mock_team_service.get_teams_by_owner = AsyncMock(return_value=[mock_team])
+                mock_tx_service.get_pending_transactions = AsyncMock(return_value=pending_tx)
+                mock_tx_service.get_frozen_transactions = AsyncMock(return_value=[])
+                mock_tx_service.get_processed_transactions = AsyncMock(return_value=[])
+
+                await commands_cog.my_moves.callback(commands_cog, mock_interaction, show_cancelled=False)
+
+                # Verify TransactionPaginationView was created
+                mock_interaction.followup.send.assert_called_once()
+                call_args = mock_interaction.followup.send.call_args
+                view = call_args.kwargs.get('view')
+
+                assert view is not None
+                assert isinstance(view, TransactionPaginationView)
+                assert len(view.all_transactions) == len(pending_tx)
+
+    @pytest.mark.asyncio
+    async def test_show_move_ids_handles_long_lists(self, mock_team, mock_transactions):
+        """Test that Show Move IDs button properly chunks very long transaction lists."""
+        from commands.transactions.management import TransactionPaginationView
+
+        # Create 100 transactions to simulate a very long list
+        base_data = {
+            'season': 12,
+            'player': {
+                'id': 12472,
+                'name': 'Very Long Player Name That Takes Up Space',
+                'wara': 2.47,
+                'season': 12,
+                'pos_1': 'LF'
+            },
+            'oldteam': {
+                'id': 508,
+                'abbrev': 'NYD',
+                'sname': 'Diamonds',
+                'lname': 'New York Diamonds',
+                'season': 12
+            },
+            'newteam': {
+                'id': 499,
+                'abbrev': 'WV',
+                'sname': 'Black Bears',
+                'lname': 'West Virginia Black Bears',
+                'season': 12
+            }
+        }
+
+        many_transactions = []
+        for i in range(100):
+            tx_data = {
+                **base_data,
+                'id': i,
+                'week': 10 + (i % 5),
+                'moveid': f'Season-012-Week-{10 + (i % 5)}-Move-{i:03d}',
+                'cancelled': False,
+                'frozen': False
+            }
+            many_transactions.append(Transaction.from_api_data(tx_data))
+
+        # Create view with many transactions
+        pages = [discord.Embed(title="Test")]
+        view = TransactionPaginationView(
+            pages=pages,
+            all_transactions=many_transactions,
+            user_id=258104532423147520,
+            timeout=300.0,
+            show_page_numbers=True
+        )
+
+        # Create mock interaction
+        mock_interaction = AsyncMock()
+        mock_button = MagicMock()
+
+        # Find the show_move_ids button and call its callback directly
+        show_move_ids_button = None
+        for item in view.children:
+            if hasattr(item, 'label') and item.label == "Show Move IDs":
+                show_move_ids_button = item
+                break
+
+        assert show_move_ids_button is not None, "Show Move IDs button not found"
+
+        # Call the button's callback
+        await show_move_ids_button.callback(mock_interaction)
+
+        # Verify response was sent
+        mock_interaction.response.send_message.assert_called_once()
+
+        # Get the message that was sent
+        call_args = mock_interaction.response.send_message.call_args
+        first_message = call_args.args[0]
+
+        # Verify first message is under 2000 characters
+        assert len(first_message) < 2000, f"First message is {len(first_message)} characters (exceeds 2000 limit)"
+
+        # If there were followup messages, verify they're also under 2000 chars
+        if mock_interaction.followup.send.called:
+            for call in mock_interaction.followup.send.call_args_list:
+                followup_message = call.args[0]
+                assert len(followup_message) < 2000, f"Followup message is {len(followup_message)} characters (exceeds 2000 limit)"
     
     @pytest.mark.asyncio
     async def test_create_legal_embed_all_legal(self, commands_cog, mock_team):
@@ -470,7 +589,7 @@ class TestTransactionCommandsIntegration:
         """Test complete /mymoves workflow with realistic data volumes."""
         mock_interaction = AsyncMock()
         mock_interaction.user.id = 258104532423147520
-        
+
         # Create realistic transaction volumes
         pending_transactions = []
         for i in range(15):  # 15 pending transactions
@@ -486,7 +605,7 @@ class TestTransactionCommandsIntegration:
                 'frozen': False
             }
             pending_transactions.append(Transaction.from_api_data(tx_data))
-        
+
         mock_team = Team.from_api_data({
             'id': 499,
             'abbrev': 'WV',
@@ -494,43 +613,50 @@ class TestTransactionCommandsIntegration:
             'lname': 'West Virginia Black Bears',
             'season': 12
         })
-        
-        with patch('commands.transactions.management.team_service') as mock_team_service:
+
+        with patch('utils.team_utils.team_service') as mock_team_service:
             with patch('commands.transactions.management.transaction_service') as mock_tx_service:
-                
+
                 mock_team_service.get_teams_by_owner = AsyncMock(return_value=[mock_team])
                 mock_tx_service.get_pending_transactions = AsyncMock(return_value=pending_transactions)
                 mock_tx_service.get_frozen_transactions = AsyncMock(return_value=[])
                 mock_tx_service.get_processed_transactions = AsyncMock(return_value=[])
-                
+
                 await commands_cog.my_moves.callback(commands_cog, mock_interaction, show_cancelled=False)
-                
+
                 # Verify embed was created and sent
                 mock_interaction.followup.send.assert_called_once()
                 embed_call = mock_interaction.followup.send.call_args
                 embed = embed_call.kwargs['embed']
-                
-                # Check that only last 5 pending transactions are shown
+
+                # With 15 transactions, should show 10 per page
                 pending_field = next(f for f in embed.fields if "Pending" in f.name)
                 lines = pending_field.value.split('\n')
-                assert len(lines) == 5  # Should show only last 5
-                
+                assert len(lines) == 10  # Should show 10 per page
+
                 # Verify summary shows correct count
                 summary_field = next(f for f in embed.fields if f.name == "Summary")
                 assert "15 pending" in summary_field.value
+
+                # Verify pagination view was created
+                from commands.transactions.management import TransactionPaginationView
+                view = embed_call.kwargs.get('view')
+                assert view is not None
+                assert isinstance(view, TransactionPaginationView)
+                assert len(view.all_transactions) == 15
     
     @pytest.mark.asyncio
     async def test_concurrent_command_execution(self, commands_cog):
         """Test that commands can handle concurrent execution."""
         import asyncio
-        
+
         # Create multiple mock interactions
         interactions = []
         for i in range(5):
             mock_interaction = AsyncMock()
             mock_interaction.user.id = 258104532423147520 + i
             interactions.append(mock_interaction)
-        
+
         mock_team = Team.from_api_data({
             'id': 499,
             'abbrev': 'WV',
@@ -538,22 +664,22 @@ class TestTransactionCommandsIntegration:
             'lname': 'West Virginia Black Bears',
             'season': 12
         })
-        
-        with patch('commands.transactions.management.team_service') as mock_team_service:
+
+        with patch('utils.team_utils.team_service') as mock_team_service:
             with patch('commands.transactions.management.transaction_service') as mock_tx_service:
-                
+
                 mock_team_service.get_teams_by_owner = AsyncMock(return_value=[mock_team])
                 mock_tx_service.get_pending_transactions = AsyncMock(return_value=[])
                 mock_tx_service.get_frozen_transactions = AsyncMock(return_value=[])
                 mock_tx_service.get_processed_transactions = AsyncMock(return_value=[])
-                
+
                 # Execute commands concurrently
                 tasks = [commands_cog.my_moves.callback(commands_cog, interaction) for interaction in interactions]
                 results = await asyncio.gather(*tasks, return_exceptions=True)
-                
+
                 # All should complete successfully
                 assert len([r for r in results if not isinstance(r, Exception)]) == 5
-                
+
                 # All interactions should have received responses
                 for interaction in interactions:
                     interaction.followup.send.assert_called_once()

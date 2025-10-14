@@ -77,13 +77,30 @@ class TransactionService(BaseService[Transaction]):
             raise APIException(f"Failed to retrieve transactions: {e}")
     
     async def get_pending_transactions(self, team_abbrev: str, season: int) -> List[Transaction]:
-        """Get pending transactions for a team."""
-        return await self.get_team_transactions(
-            team_abbrev, 
-            season, 
-            cancelled=False,
-            frozen=False
-        )
+        """Get pending (future) transactions for a team."""
+        try:
+            # Get current week to filter future transactions
+            current_data = await self.get_client()
+            current_response = await current_data.get('current')
+            current_week = current_response.get('week', 0) if current_response else 0
+
+            # Get transactions from current week onward
+            return await self.get_team_transactions(
+                team_abbrev,
+                season,
+                cancelled=False,
+                frozen=False,
+                week_start=current_week
+            )
+        except Exception as e:
+            logger.warning(f"Could not get current week, returning all non-cancelled/non-frozen transactions: {e}")
+            # Fallback to all non-cancelled/non-frozen if we can't get current week
+            return await self.get_team_transactions(
+                team_abbrev,
+                season,
+                cancelled=False,
+                frozen=False
+            )
     
     async def get_frozen_transactions(self, team_abbrev: str, season: int) -> List[Transaction]:
         """Get frozen (scheduled for processing) transactions for a team."""
