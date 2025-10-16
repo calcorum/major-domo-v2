@@ -1,0 +1,78 @@
+version: '3.8'
+
+# ============================================
+# Development Configuration
+# ============================================
+# This compose file builds the image locally from source
+#
+# Usage:
+#   docker-compose -f docker-compose.dev.yml build
+#   docker-compose -f docker-compose.dev.yml up -d
+
+services:
+  discord-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: major-domo/discord-bot-v2:dev
+    container_name: major-domo-discord-bot-v2-dev
+
+    # Restart policy
+    restart: unless-stopped
+
+    # Environment variables from .env file
+    env_file:
+      - .env
+
+    # Development environment overrides
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
+      - ENVIRONMENT=development
+      - TESTING=${TESTING:-false}
+      - REDIS_URL=${REDIS_URL:-}
+      - REDIS_CACHE_TTL=${REDIS_CACHE_TTL:-300}
+
+    # Volume mounts
+    volumes:
+      # Google Sheets credentials (required)
+      - ${SHEETS_CREDENTIALS_HOST_PATH:-./data}:/app/data:ro
+
+      # Logs directory (persistent) - mounted to /app/logs where the application expects it
+      - ${LOGS_HOST_PATH:-./logs}:/app/logs:rw
+
+      # Optional: Mount source code for live development
+      # Uncomment to enable hot-reloading (requires code changes to handle)
+      # - .:/app:ro
+
+    # Network configuration
+    networks:
+      - major-domo-network
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 60s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+
+    # Resource limits (development - more generous)
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  major-domo-network:
+    driver: bridge

@@ -1,0 +1,74 @@
+version: '3.8'
+
+# ============================================
+# Production Configuration
+# ============================================
+# This compose file pulls the pre-built image from Docker Hub
+#
+# Usage:
+#   docker-compose pull
+#   docker-compose up -d
+#
+# Docker Hub Repository: manticorum67/major-domo-discordapp
+
+services:
+  discord-bot:
+    # Pull image from Docker Hub
+    image: manticorum67/major-domo-discordapp:latest
+    container_name: major-domo-discord-bot-v2
+
+    # Restart policy
+    restart: unless-stopped
+
+    # Environment variables from .env file
+    env_file:
+      - .env
+
+    # Production environment configuration
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - ENVIRONMENT=production
+      - TESTING=${TESTING:-false}
+      - REDIS_URL=${REDIS_URL:-}
+      - REDIS_CACHE_TTL=${REDIS_CACHE_TTL:-300}
+
+    # Volume mounts
+    volumes:
+      # Google Sheets credentials (required)
+      - ${SHEETS_CREDENTIALS_HOST_PATH:-./data}:/app/data:ro
+
+      # Logs directory (persistent) - mounted to /app/logs where the application expects it
+      - ${LOGS_HOST_PATH:-./logs}:/app/logs:rw
+
+    # Network configuration
+    networks:
+      - major-domo-network
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 60s
+      timeout: 10s
+      start-period: 30s
+      retries: 3
+
+    # Resource limits (production)
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  major-domo-network:
+    driver: bridge

@@ -27,7 +27,7 @@ class BotConfig(BaseSettings):
     testing: bool = False
 
     # Google Sheets settings
-    sheets_credentials_path: str = "/data/major-domo-service-creds.json"
+    sheets_credentials_path: str = "/app/data/major-domo-service-creds.json"
 
     # Optional Redis caching settings
     redis_url: str = ""  # Empty string means no Redis caching
