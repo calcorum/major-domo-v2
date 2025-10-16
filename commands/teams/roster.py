@@ -10,7 +10,6 @@ from discord.ext import commands
 from models.player import Player
 from services import team_service, player_service
 from models.team import Team
-from constants import SBA_CURRENT_SEASON
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
 from exceptions import BotException
@@ -41,7 +40,7 @@ class TeamRosterCommands(commands.Cog):
         await interaction.response.defer()
         
         # Get team by abbreviation
-        team = await team_service.get_team_by_abbrev(abbrev, SBA_CURRENT_SEASON)
+        team = await team_service.get_team_by_abbrev(abbrev, get_config().sba_current_season)
         
         if team is None:
             self.logger.info("Team not found", team_abbrev=abbrev)
@@ -141,6 +140,7 @@ class TeamRosterCommands(commands.Cog):
     def _create_player_list_embed(self, team: Team, roster_name: str, 
                                  players: List[Dict[str, Any]]) -> discord.Embed:
         """Create an embed with detailed player list."""
+from config import get_config
         roster_titles = {
             'active': 'Active Roster',
             'longil': 'Minor League',

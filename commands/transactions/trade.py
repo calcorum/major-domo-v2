@@ -13,7 +13,6 @@ from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
 from utils.autocomplete import player_autocomplete, major_league_team_autocomplete, team_autocomplete
 from utils.team_utils import validate_user_has_team, get_team_by_abbrev_with_validation
-from constants import SBA_CURRENT_SEASON
 
 from services.trade_builder import (
     TradeBuilder,
@@ -282,7 +281,7 @@ class TradeCommands(commands.Cog):
             return
 
         # Find the player
-        players = await player_service.search_players(player_name, limit=10, season=SBA_CURRENT_SEASON)
+        players = await player_service.search_players(player_name, limit=10, season=get_config().sba_current_season)
         if not players:
             await interaction.followup.send(
                 f"❌ Player '{player_name}' not found.",
@@ -392,7 +391,7 @@ class TradeCommands(commands.Cog):
             return
 
         # Find the player
-        players = await player_service.search_players(player_name, limit=10, season=SBA_CURRENT_SEASON)
+        players = await player_service.search_players(player_name, limit=10, season=get_config().sba_current_season)
         if not players:
             await interaction.followup.send(
                 f"❌ Player '{player_name}' not found.",
@@ -532,4 +531,5 @@ class TradeCommands(commands.Cog):
 
 async def setup(bot):
     """Setup function for the cog."""
+from config import get_config
     await bot.add_cog(TradeCommands(bot))

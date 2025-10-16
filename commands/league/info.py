@@ -8,7 +8,7 @@ import discord
 from discord.ext import commands
 
 from services import league_service
-from constants import SBA_CURRENT_SEASON
+from config import get_config
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
 from exceptions import BotException

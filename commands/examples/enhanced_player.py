@@ -11,7 +11,6 @@ from discord.ext import commands
 
 from services.player_service import player_service
 from models.player import Player
-from constants import SBA_CURRENT_SEASON
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
 from exceptions import BotException
@@ -71,7 +70,7 @@ class EnhancedPlayerCommands(commands.Cog):
             return
         
         # Use current season if not specified
-        search_season = season or SBA_CURRENT_SEASON
+        search_season = season or get_config().sba_current_season
         
         # Search for players
         players = await player_service.get_players_by_name(name, search_season)
@@ -330,6 +329,7 @@ class EnhancedPlayerCommands(commands.Cog):
     @logged_command("/player-search-modal")
     async def player_search_modal(self, interaction: discord.Interaction):
         """Demonstrate modal-based player search."""
+from config import get_config
         modal = PlayerSearchModal()
         await interaction.response.send_modal(modal)
         
@@ -342,7 +342,7 @@ class EnhancedPlayerCommands(commands.Cog):
             # Perform search based on criteria
             players = await player_service.get_players_by_name(
                 search_criteria['name'], 
-                search_criteria['season'] or SBA_CURRENT_SEASON
+                search_criteria['season'] or get_config().sba_current_season
             )
             
             if players:
@@ -351,13 +351,13 @@ class EnhancedPlayerCommands(commands.Cog):
                     await self._show_player_details(
                         interaction, 
                         players[0], 
-                        search_criteria['season'] or SBA_CURRENT_SEASON
+                        search_criteria['season'] or get_config().sba_current_season
                     )
                 else:
                     await self._show_player_selection(
                         interaction, 
                         players, 
-                        search_criteria['season'] or SBA_CURRENT_SEASON
+                        search_criteria['season'] or get_config().sba_current_season
                     )
             else:
                 embed = EmbedTemplate.warning(

@@ -8,7 +8,6 @@ from typing import Optional, List, Dict, Any
 
 from services.base_service import BaseService
 from models.current import Current
-from constants import SBA_CURRENT_SEASON
 from exceptions import APIException
 
 logger = logging.getLogger(f'{__name__}.LeagueService')
@@ -63,7 +62,7 @@ class LeagueService(BaseService[Current]):
             List of standings data or None if not available
         """
         try:
-            season = season or SBA_CURRENT_SEASON
+            season = season or get_config().sba_current_season
             client = await self.get_client()
             data = await client.get('standings', params=[('season', str(season))])
             
@@ -96,7 +95,7 @@ class LeagueService(BaseService[Current]):
             List of division standings or None if not available
         """
         try:
-            season = season or SBA_CURRENT_SEASON
+            season = season or get_config().sba_current_season
             client = await self.get_client()
             data = await client.get(f'standings/division/{division_id}', params=[('season', str(season))])
             
@@ -113,6 +112,7 @@ class LeagueService(BaseService[Current]):
     
     async def get_league_leaders(self, stat_type: str = 'batting', season: Optional[int] = None, limit: int = 10) -> Optional[List[Dict[str, Any]]]:
         """
+from config import get_config
         Get league leaders for a specific statistic category.
         
         Args:
@@ -124,7 +124,7 @@ class LeagueService(BaseService[Current]):
             List of league leaders or None if not available
         """
         try:
-            season = season or SBA_CURRENT_SEASON
+            season = season or get_config().sba_current_season
             client = await self.get_client()
             
             params = [

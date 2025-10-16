@@ -13,7 +13,6 @@ from discord import app_commands
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
 from views.embeds import EmbedColors, EmbedTemplate
-from constants import SBA_CURRENT_SEASON
 
 
 class AdminCommands(commands.Cog):
@@ -71,7 +70,7 @@ class AdminCommands(commands.Cog):
             name="Bot Information",
             value=f"**Latency:** {round(self.bot.latency * 1000)}ms\n"
                   f"**Version:** Discord.py {discord.__version__}\n"
-                  f"**Current Season:** {SBA_CURRENT_SEASON}",
+                  f"**Current Season:** {get_config().sba_current_season}",
             inline=True
         )
         
@@ -389,4 +388,5 @@ class AdminCommands(commands.Cog):
 
 async def setup(bot: commands.Bot):
     """Load the admin commands cog."""
+from config import get_config
     await bot.add_cog(AdminCommands(bot))

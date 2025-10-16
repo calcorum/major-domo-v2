@@ -23,7 +23,6 @@ from views.help_commands import (
     HelpCommandListView,
     create_help_topic_embed
 )
-from constants import HELP_EDITOR_ROLE_NAME
 from exceptions import BotException
 
 
@@ -63,7 +62,7 @@ class HelpCommands(commands.Cog):
             return True
 
         # Check if user has the Help Editor role
-        role = discord.utils.get(interaction.guild.roles, name=HELP_EDITOR_ROLE_NAME)
+        role = discord.utils.get(interaction.guild.roles, name=get_config().help_editor_role_name)
         if role and role in interaction.user.roles:
             return True
 
@@ -136,7 +135,7 @@ class HelpCommands(commands.Cog):
         if not self.has_help_edit_permission(interaction):
             embed = EmbedTemplate.error(
                 title="Permission Denied",
-                description=f"Only administrators and users with the **{HELP_EDITOR_ROLE_NAME}** role can create help topics."
+                description=f"Only administrators and users with the **{get_config().help_editor_role_name}** role can create help topics."
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
@@ -217,7 +216,7 @@ class HelpCommands(commands.Cog):
         if not self.has_help_edit_permission(interaction):
             embed = EmbedTemplate.error(
                 title="Permission Denied",
-                description=f"Only administrators and users with the **{HELP_EDITOR_ROLE_NAME}** role can edit help topics."
+                description=f"Only administrators and users with the **{get_config().help_editor_role_name}** role can edit help topics."
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
@@ -292,7 +291,7 @@ class HelpCommands(commands.Cog):
         if not self.has_help_edit_permission(interaction):
             embed = EmbedTemplate.error(
                 title="Permission Denied",
-                description=f"Only administrators and users with the **{HELP_EDITOR_ROLE_NAME}** role can delete help topics."
+                description=f"Only administrators and users with the **{get_config().help_editor_role_name}** role can delete help topics."
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
@@ -369,6 +368,7 @@ class HelpCommands(commands.Cog):
         show_deleted: bool = False
     ):
         """Browse all help topics with optional category filter."""
+from config import get_config
         await interaction.response.defer()
 
         try:

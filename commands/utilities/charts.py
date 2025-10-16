@@ -14,7 +14,6 @@ from utils.logging import get_contextual_logger, set_discord_context
 from services.chart_service import get_chart_service, Chart
 from views.embeds import EmbedTemplate, EmbedColors
 from exceptions import BotException
-from constants import HELP_EDITOR_ROLE_NAME
 
 
 # Standalone autocomplete functions
@@ -79,7 +78,7 @@ def has_manage_permission(interaction: discord.Interaction) -> bool:
         return True
 
     # Check if user has the Help Editor role
-    help_editor_role = discord.utils.get(interaction.guild.roles, name=HELP_EDITOR_ROLE_NAME)
+    help_editor_role = discord.utils.get(interaction.guild.roles, name=get_config().help_editor_role_name)
     if help_editor_role and help_editor_role in interaction.user.roles:
         return True
 
@@ -255,7 +254,7 @@ class ChartManageGroup(app_commands.Group):
         if not has_manage_permission(interaction):
             embed = EmbedTemplate.error(
                 title="Permission Denied",
-                description=f"Only administrators and users with the **{HELP_EDITOR_ROLE_NAME}** role can manage charts."
+                description=f"Only administrators and users with the **{get_config().help_editor_role_name}** role can manage charts."
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
@@ -311,7 +310,7 @@ class ChartManageGroup(app_commands.Group):
         if not has_manage_permission(interaction):
             embed = EmbedTemplate.error(
                 title="Permission Denied",
-                description=f"Only administrators and users with the **{HELP_EDITOR_ROLE_NAME}** role can manage charts."
+                description=f"Only administrators and users with the **{get_config().help_editor_role_name}** role can manage charts."
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
@@ -370,7 +369,7 @@ class ChartManageGroup(app_commands.Group):
         if not has_manage_permission(interaction):
             embed = EmbedTemplate.error(
                 title="Permission Denied",
-                description=f"Only administrators and users with the **{HELP_EDITOR_ROLE_NAME}** role can manage charts."
+                description=f"Only administrators and users with the **{get_config().help_editor_role_name}** role can manage charts."
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
@@ -446,7 +445,7 @@ class ChartCategoryGroup(app_commands.Group):
         if not has_manage_permission(interaction):
             embed = EmbedTemplate.error(
                 title="Permission Denied",
-                description=f"Only administrators and users with the **{HELP_EDITOR_ROLE_NAME}** role can manage categories."
+                description=f"Only administrators and users with the **{get_config().help_editor_role_name}** role can manage categories."
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
@@ -507,7 +506,7 @@ class ChartCategoryGroup(app_commands.Group):
         if not has_manage_permission(interaction):
             embed = EmbedTemplate.error(
                 title="Permission Denied",
-                description=f"Only administrators and users with the **{HELP_EDITOR_ROLE_NAME}** role can manage categories."
+                description=f"Only administrators and users with the **{get_config().help_editor_role_name}** role can manage categories."
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
@@ -548,7 +547,7 @@ class ChartCategoryGroup(app_commands.Group):
         if not has_manage_permission(interaction):
             embed = EmbedTemplate.error(
                 title="Permission Denied",
-                description=f"Only administrators and users with the **{HELP_EDITOR_ROLE_NAME}** role can manage categories."
+                description=f"Only administrators and users with the **{get_config().help_editor_role_name}** role can manage categories."
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
@@ -599,7 +598,7 @@ class ChartCategoryGroup(app_commands.Group):
         if not has_manage_permission(interaction):
             embed = EmbedTemplate.error(
                 title="Permission Denied",
-                description=f"Only administrators and users with the **{HELP_EDITOR_ROLE_NAME}** role can manage categories."
+                description=f"Only administrators and users with the **{get_config().help_editor_role_name}** role can manage categories."
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
@@ -634,6 +633,7 @@ class ChartCategoryGroup(app_commands.Group):
 
 async def setup(bot: commands.Bot):
     """Setup function for chart commands."""
+from config import get_config
     await bot.add_cog(ChartCommands(bot))
     bot.tree.add_command(ChartManageGroup())
     bot.tree.add_command(ChartCategoryGroup())

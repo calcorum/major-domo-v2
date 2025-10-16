@@ -15,7 +15,6 @@ from services.transaction_builder import TransactionBuilder, RosterValidationRes
 from services.team_service import team_service
 from services.roster_service import roster_service
 from services.league_service import league_service
-from constants import SBA_CURRENT_SEASON, FREE_AGENT_TEAM_ID
 
 logger = logging.getLogger(f'{__name__}.TradeBuilder')
 
@@ -66,7 +65,7 @@ class TradeBuilder:
     Extends the functionality of TransactionBuilder to support trades between teams.
     """
 
-    def __init__(self, initiated_by: int, initiating_team: Team, season: int = SBA_CURRENT_SEASON):
+    def __init__(self, initiated_by: int, initiating_team: Team, season: int = get_config().sba_current_season):
         """
         Initialize trade builder.
 
@@ -190,7 +189,7 @@ class TradeBuilder:
             Tuple of (success: bool, error_message: str)
         """
         # Validate player is not from Free Agency
-        if player.team_id == FREE_AGENT_TEAM_ID:
+        if player.team_id == get_config().free_agent_team_id:
             return False, f"Cannot add {player.name} from Free Agency. Players must be traded from teams within the organizations involved in the trade."
 
         # Validate player has a valid team assignment
@@ -467,6 +466,7 @@ def get_trade_builder(user_id: int, initiating_team: Team) -> TradeBuilder:
 
 def clear_trade_builder(user_id: int) -> None:
     """Clear trade builder for a user."""
+from config import get_config
     trade_key = f"{user_id}:trade"
     if trade_key in _active_trade_builders:
         del _active_trade_builders[trade_key]

@@ -8,7 +8,6 @@ from typing import Optional, List, Dict, Any
 
 from services.base_service import BaseService
 from models.team import Team, RosterType
-from constants import SBA_CURRENT_SEASON
 from exceptions import APIException
 
 logger = logging.getLogger(f'{__name__}.TeamService')
@@ -69,7 +68,7 @@ class TeamService(BaseService[Team]):
             List of Team instances owned by the user, optionally filtered by type
         """
         try:
-            season = season or SBA_CURRENT_SEASON
+            season = season or get_config().sba_current_season
             params = [
                 ('owner_id', str(owner_id)),
                 ('season', str(season))
@@ -109,7 +108,7 @@ class TeamService(BaseService[Team]):
             Team instance or None if not found
         """
         try:
-            season = season or SBA_CURRENT_SEASON
+            season = season or get_config().sba_current_season
             params = [
                 ('team_abbrev', abbrev.upper()),
                 ('season', str(season))
@@ -300,12 +299,13 @@ class TeamService(BaseService[Team]):
     
     async def get_current_season_teams(self) -> List[Team]:
         """
+from config import get_config
         Get all teams for the current season.
         
         Returns:
             List of teams in current season
         """
-        return await self.get_teams_by_season(SBA_CURRENT_SEASON)
+        return await self.get_teams_by_season(get_config().sba_current_season)
 
 
 # Global service instance

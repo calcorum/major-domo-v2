@@ -16,7 +16,6 @@ from services.trade_builder import (
 )
 from models.trade import TradeStatus
 from models.team import RosterType, Team
-from constants import FREE_AGENT_TEAM_ID
 from tests.factories import PlayerFactory, TeamFactory
 
 
@@ -155,7 +154,7 @@ class TestTradeBuilder:
         fa_player = PlayerFactory.create(
             id=100,
             name="FA Player",
-            team_id=FREE_AGENT_TEAM_ID
+            team_id=get_config().free_agent_team_id
         )
 
         # Try to add player from FA (should fail)
@@ -549,6 +548,7 @@ class TestTradeValidationResult:
 
         # Mock participant validations
         from services.transaction_builder import RosterValidationResult
+from config import get_config
 
         team1_validation = RosterValidationResult(
             is_legal=False,

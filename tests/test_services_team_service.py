@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock
 
 from services.team_service import TeamService, team_service
 from models.team import Team
-from constants import SBA_CURRENT_SEASON
 from exceptions import APIException
 
 
@@ -259,8 +258,8 @@ class TestTeamService:
         mock_data = {
             'count': 2,
             'teams': [
-                self.create_team_data(1, 'TEA', season=SBA_CURRENT_SEASON),
-                self.create_team_data(2, 'TEB', season=SBA_CURRENT_SEASON)
+                self.create_team_data(1, 'TEA', season=get_config().sba_current_season),
+                self.create_team_data(2, 'TEB', season=get_config().sba_current_season)
             ]
         }
         mock_client.get.return_value = mock_data
@@ -268,8 +267,8 @@ class TestTeamService:
         result = await team_service_instance.get_current_season_teams()
         
         assert len(result) == 2
-        assert all(team.season == SBA_CURRENT_SEASON for team in result)
-        mock_client.get.assert_called_once_with('teams', params=[('season', str(SBA_CURRENT_SEASON))])
+        assert all(team.season == get_config().sba_current_season for team in result)
+        mock_client.get.assert_called_once_with('teams', params=[('season', str(get_config().sba_current_season))])
     
     @pytest.mark.asyncio
     async def test_error_handling(self, team_service_instance, mock_client):
@@ -315,6 +314,7 @@ class TestGlobalTeamServiceInstance:
     
     def test_team_service_global(self):
         """Test global team service instance."""
+from config import get_config
         assert isinstance(team_service, TeamService)
         assert team_service.model_class == Team
         assert team_service.endpoint == 'teams'

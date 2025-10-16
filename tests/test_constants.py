@@ -1,95 +1,86 @@
 """
-Tests for application constants
+Tests for application configuration
 
-Validates that constants have sensible values.
+Validates that config values have sensible defaults.
 """
 import pytest
 
-from constants import (
-    DISCORD_EMBED_LIMIT,
-    DISCORD_FIELD_VALUE_LIMIT,
-    DISCORD_EMBED_DESCRIPTION_LIMIT,
-    WEEKS_PER_SEASON,
-    GAMES_PER_WEEK,
-    MODERN_STATS_START_SEASON,
-    API_VERSION,
-    DEFAULT_TIMEOUT,
-    MAX_RETRIES,
-    PITCHER_POSITIONS,
-    POSITION_FIELDERS,
-    ALL_POSITIONS,
-    DEFAULT_PICK_MINUTES,
-    DRAFT_ROUNDS
-)
+from config import get_config, PITCHER_POSITIONS, POSITION_FIELDERS, ALL_POSITIONS
 
 
 class TestDiscordLimits:
     """Test Discord API limits are reasonable."""
-    
+
     def test_discord_limits_are_positive(self):
         """Test that all Discord limits are positive integers."""
-        assert DISCORD_EMBED_LIMIT > 0
-        assert DISCORD_FIELD_VALUE_LIMIT > 0
-        assert DISCORD_EMBED_DESCRIPTION_LIMIT > 0
-        
-        assert isinstance(DISCORD_EMBED_LIMIT, int)
-        assert isinstance(DISCORD_FIELD_VALUE_LIMIT, int)
-        assert isinstance(DISCORD_EMBED_DESCRIPTION_LIMIT, int)
-    
+        config = get_config()
+        assert config.discord_embed_limit > 0
+        assert config.discord_field_value_limit > 0
+        assert config.discord_embed_description_limit > 0
+
+        assert isinstance(config.discord_embed_limit, int)
+        assert isinstance(config.discord_field_value_limit, int)
+        assert isinstance(config.discord_embed_description_limit, int)
+
     def test_discord_limits_hierarchy(self):
         """Test that Discord limits have sensible relationships."""
+        config = get_config()
         # Description should be larger than field values
-        assert DISCORD_EMBED_DESCRIPTION_LIMIT > DISCORD_FIELD_VALUE_LIMIT
-        
+        assert config.discord_embed_description_limit > config.discord_field_value_limit
+
         # Total embed limit should be larger than description limit
-        assert DISCORD_EMBED_LIMIT > DISCORD_EMBED_DESCRIPTION_LIMIT
+        assert config.discord_embed_limit > config.discord_embed_description_limit
 
 
 class TestLeagueConstants:
     """Test league-specific constants."""
-    
+
     def test_league_constants_are_positive(self):
         """Test that league constants are positive."""
-        assert WEEKS_PER_SEASON > 0
-        assert GAMES_PER_WEEK > 0
-        assert MODERN_STATS_START_SEASON > 0
-        
-        assert isinstance(WEEKS_PER_SEASON, int)
-        assert isinstance(GAMES_PER_WEEK, int)
-        assert isinstance(MODERN_STATS_START_SEASON, int)
-    
+        config = get_config()
+        assert config.weeks_per_season > 0
+        assert config.games_per_week > 0
+        assert config.modern_stats_start_season > 0
+
+        assert isinstance(config.weeks_per_season, int)
+        assert isinstance(config.games_per_week, int)
+        assert isinstance(config.modern_stats_start_season, int)
+
     def test_league_constants_are_reasonable(self):
         """Test that league constants have reasonable values."""
+        config = get_config()
         # Baseball season should be reasonable length
-        assert 10 <= WEEKS_PER_SEASON <= 30
-        
+        assert 10 <= config.weeks_per_season <= 30
+
         # Games per week should be reasonable
-        assert 1 <= GAMES_PER_WEEK <= 7
-        
+        assert 1 <= config.games_per_week <= 7
+
         # Modern stats era should be reasonable
-        assert 1 <= MODERN_STATS_START_SEASON <= 20
+        assert 1 <= config.modern_stats_start_season <= 20
 
 
 class TestAPIConstants:
     """Test API-related constants."""
-    
+
     def test_api_version_format(self):
         """Test that API version is properly formatted."""
-        assert isinstance(API_VERSION, str)
-        assert API_VERSION.startswith("v")
-        assert API_VERSION[1:].isdigit()  # Should be like "v3"
-    
+        config = get_config()
+        assert isinstance(config.api_version, str)
+        assert config.api_version.startswith("v")
+        assert config.api_version[1:].isdigit()  # Should be like "v3"
+
     def test_timeout_and_retry_values(self):
         """Test that timeout and retry values are reasonable."""
-        assert DEFAULT_TIMEOUT > 0
-        assert MAX_RETRIES > 0
-        
-        assert isinstance(DEFAULT_TIMEOUT, int)
-        assert isinstance(MAX_RETRIES, int)
-        
+        config = get_config()
+        assert config.default_timeout > 0
+        assert config.max_retries > 0
+
+        assert isinstance(config.default_timeout, int)
+        assert isinstance(config.max_retries, int)
+
         # Should be reasonable values
-        assert 1 <= DEFAULT_TIMEOUT <= 60  # 1-60 seconds
-        assert 1 <= MAX_RETRIES <= 10      # 1-10 retries
+        assert 1 <= config.default_timeout <= 60  # 1-60 seconds
+        assert 1 <= config.max_retries <= 10      # 1-10 retries
 
 
 class TestPositionConstants:
@@ -137,19 +128,21 @@ class TestPositionConstants:
 
 class TestDraftConstants:
     """Test draft-related constants."""
-    
+
     def test_draft_constants_are_positive(self):
         """Test that draft constants are positive."""
-        assert DEFAULT_PICK_MINUTES > 0
-        assert DRAFT_ROUNDS > 0
-        
-        assert isinstance(DEFAULT_PICK_MINUTES, int)
-        assert isinstance(DRAFT_ROUNDS, int)
-    
+        config = get_config()
+        assert config.default_pick_minutes > 0
+        assert config.draft_rounds > 0
+
+        assert isinstance(config.default_pick_minutes, int)
+        assert isinstance(config.draft_rounds, int)
+
     def test_draft_constants_are_reasonable(self):
         """Test that draft constants have reasonable values."""
+        config = get_config()
         # Pick minutes should be reasonable
-        assert 1 <= DEFAULT_PICK_MINUTES <= 60
-        
+        assert 1 <= config.default_pick_minutes <= 60
+
         # Draft rounds should be reasonable for fantasy baseball
-        assert 10 <= DRAFT_ROUNDS <= 50
+        assert 10 <= config.draft_rounds <= 50

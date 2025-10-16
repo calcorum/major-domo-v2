@@ -16,7 +16,6 @@ from services.player_service import player_service
 from services.team_service import team_service
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
-from constants import SBA_CURRENT_SEASON
 from views.embeds import EmbedColors, EmbedTemplate
 from views.base import BaseView
 from models.player import Player
@@ -230,6 +229,7 @@ class ImageCommands(commands.Cog):
         image_url: str
     ):
         """Update a player's image (fancy card or headshot)."""
+from config import get_config
         # Defer response for potentially slow operations
         await interaction.response.defer(ephemeral=True)
 
@@ -279,7 +279,7 @@ class ImageCommands(commands.Cog):
 
         # Step 3: Find player
         self.logger.debug("Searching for player", player_name=player_name)
-        players = await player_service.get_players_by_name(player_name, SBA_CURRENT_SEASON)
+        players = await player_service.get_players_by_name(player_name, get_config().sba_current_season)
 
         if not players:
             self.logger.warning("Player not found", player_name=player_name)
@@ -316,7 +316,7 @@ class ImageCommands(commands.Cog):
 
         # Step 4: Check permissions
         has_permission, permission_error = await can_edit_player_image(
-            interaction, player, SBA_CURRENT_SEASON, self.logger
+            interaction, player, get_config().sba_current_season, self.logger
         )
 
         if not has_permission:

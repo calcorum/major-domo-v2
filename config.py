@@ -3,6 +3,11 @@ Configuration management for Discord Bot v2.0
 """
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Baseball position constants (static, not configurable)
+PITCHER_POSITIONS = {"SP", "RP", "P"}
+POSITION_FIELDERS = {"C", "1B", "2B", "3B", "SS", "LF", "CF", "RF", "OF", "DH"}
+ALL_POSITIONS = PITCHER_POSITIONS | POSITION_FIELDERS
+
 
 class BotConfig(BaseSettings):
     """Application configuration with environment variable support."""

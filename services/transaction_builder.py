@@ -19,7 +19,6 @@ from services.roster_service import roster_service
 from services.transaction_service import transaction_service
 from services.league_service import league_service
 from models.team import RosterType
-from constants import SBA_CURRENT_SEASON
 
 logger = logging.getLogger(f'{__name__}.TransactionBuilder')
 
@@ -136,7 +135,7 @@ class RosterValidationResult:
 class TransactionBuilder:
     """Interactive transaction builder for complex multi-move transactions."""
     
-    def __init__(self, team: Team, user_id: int, season: int = SBA_CURRENT_SEASON):
+    def __init__(self, team: Team, user_id: int, season: int = get_config().sba_current_season):
         """
         Initialize transaction builder.
         
@@ -523,6 +522,7 @@ def get_transaction_builder(user_id: int, team: Team) -> TransactionBuilder:
 
 def clear_transaction_builder(user_id: int) -> None:
     """Clear transaction builder for a user."""
+from config import get_config
     if user_id in _active_builders:
         del _active_builders[user_id]
         logger.info(f"Cleared transaction builder for user {user_id}")

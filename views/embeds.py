@@ -9,7 +9,6 @@ from dataclasses import dataclass
 
 import discord
 
-from constants import SBA_CURRENT_SEASON
 
 
 @dataclass(frozen=True)
@@ -154,7 +153,7 @@ class SBAEmbedTemplate(EmbedTemplate):
         
         embed.add_field(
             name="Season", 
-            value=str(season or SBA_CURRENT_SEASON), 
+            value=str(season or get_config().sba_current_season), 
             inline=True
         )
         
@@ -191,7 +190,7 @@ class SBAEmbedTemplate(EmbedTemplate):
         
         embed = EmbedTemplate.create_base_embed(
             title=f"{team_abbrev} - {team_name}",
-            description=f"Season {season or SBA_CURRENT_SEASON} Team Information",
+            description=f"Season {season or get_config().sba_current_season} Team Information",
             color=color
         )
         
@@ -200,7 +199,7 @@ class SBAEmbedTemplate(EmbedTemplate):
             embed.add_field(name="Short Name", value=short_name, inline=True)
         
         embed.add_field(name="Abbreviation", value=team_abbrev, inline=True)
-        embed.add_field(name="Season", value=str(season or SBA_CURRENT_SEASON), inline=True)
+        embed.add_field(name="Season", value=str(season or get_config().sba_current_season), inline=True)
         
         if stadium:
             embed.add_field(name="Stadium", value=stadium, inline=True)
@@ -275,7 +274,7 @@ class SBAEmbedTemplate(EmbedTemplate):
         
         embed = EmbedTemplate.create_base_embed(
             title=f"{team_abbrev} - {roster_type}",
-            description=f"{team_name} • Season {season or SBA_CURRENT_SEASON}",
+            description=f"{team_name} • Season {season or get_config().sba_current_season}",
             color=color
         )
         
@@ -385,6 +384,7 @@ class EmbedBuilder:
     
     def author(self, name: str, url: Optional[str] = None, icon_url: Optional[str] = None) -> 'EmbedBuilder':
         """Set embed author."""
+from config import get_config
         self._embed.set_author(name=name, url=url, icon_url=icon_url)
         return self
     

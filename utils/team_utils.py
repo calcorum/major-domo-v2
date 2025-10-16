@@ -8,12 +8,11 @@ import discord
 
 from models.team import Team
 from services.team_service import team_service
-from constants import SBA_CURRENT_SEASON
 
 
 async def get_user_major_league_team(
     user_id: int,
-    season: int = SBA_CURRENT_SEASON
+    season: int = get_config().sba_current_season
 ) -> Optional[Team]:
     """
     Get the major league team owned by a Discord user.
@@ -47,7 +46,7 @@ async def get_user_major_league_team(
 
 async def validate_user_has_team(
     interaction: discord.Interaction,
-    season: int = SBA_CURRENT_SEASON
+    season: int = get_config().sba_current_season
 ) -> Optional[Team]:
     """
     Validate that a user has a major league team and send error message if not.
@@ -76,7 +75,7 @@ async def validate_user_has_team(
 async def get_team_by_abbrev_with_validation(
     team_abbrev: str,
     interaction: discord.Interaction,
-    season: int = SBA_CURRENT_SEASON
+    season: int = get_config().sba_current_season
 ) -> Optional[Team]:
     """
     Get a team by abbreviation with standard error messaging.
@@ -89,6 +88,7 @@ async def get_team_by_abbrev_with_validation(
     Returns:
         Team object if found, None if not (error message already sent)
     """
+from config import get_config
     try:
         team = await team_service.get_team_by_abbrev(team_abbrev, season)
 

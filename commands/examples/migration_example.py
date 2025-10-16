@@ -11,7 +11,6 @@ from discord.ext import commands
 
 from services.team_service import team_service
 from models.team import Team
-from constants import SBA_CURRENT_SEASON
 from utils.logging import get_contextual_logger
 from views.embeds import EmbedTemplate, EmbedColors
 from utils.decorators import logged_command
@@ -48,7 +47,7 @@ class MigrationExampleCommands(commands.Cog):
         """Old style team listing - basic embed only."""
         await interaction.response.defer()
         
-        season = season or SBA_CURRENT_SEASON
+        season = season or get_config().sba_current_season
         teams = await team_service.get_teams_by_season(season)
         
         if not teams:
@@ -91,7 +90,7 @@ class MigrationExampleCommands(commands.Cog):
         """New style team listing - interactive with pagination and selection."""
         await interaction.response.defer()
         
-        season = season or SBA_CURRENT_SEASON
+        season = season or get_config().sba_current_season
         teams = await team_service.get_teams_by_season(season)
         
         if not teams:
@@ -308,4 +307,5 @@ class MigrationExampleCommands(commands.Cog):
 
 async def setup(bot: commands.Bot):
     """Load the migration example commands cog."""
+from config import get_config
     await bot.add_cog(MigrationExampleCommands(bot))

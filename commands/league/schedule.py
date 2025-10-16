@@ -12,7 +12,6 @@ from discord.ext import commands
 from services.schedule_service import schedule_service
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
-from constants import SBA_CURRENT_SEASON
 from views.embeds import EmbedColors, EmbedTemplate
 
 
@@ -43,7 +42,7 @@ class ScheduleCommands(commands.Cog):
         """Display game schedule for a week or team."""
         await interaction.response.defer()
         
-        search_season = season or SBA_CURRENT_SEASON
+        search_season = season or get_config().sba_current_season
         
         if team:
             # Show team schedule
@@ -73,7 +72,7 @@ class ScheduleCommands(commands.Cog):
     #     """Display recent game results."""
     #     await interaction.response.defer()
         
-    #     search_season = season or SBA_CURRENT_SEASON
+    #     search_season = season or get_config().sba_current_season
         
     #     if week:
     #         # Show specific week results
@@ -350,4 +349,5 @@ class ScheduleCommands(commands.Cog):
 
 async def setup(bot: commands.Bot):
     """Load the schedule commands cog."""
+from config import get_config
     await bot.add_cog(ScheduleCommands(bot))

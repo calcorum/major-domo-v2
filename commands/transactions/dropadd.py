@@ -13,7 +13,6 @@ from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
 from utils.autocomplete import player_autocomplete
 from utils.team_utils import validate_user_has_team
-from constants import SBA_CURRENT_SEASON
 
 from services.transaction_builder import (
     TransactionBuilder,
@@ -127,7 +126,7 @@ class DropAddCommands(commands.Cog):
         """
         try:
             # Find player using the new search endpoint
-            players = await player_service.search_players(player_name, limit=10, season=SBA_CURRENT_SEASON)
+            players = await player_service.search_players(player_name, limit=10, season=get_config().sba_current_season)
             if not players:
                 self.logger.error(f"Player not found: {player_name}")
                 return False, f"Player '{player_name}' not found"
@@ -232,4 +231,5 @@ class DropAddCommands(commands.Cog):
 
 async def setup(bot):
     """Setup function for the cog."""
+from config import get_config
     await bot.add_cog(DropAddCommands(bot))

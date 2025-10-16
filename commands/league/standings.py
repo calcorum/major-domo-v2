@@ -11,7 +11,6 @@ from discord.ext import commands
 from services.standings_service import standings_service
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
-from constants import SBA_CURRENT_SEASON
 from views.embeds import EmbedColors, EmbedTemplate
 
 
@@ -40,7 +39,7 @@ class StandingsCommands(commands.Cog):
         """Display league standings by division."""
         await interaction.response.defer()
         
-        search_season = season or SBA_CURRENT_SEASON
+        search_season = season or get_config().sba_current_season
         
         if division:
             # Show specific division
@@ -65,7 +64,7 @@ class StandingsCommands(commands.Cog):
         """Display playoff picture with division leaders and wild card race."""
         await interaction.response.defer()
         
-        search_season = season or SBA_CURRENT_SEASON
+        search_season = season or get_config().sba_current_season
         self.logger.debug("Fetching playoff picture", season=search_season)
         
         playoff_data = await standings_service.get_playoff_picture(search_season)
@@ -250,4 +249,5 @@ class StandingsCommands(commands.Cog):
 
 async def setup(bot: commands.Bot):
     """Load the standings commands cog."""
+from config import get_config
     await bot.add_cog(StandingsCommands(bot))

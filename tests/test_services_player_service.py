@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock
 
 from services.player_service import PlayerService, player_service
 from models.player import Player
-from constants import FREE_AGENT_TEAM_ID
 from exceptions import APIException
 
 
@@ -168,8 +167,8 @@ class TestPlayerService:
         mock_data = {
             'count': 2,
             'players': [
-                self.create_player_data(1, 'Free Agent 1', team_id=FREE_AGENT_TEAM_ID),
-                self.create_player_data(2, 'Free Agent 2', team_id=FREE_AGENT_TEAM_ID)
+                self.create_player_data(1, 'Free Agent 1', team_id=get_config().free_agent_team_id),
+                self.create_player_data(2, 'Free Agent 2', team_id=get_config().free_agent_team_id)
             ]
         }
         mock_client.get.return_value = mock_data
@@ -177,14 +176,14 @@ class TestPlayerService:
         result = await player_service_instance.get_free_agents(season=12)
         
         assert len(result) == 2
-        assert all(p.team_id == FREE_AGENT_TEAM_ID for p in result)
-        mock_client.get.assert_called_once_with('players', params=[('team_id', FREE_AGENT_TEAM_ID), ('season', '12')])
+        assert all(p.team_id == get_config().free_agent_team_id for p in result)
+        mock_client.get.assert_called_once_with('players', params=[('team_id', get_config().free_agent_team_id), ('season', '12')])
     
     @pytest.mark.asyncio
     async def test_is_free_agent(self, player_service_instance):
         """Test free agent checking."""
         # Create test players with all required fields
-        free_agent_data = self.create_player_data(1, 'Free Agent', team_id=FREE_AGENT_TEAM_ID)
+        free_agent_data = self.create_player_data(1, 'Free Agent', team_id=get_config().free_agent_team_id)
         regular_player_data = self.create_player_data(2, 'Regular Player', team_id=5)
         
         free_agent = Player.from_api_data(free_agent_data)
@@ -312,8 +311,7 @@ class TestPlayerServiceExtras:
     async def test_player_service_additional_methods(self):
         """Test additional PlayerService methods for coverage."""
         from services.player_service import PlayerService
-        from constants import FREE_AGENT_TEAM_ID
-        
+                
         mock_client = AsyncMock()
         player_service = PlayerService()
         player_service._client = mock_client
@@ -340,6 +338,7 @@ class TestGlobalPlayerServiceInstance:
     @pytest.mark.asyncio
     async def test_service_independence(self):
         """Test that service instances are independent."""
+from config import get_config
         service1 = PlayerService()
         service2 = PlayerService()
         

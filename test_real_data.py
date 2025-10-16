@@ -22,7 +22,6 @@ os.environ.setdefault('TESTING', 'true')
 from services.player_service import player_service
 from utils.logging import get_contextual_logger, set_discord_context
 from api.client import cleanup_global_client
-from constants import SBA_CURRENT_SEASON
 
 logger = get_contextual_logger('test_real_data')
 
@@ -68,7 +67,7 @@ async def test_player_search():
     try:
         # Test 1: Search for a common name (should find multiple)
         logger.info("Testing search for common player name")
-        players = await player_service.get_players_by_name("Smith", SBA_CURRENT_SEASON)
+        players = await player_service.get_players_by_name("Smith", get_config().sba_current_season)
         logger.info("Common name search completed", 
                    search_term="Smith", 
                    results_found=len(players))
@@ -82,7 +81,7 @@ async def test_player_search():
         
         # Test 2: Search for specific player (exact match)
         logger.info("Testing search for specific player")
-        players = await player_service.get_players_by_name("Mike Trout", SBA_CURRENT_SEASON)
+        players = await player_service.get_players_by_name("Mike Trout", get_config().sba_current_season)
         logger.info("Specific player search completed",
                    search_term="Mike Trout",
                    results_found=len(players))
@@ -142,10 +141,9 @@ async def test_player_service_methods():
     
     try:
         # Test get_all with limit (need to include season)
-        from constants import SBA_CURRENT_SEASON
         logger.info("Testing get_all with limit")
         players, total_count = await player_service.get_all(params=[
-            ('season', str(SBA_CURRENT_SEASON)),
+            ('season', str(get_config().sba_current_season)),
             ('limit', '10')
         ])
         
@@ -154,7 +152,7 @@ async def test_player_service_methods():
                    retrieved_count=len(players),
                    total_count=total_count,
                    limit=10,
-                   season=SBA_CURRENT_SEASON)
+                   season=get_config().sba_current_season)
         
         if players:
             print("     Sample players:")
@@ -165,7 +163,7 @@ async def test_player_service_methods():
         if players:
             test_position = players[0].primary_position
             logger.info("Testing position search", position=test_position)
-            position_players = await player_service.get_players_by_position(test_position, SBA_CURRENT_SEASON)
+            position_players = await player_service.get_players_by_position(test_position, get_config().sba_current_season)
             
             print(f"  ✅ Found {len(position_players)} players at position {test_position}")
             logger.info("Position search completed",
@@ -194,7 +192,8 @@ async def test_api_connectivity():
     
     try:
         from api.client import get_global_client
-        
+        from config import get_config
+
         logger.info("Testing basic API connection")
         client = await get_global_client()
         

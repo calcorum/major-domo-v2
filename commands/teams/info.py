@@ -9,7 +9,6 @@ from discord.ext import commands
 
 from services import team_service, player_service
 from models.team import RosterType, Team
-from constants import SBA_CURRENT_SEASON
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
 from exceptions import BotException
@@ -36,7 +35,7 @@ class TeamInfoCommands(commands.Cog):
         await interaction.response.defer()
         
         # Use current season if not specified
-        season = season or SBA_CURRENT_SEASON
+        season = season or get_config().sba_current_season
         
         # Get team by abbreviation
         team = await team_service.get_team_by_abbrev(abbrev, season)
@@ -67,7 +66,7 @@ class TeamInfoCommands(commands.Cog):
         """List all teams in a season."""
         await interaction.response.defer()
 
-        season = season or SBA_CURRENT_SEASON
+        season = season or get_config().sba_current_season
 
         teams = await team_service.get_teams_by_season(season)
 
@@ -129,6 +128,7 @@ class TeamInfoCommands(commands.Cog):
 
     async def _create_team_embed(self, team: Team, standings_data: Optional[dict] = None) -> discord.Embed:
         """Create a rich embed for team information."""
+from config import get_config
         embed = EmbedTemplate.create_base_embed(
             title=f"{team.abbrev} - {team.lname}",
             description=f"Season {team.season} Team Information",

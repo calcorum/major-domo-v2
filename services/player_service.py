@@ -8,7 +8,6 @@ from typing import Optional, List, TYPE_CHECKING
 
 from services.base_service import BaseService
 from models.player import Player
-from constants import FREE_AGENT_TEAM_ID, SBA_CURRENT_SEASON
 from exceptions import APIException
 
 if TYPE_CHECKING:
@@ -192,8 +191,7 @@ class PlayerService(BaseService[Player]):
         """
         try:
             if season is None:
-                from constants import SBA_CURRENT_SEASON
-                season = SBA_CURRENT_SEASON
+                                season = get_config().sba_current_season
 
             # Use the existing name-based search that actually works
             players = await self.get_players_by_name(query, season)
@@ -233,7 +231,7 @@ class PlayerService(BaseService[Player]):
             List of free agent players
         """
         try:
-            params = [('team_id', FREE_AGENT_TEAM_ID), ('season', str(season))]
+            params = [('team_id', get_config().free_agent_team_id), ('season', str(season))]
             
             players = await self.get_all_items(params=params)
             logger.debug(f"Retrieved {len(players)} free agents")
@@ -253,7 +251,7 @@ class PlayerService(BaseService[Player]):
         Returns:
             True if player is a free agent
         """
-        return player.team_id == FREE_AGENT_TEAM_ID
+        return player.team_id == get_config().free_agent_team_id
     
     async def get_players_by_position(self, position: str, season: int) -> List[Player]:
         """
@@ -280,6 +278,7 @@ class PlayerService(BaseService[Player]):
     
     async def update_player(self, player_id: int, updates: dict) -> Optional[Player]:
         """
+from config import get_config
         Update player information.
 
         Args:

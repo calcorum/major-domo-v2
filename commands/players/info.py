@@ -12,7 +12,6 @@ from services.player_service import player_service
 from services.stats_service import stats_service
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
-from constants import SBA_CURRENT_SEASON
 from views.embeds import EmbedColors, EmbedTemplate
 from models.team import RosterType
 
@@ -27,7 +26,7 @@ async def player_name_autocomplete(
 
     try:
         # Use the dedicated search endpoint to get matching players
-        players = await player_service.search_players(current, limit=25, season=SBA_CURRENT_SEASON)
+        players = await player_service.search_players(current, limit=25, season=get_config().sba_current_season)
 
         # Convert to discord choices, limiting to 25 (Discord's max)
         choices = []
@@ -78,7 +77,7 @@ class PlayerInfoCommands(commands.Cog):
         self.logger.debug("Response deferred")
         
         # Search for player by name (use season parameter or default to current)
-        search_season = season or SBA_CURRENT_SEASON
+        search_season = season or get_config().sba_current_season
         self.logger.debug("Starting player search", api_call="get_players_by_name", season=search_season)
         players = await player_service.get_players_by_name(name, search_season)
         self.logger.info("Player search completed", players_found=len(players), season=search_season)
@@ -173,6 +172,7 @@ class PlayerInfoCommands(commands.Cog):
         pitching_stats=None
     ) -> discord.Embed:
         """Create a comprehensive player embed with statistics."""
+from config import get_config
         # Determine embed color based on team
         embed_color = EmbedColors.PRIMARY
         if hasattr(player, 'team') and player.team and hasattr(player.team, 'color'):
