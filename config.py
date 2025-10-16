@@ -6,21 +6,55 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class BotConfig(BaseSettings):
     """Application configuration with environment variable support."""
-    
+
     # Discord settings
     bot_token: str
     guild_id: int
-    
+
     # Database API settings
     api_token: str
     db_url: str
-    
+
+    # Discord Limits
+    discord_embed_limit: int = 6000
+    discord_field_value_limit: int = 1024
+    discord_embed_description_limit: int = 4096
+
     # League settings
     sba_season: int = 12
     pd_season: int = 9
     fa_lock_week: int = 14
     sba_color: str = "a6ce39"
-    
+    weeks_per_season: int = 18
+    games_per_week: int = 4
+    modern_stats_start_season: int = 8
+
+    # Current Season Constants
+    sba_current_season: int = 12
+    pd_current_season: int = 9
+
+    # API Constants
+    api_version: str = "v3"
+    default_timeout: int = 10
+    max_retries: int = 3
+
+    # Draft Constants
+    default_pick_minutes: int = 10
+    draft_rounds: int = 25
+
+    # Special Team IDs
+    free_agent_team_id: int = 498
+
+    # Role Names
+    help_editor_role_name: str = "Help Editor"
+    sba_players_role_name: str = "Season 12 Players"
+
+    # Channel Names
+    sba_network_news_channel: str = "sba-network-news"
+
+    # Base URLs
+    sba_base_url: str = "https://sba.manticorum.com"
+
     # Application settings
     log_level: str = "INFO"
     environment: str = "development"

@@ -1,47 +1,54 @@
 """
 Application constants for Discord Bot v2.0
+
+Most constants are now configurable via environment variables.
+See config.py for default values and .env.example for configuration options.
 """
+from config import get_config
 
-# Discord Limits
-DISCORD_EMBED_LIMIT = 6000
-DISCORD_FIELD_VALUE_LIMIT = 1024
-DISCORD_EMBED_DESCRIPTION_LIMIT = 4096
+# Load configuration
+_config = get_config()
 
-# League Constants
-WEEKS_PER_SEASON = 18
-GAMES_PER_WEEK = 4
-MODERN_STATS_START_SEASON = 8
+# Discord Limits (configurable)
+DISCORD_EMBED_LIMIT = _config.discord_embed_limit
+DISCORD_FIELD_VALUE_LIMIT = _config.discord_field_value_limit
+DISCORD_EMBED_DESCRIPTION_LIMIT = _config.discord_embed_description_limit
 
-# Current Season Constants
-SBA_CURRENT_SEASON = 12
-PD_CURRENT_SEASON = 9
+# League Constants (configurable)
+WEEKS_PER_SEASON = _config.weeks_per_season
+GAMES_PER_WEEK = _config.games_per_week
+MODERN_STATS_START_SEASON = _config.modern_stats_start_season
 
-# API Constants
-API_VERSION = "v3"
-DEFAULT_TIMEOUT = 10
-MAX_RETRIES = 3
+# Current Season Constants (configurable)
+SBA_CURRENT_SEASON = _config.sba_current_season
+PD_CURRENT_SEASON = _config.pd_current_season
 
-# Baseball Positions
+# API Constants (configurable)
+API_VERSION = _config.api_version
+DEFAULT_TIMEOUT = _config.default_timeout
+MAX_RETRIES = _config.max_retries
+
+# Baseball Positions (static)
 PITCHER_POSITIONS = {"SP", "RP", "P"}
 POSITION_FIELDERS = {"C", "1B", "2B", "3B", "SS", "LF", "CF", "RF", "OF", "DH"}
 ALL_POSITIONS = PITCHER_POSITIONS | POSITION_FIELDERS
 
-# Draft Constants
-DEFAULT_PICK_MINUTES = 10
-DRAFT_ROUNDS = 25
+# Draft Constants (configurable)
+DEFAULT_PICK_MINUTES = _config.default_pick_minutes
+DRAFT_ROUNDS = _config.draft_rounds
 
-# Special Team IDs
-FREE_AGENT_TEAM_ID = 31  # Generic free agent team ID (same per season)
+# Special Team IDs (configurable)
+FREE_AGENT_TEAM_ID = _config.free_agent_team_id
 
-# Role Names
-HELP_EDITOR_ROLE_NAME = "Help Editor"  # Users with this role can edit help commands
-SBA_PLAYERS_ROLE_NAME = "Season 12 Players"  # Current season players
+# Role Names (configurable)
+HELP_EDITOR_ROLE_NAME = _config.help_editor_role_name
+SBA_PLAYERS_ROLE_NAME = _config.sba_players_role_name
 
-# Channel Names
-SBA_NETWORK_NEWS_CHANNEL = "sba-network-news"  # Channel for game results
+# Channel Names (configurable)
+SBA_NETWORK_NEWS_CHANNEL = _config.sba_network_news_channel
 
-# Base URLs
-SBA_BASE_URL = "https://sba.major-domo.app"  # Base URL for web links
+# Base URLs (configurable)
+SBA_BASE_URL = _config.sba_base_url
 
-# Note: Google Sheets credentials path is now managed via config.py
+# Note: Google Sheets credentials path is managed via config.py
 # Access it with: get_config().sheets_credentials_path

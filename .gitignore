@@ -10,7 +10,6 @@ __pycache__/
 .last_command_hash
 logs/
 *.log
-*.json
 
 # Claude files & directories
 .claude/
@@ -216,3 +215,6 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+data/
+
