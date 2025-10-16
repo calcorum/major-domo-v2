@@ -56,7 +56,7 @@ This document outlines the remaining functionality required before the Discord B
   - Admin commands for chart management (add, remove, list, update)
   - Category organization (gameplay, defense, reference, stats)
   - Proper embed formatting with descriptions
-- **Data Storage**: `storage/charts.json` with JSON persistence
+- **Data Storage**: `data/charts.json` with JSON persistence
 - **Completed**: January 2025
 
 #### 4. Custom Help System **✅ COMPLETED**

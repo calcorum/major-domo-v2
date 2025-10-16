@@ -163,7 +163,7 @@ Administrators can manage the chart library using these commands:
 - **Files**:
   - `commands/utilities/charts.py` - Command handlers
   - `services/chart_service.py` - Chart management service
-  - `storage/charts.json` - Chart definitions storage
+  - `data/charts.json` - Chart definitions storage
 - **Service**: `ChartService` - Manages chart loading, saving, and retrieval
 - **Categories**: gameplay, defense, reference, stats
 - **Logging**: Uses `@logged_command` decorator for automatic logging
@@ -194,7 +194,7 @@ Administrators can manage the chart library using these commands:
    → Shows all gameplay charts
    ```
 
-**Data Structure** (`storage/charts.json`):
+**Data Structure** (`data/charts.json`):
 ```json
 {
   "charts": {

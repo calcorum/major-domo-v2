@@ -8,7 +8,10 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 from discord import app_commands
 
-from commands.utilities.charts import ChartCommands, ChartAdminCommands
+from commands.utilities.charts import (
+    ChartCommands, ChartManageGroup, ChartCategoryGroup,
+    chart_autocomplete, category_autocomplete
+)
 from services.chart_service import ChartService, Chart, get_chart_service
 from exceptions import BotException
 
@@ -191,6 +194,48 @@ class TestChartService:
         with pytest.raises(BotException, match="not found"):
             chart_service.remove_chart('nonexistent')
 
+    def test_add_category(self, chart_service):
+        """Test adding a new category."""
+        chart_service.add_category(key='stats', display_name='Statistics Charts')
+
+        categories = chart_service.get_categories()
+        assert 'stats' in categories
+        assert categories['stats'] == 'Statistics Charts'
+
+    def test_add_duplicate_category(self, chart_service):
+        """Test adding a duplicate category raises exception."""
+        with pytest.raises(BotException, match="already exists"):
+            chart_service.add_category(key='gameplay', display_name='Duplicate')
+
+    def test_remove_category(self, chart_service):
+        """Test removing an unused category."""
+        chart_service.remove_category('reference')
+
+        categories = chart_service.get_categories()
+        assert 'reference' not in categories
+
+    def test_remove_nonexistent_category(self, chart_service):
+        """Test removing a non-existent category raises exception."""
+        with pytest.raises(BotException, match="not found"):
+            chart_service.remove_category('nonexistent')
+
+    def test_remove_category_with_charts(self, chart_service):
+        """Test removing a category that charts are using raises exception."""
+        with pytest.raises(BotException, match="Cannot remove category"):
+            chart_service.remove_category('gameplay')
+
+    def test_update_category(self, chart_service):
+        """Test updating a category display name."""
+        chart_service.update_category(key='gameplay', display_name='Updated Gameplay')
+
+        categories = chart_service.get_categories()
+        assert categories['gameplay'] == 'Updated Gameplay'
+
+    def test_update_nonexistent_category(self, chart_service):
+        """Test updating a non-existent category raises exception."""
+        with pytest.raises(BotException, match="not found"):
+            chart_service.update_category(key='nonexistent', display_name='New Name')
+
 
 class TestChartCommands:
     """Tests for ChartCommands class."""
@@ -244,40 +289,47 @@ class TestChartCommands:
             await chart_cog.charts.callback(chart_cog, mock_interaction, 'nonexistent')
 
     @pytest.mark.asyncio
-    async def test_chart_autocomplete(self, chart_cog, mock_interaction):
+    async def test_chart_autocomplete(self, chart_service, mock_interaction):
         """Test chart autocomplete functionality."""
-        # Test with empty current input
-        choices = await chart_cog.chart_autocomplete(mock_interaction, '')
-        assert len(choices) == 3
+        # Patch get_chart_service to return our test service
+        with patch('commands.utilities.charts.get_chart_service', return_value=chart_service):
+            # Test with empty current input
+            choices = await chart_autocomplete(mock_interaction, '')
+            assert len(choices) == 3
 
-        # Test with partial match
-        choices = await chart_cog.chart_autocomplete(mock_interaction, 'def')
-        assert len(choices) == 1
-        assert choices[0].value == 'defense'
+            # Test with partial match
+            choices = await chart_autocomplete(mock_interaction, 'def')
+            assert len(choices) == 1
+            assert choices[0].value == 'defense'
 
-        # Test with no match
-        choices = await chart_cog.chart_autocomplete(mock_interaction, 'xyz')
-        assert len(choices) == 0
+            # Test with no match
+            choices = await chart_autocomplete(mock_interaction, 'xyz')
+            assert len(choices) == 0
 
 
-class TestChartAdminCommands:
-    """Tests for ChartAdminCommands class."""
+class TestChartManageGroup:
+    """Tests for ChartManageGroup command group."""
 
     @pytest.fixture
-    def admin_cog(self, chart_service):
-        """Create ChartAdminCommands cog with mocked service."""
-        bot = AsyncMock()
-        cog = ChartAdminCommands(bot)
+    def manage_group(self, chart_service):
+        """Create ChartManageGroup with mocked service."""
+        group = ChartManageGroup()
 
-        with patch.object(cog, 'chart_service', chart_service):
-            yield cog
+        with patch.object(group, 'chart_service', chart_service):
+            yield group
+
+    @pytest.fixture
+    def mock_admin_interaction(self, mock_interaction):
+        """Create a mock interaction with admin permissions."""
+        mock_interaction.user.guild_permissions.administrator = True
+        return mock_interaction
 
     @pytest.mark.asyncio
-    async def test_chart_add_command(self, admin_cog, mock_interaction):
+    async def test_chart_add_command(self, manage_group, mock_admin_interaction):
         """Test adding a new chart via command."""
-        await admin_cog.chart_add.callback(
-            admin_cog,
-            mock_interaction,
+        await manage_group.add.callback(
+            manage_group,
+            mock_admin_interaction,
             key='new-chart',
             name='New Chart',
             category='gameplay',
@@ -286,25 +338,25 @@ class TestChartAdminCommands:
         )
 
         # Verify success response
-        mock_interaction.response.send_message.assert_called_once()
-        call_kwargs = mock_interaction.response.send_message.call_args[1]
+        mock_admin_interaction.response.send_message.assert_called_once()
+        call_kwargs = mock_admin_interaction.response.send_message.call_args[1]
         embed = call_kwargs['embed']
 
         assert '✅ Chart Added' in embed.title
         assert call_kwargs['ephemeral'] is True
 
         # Verify chart was added
-        chart = admin_cog.chart_service.get_chart('new-chart')
+        chart = manage_group.chart_service.get_chart('new-chart')
         assert chart is not None
         assert chart.name == 'New Chart'
 
     @pytest.mark.asyncio
-    async def test_chart_add_invalid_category(self, admin_cog, mock_interaction):
+    async def test_chart_add_invalid_category(self, manage_group, mock_admin_interaction):
         """Test adding a chart with invalid category."""
         with pytest.raises(BotException, match="Invalid category"):
-            await admin_cog.chart_add.callback(
-                admin_cog,
-                mock_interaction,
+            await manage_group.add.callback(
+                manage_group,
+                mock_admin_interaction,
                 key='new-chart',
                 name='New Chart',
                 category='invalid-category',
@@ -313,60 +365,34 @@ class TestChartAdminCommands:
             )
 
     @pytest.mark.asyncio
-    async def test_chart_remove_command(self, admin_cog, mock_interaction):
+    async def test_chart_remove_command(self, manage_group, mock_admin_interaction):
         """Test removing a chart via command."""
-        await admin_cog.chart_remove.callback(admin_cog, mock_interaction, 'rest')
+        await manage_group.remove.callback(manage_group, mock_admin_interaction, 'rest')
 
         # Verify success response
-        mock_interaction.response.send_message.assert_called_once()
-        call_kwargs = mock_interaction.response.send_message.call_args[1]
+        mock_admin_interaction.response.send_message.assert_called_once()
+        call_kwargs = mock_admin_interaction.response.send_message.call_args[1]
         embed = call_kwargs['embed']
 
         assert '✅ Chart Removed' in embed.title
         assert call_kwargs['ephemeral'] is True
 
         # Verify chart was removed
-        chart = admin_cog.chart_service.get_chart('rest')
+        chart = manage_group.chart_service.get_chart('rest')
         assert chart is None
 
     @pytest.mark.asyncio
-    async def test_chart_remove_not_found(self, admin_cog, mock_interaction):
+    async def test_chart_remove_not_found(self, manage_group, mock_admin_interaction):
         """Test removing a non-existent chart."""
         with pytest.raises(BotException, match="not found"):
-            await admin_cog.chart_remove.callback(admin_cog, mock_interaction, 'nonexistent')
+            await manage_group.remove.callback(manage_group, mock_admin_interaction, 'nonexistent')
 
     @pytest.mark.asyncio
-    async def test_chart_list_all(self, admin_cog, mock_interaction):
-        """Test listing all charts."""
-        await admin_cog.chart_list.callback(admin_cog, mock_interaction, category=None)
-
-        # Verify response
-        mock_interaction.response.send_message.assert_called_once()
-        call_kwargs = mock_interaction.response.send_message.call_args[1]
-        embed = call_kwargs['embed']
-
-        assert '📊 All Available Charts' in embed.title
-        assert 'Total: 3 chart(s)' in embed.description
-
-    @pytest.mark.asyncio
-    async def test_chart_list_by_category(self, admin_cog, mock_interaction):
-        """Test listing charts by category."""
-        await admin_cog.chart_list.callback(admin_cog, mock_interaction, category='gameplay')
-
-        # Verify response
-        mock_interaction.response.send_message.assert_called_once()
-        call_kwargs = mock_interaction.response.send_message.call_args[1]
-        embed = call_kwargs['embed']
-
-        assert "Charts in 'gameplay'" in embed.title
-        assert 'Total: 2 chart(s)' in embed.description
-
-    @pytest.mark.asyncio
-    async def test_chart_update_command(self, admin_cog, mock_interaction):
+    async def test_chart_update_command(self, manage_group, mock_admin_interaction):
         """Test updating a chart via command."""
-        await admin_cog.chart_update.callback(
-            admin_cog,
-            mock_interaction,
+        await manage_group.update.callback(
+            manage_group,
+            mock_admin_interaction,
             key='rest',
             name='Updated Rest Chart',
             category=None,
@@ -375,24 +401,24 @@ class TestChartAdminCommands:
         )
 
         # Verify success response
-        mock_interaction.response.send_message.assert_called_once()
-        call_kwargs = mock_interaction.response.send_message.call_args[1]
+        mock_admin_interaction.response.send_message.assert_called_once()
+        call_kwargs = mock_admin_interaction.response.send_message.call_args[1]
         embed = call_kwargs['embed']
 
         assert '✅ Chart Updated' in embed.title
 
         # Verify chart was updated
-        chart = admin_cog.chart_service.get_chart('rest')
+        chart = manage_group.chart_service.get_chart('rest')
         assert chart.name == 'Updated Rest Chart'
         assert chart.description == 'Updated description'
 
     @pytest.mark.asyncio
-    async def test_chart_update_no_fields(self, admin_cog, mock_interaction):
+    async def test_chart_update_no_fields(self, manage_group, mock_admin_interaction):
         """Test updating with no fields raises exception."""
         with pytest.raises(BotException, match="Must provide at least one field"):
-            await admin_cog.chart_update.callback(
-                admin_cog,
-                mock_interaction,
+            await manage_group.update.callback(
+                manage_group,
+                mock_admin_interaction,
                 key='rest',
                 name=None,
                 category=None,
@@ -401,15 +427,114 @@ class TestChartAdminCommands:
             )
 
     @pytest.mark.asyncio
-    async def test_chart_update_invalid_category(self, admin_cog, mock_interaction):
+    async def test_chart_update_invalid_category(self, manage_group, mock_admin_interaction):
         """Test updating with invalid category."""
         with pytest.raises(BotException, match="Invalid category"):
-            await admin_cog.chart_update.callback(
-                admin_cog,
-                mock_interaction,
+            await manage_group.update.callback(
+                manage_group,
+                mock_admin_interaction,
                 key='rest',
                 name=None,
                 category='invalid-category',
                 url=None,
                 description=None
             )
+
+
+class TestChartCategoryGroup:
+    """Tests for ChartCategoryGroup command group."""
+
+    @pytest.fixture
+    def category_group(self, chart_service):
+        """Create ChartCategoryGroup with mocked service."""
+        group = ChartCategoryGroup()
+
+        with patch.object(group, 'chart_service', chart_service):
+            yield group
+
+    @pytest.fixture
+    def mock_admin_interaction(self, mock_interaction):
+        """Create a mock interaction with admin permissions."""
+        mock_interaction.user.guild_permissions.administrator = True
+        return mock_interaction
+
+    @pytest.mark.asyncio
+    async def test_list_categories(self, category_group, mock_admin_interaction):
+        """Test listing all categories."""
+        await category_group.list_categories.callback(
+            category_group,
+            mock_admin_interaction
+        )
+
+        # Verify response
+        mock_admin_interaction.response.send_message.assert_called_once()
+        call_kwargs = mock_admin_interaction.response.send_message.call_args[1]
+        embed = call_kwargs['embed']
+
+        assert '📊 Chart Categories' in embed.title
+        assert call_kwargs['ephemeral'] is True
+
+    @pytest.mark.asyncio
+    async def test_add_category(self, category_group, mock_admin_interaction):
+        """Test adding a new category."""
+        await category_group.add_category.callback(
+            category_group,
+            mock_admin_interaction,
+            key='stats',
+            display_name='Statistics Charts'
+        )
+
+        # Verify success response
+        mock_admin_interaction.response.send_message.assert_called_once()
+        call_kwargs = mock_admin_interaction.response.send_message.call_args[1]
+        embed = call_kwargs['embed']
+
+        assert '✅ Category Added' in embed.title
+        assert call_kwargs['ephemeral'] is True
+
+        # Verify category was added
+        categories = category_group.chart_service.get_categories()
+        assert 'stats' in categories
+
+    @pytest.mark.asyncio
+    async def test_remove_category(self, category_group, mock_admin_interaction):
+        """Test removing a category."""
+        await category_group.remove_category.callback(
+            category_group,
+            mock_admin_interaction,
+            key='reference'
+        )
+
+        # Verify success response
+        mock_admin_interaction.response.send_message.assert_called_once()
+        call_kwargs = mock_admin_interaction.response.send_message.call_args[1]
+        embed = call_kwargs['embed']
+
+        assert '✅ Category Removed' in embed.title
+        assert call_kwargs['ephemeral'] is True
+
+        # Verify category was removed
+        categories = category_group.chart_service.get_categories()
+        assert 'reference' not in categories
+
+    @pytest.mark.asyncio
+    async def test_rename_category(self, category_group, mock_admin_interaction):
+        """Test renaming a category."""
+        await category_group.rename_category.callback(
+            category_group,
+            mock_admin_interaction,
+            key='gameplay',
+            new_display_name='Updated Gameplay'
+        )
+
+        # Verify success response
+        mock_admin_interaction.response.send_message.assert_called_once()
+        call_kwargs = mock_admin_interaction.response.send_message.call_args[1]
+        embed = call_kwargs['embed']
+
+        assert '✅ Category Renamed' in embed.title
+        assert call_kwargs['ephemeral'] is True
+
+        # Verify category was renamed
+        categories = category_group.chart_service.get_categories()
+        assert categories['gameplay'] == 'Updated Gameplay'

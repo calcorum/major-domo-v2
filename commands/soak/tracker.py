@@ -22,7 +22,7 @@ class SoakTracker:
     - Time-based calculations for disappointment tiers
     """
 
-    def __init__(self, data_file: str = "storage/soak_data.json"):
+    def __init__(self, data_file: str = "data/soak_data.json"):
         """
         Initialize the soak tracker.
 

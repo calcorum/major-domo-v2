@@ -9,6 +9,7 @@ from pydantic import Field
 
 from models.base import SBABaseModel
 from models.division import Division
+from models.manager import Manager
 
 
 class RosterType(Enum):
@@ -34,7 +35,9 @@ class Team(SBABaseModel):
     gmid: Optional[int] = Field(None, description="Primary general manager ID")
     gmid2: Optional[int] = Field(None, description="Secondary general manager ID")
     manager1_id: Optional[int] = Field(None, description="Primary manager ID")
+    manager1: Optional[Manager] = Field(None, description="Manager object")
     manager2_id: Optional[int] = Field(None, description="Secondary manager ID")
+    manager2: Optional[Manager] = Field(None, description="Manager object")
     
     # Team metadata
     division_id: Optional[int] = Field(None, description="Division ID")
@@ -195,6 +198,19 @@ class Team(SBABaseModel):
             True if both teams are from the same organization
         """
         return self._get_base_abbrev() == other_team._get_base_abbrev()
+
+    def gm_names(self) -> str:
+        if any([self.manager1, self.manager2]):
+            names = ''
+            if self.manager1:
+                names += f'{self.manager1}'
+            if self.manager2:
+                names += f', {self.manager2}'
+            return names
+        if any([self.manager1_id, self.manager2_id]):
+            mgr_count = sum(1 for x in [self.manager1_id, self.manager2_id] if x is not None)
+            return f'{mgr_count} GM{"s" if mgr_count > 1 else ""}'
+        return 'Unknown'
 
     def __str__(self):
         return f"{self.abbrev} - {self.lname}"

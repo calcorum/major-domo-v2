@@ -22,8 +22,8 @@ class LeagueInfoCommands(commands.Cog):
         self.logger = get_contextual_logger(f'{__name__}.LeagueInfoCommands')
         self.logger.info("LeagueInfoCommands cog initialized")
     
-    @discord.app_commands.command(name="league", description="Display current league status and information")
-    @logged_command("/league")
+    @discord.app_commands.command(name="league-metadata", description="Display current league metadata")
+    @logged_command("/league-metadata")
     async def league_info(self, interaction: discord.Interaction):
         """Display current league state and information."""
         await interaction.response.defer()
@@ -41,8 +41,8 @@ class LeagueInfoCommands(commands.Cog):
         
         # Create league info embed
         embed = EmbedTemplate.create_base_embed(
-            title="🏆 SBA League Status",
-            description="Current league information and status"
+            title="🏆 SBA League Metadata",
+            description="Current league metadata"
         )
         
         # Basic league info

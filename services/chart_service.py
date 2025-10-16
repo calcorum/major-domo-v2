@@ -37,7 +37,7 @@ class Chart:
 class ChartService:
     """Service for managing gameplay charts and infographics."""
 
-    CHARTS_FILE = Path(__file__).parent.parent / 'storage' / 'charts.json'
+    CHARTS_FILE = Path(__file__).parent.parent / 'data' / 'charts.json'
 
     def __init__(self):
         """Initialize the chart service."""
@@ -234,6 +234,68 @@ class ChartService:
         del self._charts[key]
         self._save_charts()
         logger.info(f"Removed chart: {key}")
+
+    def add_category(self, key: str, display_name: str) -> None:
+        """
+        Add a new category.
+
+        Args:
+            key: Unique identifier for the category (e.g., 'gameplay')
+            display_name: Display name for the category (e.g., 'Gameplay Charts')
+
+        Raises:
+            BotException: If category key already exists
+        """
+        if key in self._categories:
+            raise BotException(f"Category '{key}' already exists")
+
+        self._categories[key] = display_name
+        self._save_charts()
+        logger.info(f"Added category: {key} - {display_name}")
+
+    def remove_category(self, key: str) -> None:
+        """
+        Remove a category.
+
+        Args:
+            key: Category key to remove
+
+        Raises:
+            BotException: If category doesn't exist or charts are using it
+        """
+        if key not in self._categories:
+            raise BotException(f"Category '{key}' not found")
+
+        # Check if any charts use this category
+        charts_using = [c for c in self._charts.values() if c.category == key]
+        if charts_using:
+            chart_names = ", ".join([c.name for c in charts_using])
+            raise BotException(
+                f"Cannot remove category '{key}' - used by {len(charts_using)} chart(s): {chart_names}"
+            )
+
+        del self._categories[key]
+        self._save_charts()
+        logger.info(f"Removed category: {key}")
+
+    def update_category(self, key: str, display_name: str) -> None:
+        """
+        Update category display name.
+
+        Args:
+            key: Category key to update
+            display_name: New display name
+
+        Raises:
+            BotException: If category doesn't exist
+        """
+        if key not in self._categories:
+            raise BotException(f"Category '{key}' not found")
+
+        old_name = self._categories[key]
+        self._categories[key] = display_name
+        self._save_charts()
+        logger.info(f"Updated category: {key} from '{old_name}' to '{display_name}'")
 
     def reload_charts(self) -> None:
         """Reload charts from the JSON file."""

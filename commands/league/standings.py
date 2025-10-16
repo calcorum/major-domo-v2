@@ -172,23 +172,23 @@ class StandingsCommands(commands.Cog):
             inline=False
         )
         
-        # Add additional stats for top teams
-        if len(teams) >= 3:
-            stats_lines = []
-            for team in teams[:3]:  # Top 3 teams
-                stats_line = (
-                    f"**{team.team.abbrev}**: "
-                    f"Home {team.home_record} • "
-                    f"Last 8: {team.last8_record} • "
-                    f"Streak: {team.current_streak}"
-                )
-                stats_lines.append(stats_line)
+        # # Add additional stats for top teams
+        # if len(teams) >= 3:
+        #     stats_lines = []
+        #     for team in teams[:3]:  # Top 3 teams
+        #         stats_line = (
+        #             f"**{team.team.abbrev}**: "
+        #             f"Home {team.home_record} • "
+        #             f"Last 8: {team.last8_record} • "
+        #             f"Streak: {team.current_streak}"
+        #         )
+        #         stats_lines.append(stats_line)
             
-            embed.add_field(
-                name="Recent Form (Top 3)",
-                value="\n".join(stats_lines),
-                inline=False
-            )
+        #     embed.add_field(
+        #         name="Recent Form (Top 3)",
+        #         value="\n".join(stats_lines),
+        #         inline=False
+        #     )
         
         embed.set_footer(text=f"Season {season}")
         return embed

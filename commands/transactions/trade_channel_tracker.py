@@ -27,7 +27,7 @@ class TradeChannelTracker:
     - Automatic stale entry removal
     """
 
-    def __init__(self, data_file: str = "storage/trade_channels.json"):
+    def __init__(self, data_file: str = "data/trade_channels.json"):
         """
         Initialize the trade channel tracker.
 

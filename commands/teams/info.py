@@ -8,12 +8,13 @@ import discord
 from discord.ext import commands
 
 from services import team_service, player_service
-from models.team import Team
+from models.team import RosterType, Team
 from constants import SBA_CURRENT_SEASON
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
 from exceptions import BotException
 from views.embeds import EmbedTemplate, EmbedColors
+from views.base import PaginationView
 
 
 class TeamInfoCommands(commands.Cog):
@@ -65,11 +66,11 @@ class TeamInfoCommands(commands.Cog):
     async def list_teams(self, interaction: discord.Interaction, season: Optional[int] = None):
         """List all teams in a season."""
         await interaction.response.defer()
-        
+
         season = season or SBA_CURRENT_SEASON
-        
+
         teams = await team_service.get_teams_by_season(season)
-        
+
         if not teams:
             embed = EmbedTemplate.error(
                 title="No Teams Found",
@@ -77,38 +78,55 @@ class TeamInfoCommands(commands.Cog):
             )
             await interaction.followup.send(embed=embed)
             return
-        
-        # Sort teams by abbreviation
-        teams.sort(key=lambda t: t.abbrev)
-        
-        # Create embed with team list
-        embed = EmbedTemplate.create_base_embed(
-            title=f"SBA Teams - Season {season}",
-            color=EmbedColors.PRIMARY
-        )
-        
-        # Group teams by division if available
-        if any(team.division_id for team in teams):
-            divisions = {}
-            for team in teams:
-                div_id = team.division_id or 0
-                if div_id not in divisions:
-                    divisions[div_id] = []
-                divisions[div_id].append(team)
-            
-            for div_id, div_teams in sorted(divisions.items()):
-                div_name = f"Division {div_id}" if div_id > 0 else "Unassigned"
-                team_list = "\n".join([f"**{team.abbrev}** - {team.lname}" for team in div_teams])
-                embed.add_field(name=div_name, value=team_list, inline=True)
+
+        # Filter to major league teams only and sort by abbreviation
+        ml_teams = [team for team in teams if team.roster_type() == RosterType.MAJOR_LEAGUE]
+        ml_teams.sort(key=lambda t: t.abbrev)
+
+        if not ml_teams:
+            embed = EmbedTemplate.error(
+                title="No Major League Teams Found",
+                description=f"No major league teams found for season {season}"
+            )
+            await interaction.followup.send(embed=embed)
+            return
+
+        # Create paginated embeds (12 teams per page to stay under character limit)
+        teams_per_page = 12
+        pages: list[discord.Embed] = []
+
+        for i in range(0, len(ml_teams), teams_per_page):
+            page_teams = ml_teams[i:i + teams_per_page]
+
+            embed = EmbedTemplate.create_base_embed(
+                title=f"SBA Teams - Season {season}",
+                color=EmbedColors.PRIMARY
+            )
+
+            for team in page_teams:
+                embed.add_field(
+                    name=f'{team}',
+                    value=self._team_detail_description(team),
+                    inline=False
+                )
+
+            embed.set_footer(text=f"Total: {len(ml_teams)} teams")
+            pages.append(embed)
+
+        # Use pagination if multiple pages, otherwise send single embed
+        if len(pages) > 1:
+            pagination = PaginationView(
+                pages=pages,
+                user_id=interaction.user.id,
+                show_page_numbers=True
+            )
+            await interaction.followup.send(embed=pagination.get_current_embed(), view=pagination)
         else:
-            # Simple list if no divisions
-            team_list = "\n".join([f"**{team.abbrev}** - {team.lname}" for team in teams])
-            embed.add_field(name="Teams", value=team_list, inline=False)
-        
-        embed.set_footer(text=f"Total: {len(teams)} teams")
-        
-        await interaction.followup.send(embed=embed)
+            await interaction.followup.send(embed=pages[0])
     
+    def _team_detail_description(self, team: Team) -> str:
+        return f'GM: {team.gm_names()}\nID: {team.id}'
+
     async def _create_team_embed(self, team: Team, standings_data: Optional[dict] = None) -> discord.Embed:
         """Create a rich embed for team information."""
         embed = EmbedTemplate.create_base_embed(

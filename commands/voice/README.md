@@ -146,7 +146,7 @@ if hasattr(self.bot, 'voice_cleanup_service'):
 ### Cleanup Service Settings
 - **`cleanup_interval`**: How often to check channels (default: 60 seconds)
 - **`empty_threshold`**: Minutes empty before deletion (default: 5 minutes)
-- **`data_file`**: JSON persistence file path (default: "storage/voice_channels.json")
+- **`data_file`**: JSON persistence file path (default: "data/voice_channels.json")
 
 ### Channel Categories
 - Channels are created in the "Voice Channels" category if it exists
