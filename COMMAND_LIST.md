@@ -135,7 +135,7 @@ Roll ballpark weather for a team
 ### `/charts <chart_name>`
 Display a gameplay chart or infographic
 - **Parameters:**
-  - `chart_name`: Name of chart (autocomplete enabled)
+  - `chart_nam  e`: Name of chart (autocomplete enabled)
 
 ---
 

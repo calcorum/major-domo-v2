@@ -112,6 +112,11 @@ class Player(SBABaseModel):
     def is_pitcher(self) -> bool:
         """Check if player is a pitcher."""
         return self.pos_1 in ['SP', 'RP', 'P']
-    
+
+    @property
+    def display_name(self) -> str:
+        """Return the player's display name (same as name)."""
+        return self.name
+
     def __str__(self):
         return f"{self.name} ({self.primary_position})"

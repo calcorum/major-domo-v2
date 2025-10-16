@@ -35,3 +35,13 @@ FREE_AGENT_TEAM_ID = 31  # Generic free agent team ID (same per season)
 
 # Role Names
 HELP_EDITOR_ROLE_NAME = "Help Editor"  # Users with this role can edit help commands
+SBA_PLAYERS_ROLE_NAME = "Season 12 Players"  # Current season players
+
+# Channel Names
+SBA_NETWORK_NEWS_CHANNEL = "sba-network-news"  # Channel for game results
+
+# Base URLs
+SBA_BASE_URL = "https://sba.major-domo.app"  # Base URL for web links
+
+# Note: Google Sheets credentials path is now managed via config.py
+# Access it with: get_config().sheets_credentials_path

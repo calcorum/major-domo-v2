@@ -7,6 +7,7 @@ from typing import Optional
 from enum import Enum
 from pydantic import Field
 
+from config import get_config
 from models.base import SBABaseModel
 from models.division import Division
 from models.manager import Manager
@@ -211,6 +212,14 @@ class Team(SBABaseModel):
             mgr_count = sum(1 for x in [self.manager1_id, self.manager2_id] if x is not None)
             return f'{mgr_count} GM{"s" if mgr_count > 1 else ""}'
         return 'Unknown'
+
+    def get_color_int(self, default_color: Optional[str] = None) -> int:
+        if self.color is not None:
+            return int(self.color, 16)
+        if default_color is not None:
+            return int(default_color, 16)
+        config = get_config()
+        return int(config.sba_color, 16)
 
     def __str__(self):
         return f"{self.abbrev} - {self.lname}"

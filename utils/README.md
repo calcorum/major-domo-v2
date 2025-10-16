@@ -561,15 +561,152 @@ See [Redis Caching](#-redis-caching) section above for caching decorator documen
 
 ---
 
+## 🚀 Discord Helpers
+
+**Location:** `utils/discord_helpers.py` (NEW - January 2025)
+**Purpose:** Common Discord-related helper functions for channel lookups, message sending, and formatting.
+
+### **Available Functions**
+
+#### **`get_channel_by_name(bot, channel_name)`**
+Get a text channel by name from the configured guild:
+
+```python
+from utils.discord_helpers import get_channel_by_name
+
+# In your command or cog
+channel = await get_channel_by_name(self.bot, "sba-network-news")
+if channel:
+    await channel.send("Message content")
+```
+
+**Features:**
+- Retrieves guild ID from environment (`GUILD_ID`)
+- Returns `TextChannel` object or `None` if not found
+- Handles errors gracefully with logging
+- Works across all guilds the bot is in
+
+#### **`send_to_channel(bot, channel_name, content=None, embed=None)`**
+Send a message to a channel by name:
+
+```python
+from utils.discord_helpers import send_to_channel
+
+# Send text message
+success = await send_to_channel(
+    self.bot,
+    "sba-network-news",
+    content="Game results posted!"
+)
+
+# Send embed
+success = await send_to_channel(
+    self.bot,
+    "sba-network-news",
+    embed=results_embed
+)
+
+# Send both
+success = await send_to_channel(
+    self.bot,
+    "sba-network-news",
+    content="Check out these results:",
+    embed=results_embed
+)
+```
+
+**Features:**
+- Combined channel lookup and message sending
+- Supports text content, embeds, or both
+- Returns `True` on success, `False` on failure
+- Comprehensive error logging
+- Non-critical - doesn't raise exceptions
+
+#### **`format_key_plays(plays, away_team, home_team)`**
+Format top plays into embed field text for game results:
+
+```python
+from utils.discord_helpers import format_key_plays
+from services.play_service import play_service
+
+# Get top 3 plays by WPA
+top_plays = await play_service.get_top_plays_by_wpa(game_id, limit=3)
+
+# Format for display
+key_plays_text = format_key_plays(top_plays, away_team, home_team)
+
+# Add to embed
+if key_plays_text:
+    embed.add_field(name="Key Plays", value=key_plays_text, inline=False)
+```
+
+**Output Example:**
+```
+Top 3: (NYY) homers in 2 runs, NYY up 3-1
+Bot 5: (BOS) doubles scoring 1 run, tied at 3
+Top 9: (NYY) singles scoring 1 run, NYY up 4-3
+```
+
+**Features:**
+- Uses `Play.descriptive_text()` for human-readable descriptions
+- Adds score context after each play
+- Shows which team is leading or if tied
+- Returns empty string if no plays provided
+- Handles RBI adjustments for accurate score display
+
+### **Real-World Usage**
+
+#### **Scorecard Submission Results Posting**
+From `commands/league/submit_scorecard.py`:
+
+```python
+# Create results embed
+results_embed = await self._create_results_embed(
+    away_team, home_team, box_score, setup_data,
+    current, sheet_url, wp_id, lp_id, sv_id, hold_ids, game_id
+)
+
+# Post to news channel automatically
+await send_to_channel(
+    self.bot,
+    SBA_NETWORK_NEWS_CHANNEL,  # "sba-network-news"
+    content=None,
+    embed=results_embed
+)
+```
+
+### **Configuration**
+
+These functions rely on environment variables:
+- **`GUILD_ID`**: Discord server ID where channels should be found
+- **`SBA_NETWORK_NEWS_CHANNEL`**: Channel name for game results (constant)
+
+### **Error Handling**
+
+All functions handle errors gracefully:
+- **Channel not found**: Logs warning and returns `None` or `False`
+- **Missing GUILD_ID**: Logs error and returns `None` or `False`
+- **Send failures**: Logs error with details and returns `False`
+- **Empty data**: Returns empty string or `False` without errors
+
+### **Testing Considerations**
+
+When testing commands that use these utilities:
+- Mock `get_channel_by_name()` to return test channel objects
+- Mock `send_to_channel()` to verify message content
+- Mock `format_key_plays()` to verify play formatting logic
+- Use test guild IDs in environment variables
+
+---
+
 ## 🚀 Future Utilities
 
 Additional utility modules planned for future implementation:
 
-### **Discord Helpers** (Planned)
-- Embed builders and formatters
+### **Permission Utilities** (Planned)
 - Permission checking decorators
-- User mention and role utilities
-- Message pagination helpers
+- Role validation helpers
+- User authorization utilities
 
 ### **API Utilities** (Planned)  
 - Rate limiting decorators

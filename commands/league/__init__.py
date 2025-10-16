@@ -12,6 +12,7 @@ from discord.ext import commands
 from .info import LeagueInfoCommands
 from .standings import StandingsCommands
 from .schedule import ScheduleCommands
+from .submit_scorecard import SubmitScorecardCommands
 
 logger = logging.getLogger(f'{__name__}.setup_league')
 
@@ -27,6 +28,7 @@ async def setup_league(bot: commands.Bot) -> Tuple[int, int, List[str]]:
         ("LeagueInfoCommands", LeagueInfoCommands),
         ("StandingsCommands", StandingsCommands),
         ("ScheduleCommands", ScheduleCommands),
+        ("SubmitScorecardCommands", SubmitScorecardCommands),
     ]
     
     successful = 0

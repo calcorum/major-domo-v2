@@ -42,16 +42,93 @@ class BaseView(discord.ui.View):
         """Handle view errors with user feedback."""
 ```
 
-#### ConfirmationView Class
-Standard Yes/No confirmation dialogs:
+#### ConfirmationView Class (Updated January 2025)
+Reusable confirmation dialog with Confirm/Cancel buttons (`confirmations.py`):
 
+**Key Features:**
+- **User restriction**: Only specified users can interact
+- **Customizable labels and styles**: Flexible button appearance
+- **Timeout handling**: Automatic cleanup after timeout
+- **Three-state result**: `True` (confirmed), `False` (cancelled), `None` (timeout)
+- **Clean interface**: Automatically removes buttons after interaction
+
+**Usage Pattern:**
 ```python
-confirmation = ConfirmationView(
-    user_id=interaction.user.id,
-    confirm_callback=handle_confirm,
-    cancel_callback=handle_cancel
+from views.confirmations import ConfirmationView
+
+# Create confirmation dialog
+view = ConfirmationView(
+    responders=[interaction.user],  # Only this user can interact
+    timeout=30.0,                    # 30 second timeout
+    confirm_label="Yes, delete",    # Custom label
+    cancel_label="No, keep it"      # Custom label
 )
-await interaction.followup.send("Confirm action?", view=confirmation)
+
+# Send confirmation
+await interaction.edit_original_response(
+    content="⚠️ Are you sure you want to delete this?",
+    view=view
+)
+
+# Wait for user response
+await view.wait()
+
+# Check result
+if view.confirmed is True:
+    # User clicked Confirm
+    await interaction.edit_original_response(
+        content="✅ Deleted successfully",
+        view=None
+    )
+elif view.confirmed is False:
+    # User clicked Cancel
+    await interaction.edit_original_response(
+        content="❌ Cancelled",
+        view=None
+    )
+else:
+    # Timeout occurred (view.confirmed is None)
+    await interaction.edit_original_response(
+        content="⏱️ Request timed out",
+        view=None
+    )
+```
+
+**Real-World Example (Scorecard Submission):**
+```python
+# From commands/league/submit_scorecard.py
+if duplicate_game:
+    view = ConfirmationView(
+        responders=[interaction.user],
+        timeout=30.0
+    )
+    await interaction.edit_original_response(
+        content=(
+            f"⚠️ This game has already been played!\n"
+            f"Would you like me to wipe the old one and re-submit?"
+        ),
+        view=view
+    )
+    await view.wait()
+
+    if view.confirmed:
+        # User confirmed - proceed with wipe and resubmit
+        await wipe_old_data()
+    else:
+        # User cancelled - exit gracefully
+        return
+```
+
+**Configuration Options:**
+```python
+ConfirmationView(
+    responders=[user1, user2],              # Multiple users allowed
+    timeout=60.0,                           # Custom timeout
+    confirm_label="Approve",                # Custom confirm text
+    cancel_label="Reject",                  # Custom cancel text
+    confirm_style=discord.ButtonStyle.red,  # Custom button style
+    cancel_style=discord.ButtonStyle.grey   # Custom button style
+)
 ```
 
 #### PaginationView Class

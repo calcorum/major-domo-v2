@@ -39,3 +39,8 @@ class ValidationException(BotException):
 class ConfigurationException(BotException):
     """Exception for configuration-related errors."""
     pass
+
+
+class SheetsException(BotException):
+    """Exception for Google Sheets-related errors."""
+    pass

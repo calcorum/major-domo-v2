@@ -585,7 +585,7 @@ class CustomCommandsService(BaseService[CustomCommand]):
             BotException: If creator not found
         """
         creators = await self.get_items_from_table_with_params(
-            'custom_command_creators',
+            'custom_commands/creators',
             [('id', creator_id)]
         )
         

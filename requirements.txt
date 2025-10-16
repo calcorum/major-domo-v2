@@ -17,4 +17,4 @@ black>=23.0.0
 ruff>=0.1.0
 
 # Optional Dependencies
-# pygsheets>=4.0.0  # For Google Sheets integration if needed
+pygsheets>=4.0.0  # For Google Sheets integration (scorecard submission)

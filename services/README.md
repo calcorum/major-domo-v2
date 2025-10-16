@@ -82,8 +82,84 @@ This naming inconsistency was fixed in `services/trade_builder.py` line 201 and 
 - **`transaction_service.py`** - Player transaction operations (trades, waivers, etc.)
 - **`transaction_builder.py`** - Complex transaction building and validation
 
+### Game Submission Services (NEW - January 2025)
+- **`game_service.py`** - Game CRUD operations and scorecard submission support
+- **`play_service.py`** - Play-by-play data management for game submissions
+- **`decision_service.py`** - Pitching decision operations for game results
+- **`sheets_service.py`** - Google Sheets integration for scorecard reading
+
+#### GameService Key Methods
+```python
+class GameService(BaseService[Game]):
+    async def find_duplicate_game(season: int, week: int, game_num: int,
+                                   away_team_id: int, home_team_id: int) -> Optional[Game]
+    async def find_scheduled_game(season: int, week: int,
+                                   away_team_id: int, home_team_id: int) -> Optional[Game]
+    async def wipe_game_data(game_id: int) -> bool  # Transaction rollback support
+    async def update_game_result(game_id: int, away_score: int, home_score: int,
+                                 away_manager_id: int, home_manager_id: int,
+                                 game_num: int, scorecard_url: str) -> Game
+```
+
+#### PlayService Key Methods
+```python
+class PlayService:
+    async def create_plays_batch(plays: List[Dict[str, Any]]) -> bool
+    async def delete_plays_for_game(game_id: int) -> bool  # Transaction rollback
+    async def get_top_plays_by_wpa(game_id: int, limit: int = 3) -> List[Play]
+```
+
+#### DecisionService Key Methods
+```python
+class DecisionService:
+    async def create_decisions_batch(decisions: List[Dict[str, Any]]) -> bool
+    async def delete_decisions_for_game(game_id: int) -> bool  # Transaction rollback
+    def find_winning_losing_pitchers(decisions_data: List[Dict[str, Any]])
+        -> Tuple[Optional[int], Optional[int], Optional[int], List[int], List[int]]
+```
+
+#### SheetsService Key Methods
+```python
+class SheetsService:
+    async def open_scorecard(sheet_url: str) -> pygsheets.Spreadsheet
+    async def read_setup_data(scorecard: pygsheets.Spreadsheet) -> Dict[str, Any]
+    async def read_playtable_data(scorecard: pygsheets.Spreadsheet) -> List[Dict[str, Any]]
+    async def read_pitching_decisions(scorecard: pygsheets.Spreadsheet) -> List[Dict[str, Any]]
+    async def read_box_score(scorecard: pygsheets.Spreadsheet) -> Dict[str, List[int]]
+```
+
+**Transaction Rollback Pattern:**
+The game submission services implement a 3-state transaction rollback pattern:
+1. **PLAYS_POSTED**: Plays submitted → Rollback: Delete plays
+2. **GAME_PATCHED**: Game updated → Rollback: Wipe game + Delete plays
+3. **COMPLETE**: All data committed → No rollback needed
+
+**Usage Example:**
+```python
+# Create plays (state: PLAYS_POSTED)
+await play_service.create_plays_batch(plays_data)
+rollback_state = "PLAYS_POSTED"
+
+try:
+    # Update game (state: GAME_PATCHED)
+    await game_service.update_game_result(game_id, ...)
+    rollback_state = "GAME_PATCHED"
+
+    # Create decisions (state: COMPLETE)
+    await decision_service.create_decisions_batch(decisions_data)
+    rollback_state = "COMPLETE"
+except APIException as e:
+    # Rollback based on current state
+    if rollback_state == "GAME_PATCHED":
+        await game_service.wipe_game_data(game_id)
+        await play_service.delete_plays_for_game(game_id)
+    elif rollback_state == "PLAYS_POSTED":
+        await play_service.delete_plays_for_game(game_id)
+```
+
 ### Custom Features
 - **`custom_commands_service.py`** - User-created custom Discord commands
+- **`help_commands_service.py`** - Admin-managed help system and documentation
 
 ## Caching Integration
 

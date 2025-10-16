@@ -198,6 +198,38 @@ class StandingsService:
             logger.error(f"Error generating playoff picture: {e}")
             return {"division_leaders": [], "wild_card": []}
 
+    async def recalculate_standings(self, season: int) -> bool:
+        """
+        Trigger standings recalculation for a season.
+
+        Calls POST /standings/s{season}/recalculate
+
+        Args:
+            season: Season number to recalculate
+
+        Returns:
+            True if successful
+
+        Raises:
+            APIException: If recalculation fails
+        """
+        try:
+            client = await self.get_client()
+
+            # Use 8 second timeout for this potentially slow operation
+            response = await client.post(
+                f'standings/s{season}/recalculate',
+                {},
+                timeout=8.0
+            )
+
+            logger.info(f"Recalculated standings for season {season}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to recalculate standings: {e}")
+            raise APIException(f"Failed to recalculate standings: {e}")
+
 
 # Global service instance
 standings_service = StandingsService()

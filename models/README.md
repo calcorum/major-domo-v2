@@ -34,6 +34,172 @@ class SBABaseModel(BaseModel):
 - `Player` model: `id: int = Field(..., description="Player ID from database")`
 - `Team` model: `id: int = Field(..., description="Team ID from database")`
 
+### Game Submission Models (January 2025)
+
+New models for comprehensive game data submission from Google Sheets scorecards:
+
+#### Play Model (`play.py`)
+Represents a single play in a baseball game with complete statistics and game state.
+
+**Key Features:**
+- **92 total fields** supporting comprehensive play-by-play tracking
+- **68 fields from scorecard**: All data read from Google Sheets Playtable
+- **Required fields**: game_id, play_num, pitcher_id, on_base_code, inning details, outs, scores
+- **Base running**: Tracks up to 3 runners with starting and ending positions
+- **Statistics**: PA, AB, H, HR, RBI, BB, SO, SB, CS, errors, and 20+ more
+- **Advanced metrics**: WPA, RE24, ballpark effects
+- **Descriptive text generation**: Automatic play descriptions for key plays display
+
+**Field Validators:**
+```python
+@field_validator('on_first_final')
+@classmethod
+def no_final_if_no_runner_one(cls, v, info):
+    """Ensure on_first_final is None if no runner on first."""
+    if info.data.get('on_first_id') is None:
+        return None
+    return v
+```
+
+**Usage Example:**
+```python
+play = Play(
+    id=1234,
+    game_id=567,
+    play_num=1,
+    pitcher_id=100,
+    batter_id=101,
+    on_base_code="000",
+    inning_half="top",
+    inning_num=1,
+    batting_order=1,
+    starting_outs=0,
+    away_score=0,
+    home_score=0,
+    homerun=1,
+    rbi=1,
+    wpa=0.15
+)
+
+# Generate human-readable description
+description = play.descriptive_text(away_team, home_team)
+# Output: "Top 1: (NYY) homers"
+```
+
+**Field Categories:**
+- **Game Context**: game_id, play_num, inning_half, inning_num, starting_outs
+- **Players**: batter_id, pitcher_id, catcher_id, defender_id, runner_id
+- **Base Runners**: on_first_id, on_second_id, on_third_id (with _final positions)
+- **Offensive Stats**: pa, ab, hit, rbi, double, triple, homerun, bb, so, hbp, sac
+- **Defensive Stats**: outs, error, wild_pitch, passed_ball, pick_off, balk
+- **Advanced**: wpa, re24_primary, re24_running, ballpark effects (bphr, bpfo, bp1b, bplo)
+- **Pitching**: pitcher_rest_outs, inherited_runners, inherited_scored, on_hook_for_loss
+
+**API-Populated Nested Objects:**
+
+The Play model includes optional nested object fields for all ID references. These are populated by the API endpoint to provide complete context without additional lookups:
+
+```python
+class Play(SBABaseModel):
+    # ID field with corresponding optional object
+    game_id: int = Field(..., description="Game ID this play belongs to")
+    game: Optional[Game] = Field(None, description="Game object (API-populated)")
+
+    pitcher_id: int = Field(..., description="Pitcher ID")
+    pitcher: Optional[Player] = Field(None, description="Pitcher object (API-populated)")
+
+    batter_id: Optional[int] = Field(None, description="Batter ID")
+    batter: Optional[Player] = Field(None, description="Batter object (API-populated)")
+
+    # ... and so on for all player/team IDs
+```
+
+**Pattern Details:**
+- **Placement**: Optional object field immediately follows its corresponding ID field
+- **Naming**: Object field uses singular form of ID field name (e.g., `batter_id` → `batter`)
+- **API Population**: Database endpoint includes nested objects in response
+- **Future Enhancement**: Validators could ensure consistency between ID and object fields
+
+**ID Fields with Nested Objects:**
+- `game_id` → `game: Optional[Game]`
+- `pitcher_id` → `pitcher: Optional[Player]`
+- `batter_id` → `batter: Optional[Player]`
+- `batter_team_id` → `batter_team: Optional[Team]`
+- `pitcher_team_id` → `pitcher_team: Optional[Team]`
+- `on_first_id` → `on_first: Optional[Player]`
+- `on_second_id` → `on_second: Optional[Player]`
+- `on_third_id` → `on_third: Optional[Player]`
+- `catcher_id` → `catcher: Optional[Player]`
+- `catcher_team_id` → `catcher_team: Optional[Team]`
+- `defender_id` → `defender: Optional[Player]`
+- `defender_team_id` → `defender_team: Optional[Team]`
+- `runner_id` → `runner: Optional[Player]`
+- `runner_team_id` → `runner_team: Optional[Team]`
+
+**Usage Example:**
+```python
+# API returns play with nested objects populated
+play = await play_service.get_play(play_id=123)
+
+# Access nested objects directly without additional lookups
+if play.batter:
+    print(f"Batter: {play.batter.name}")
+if play.pitcher:
+    print(f"Pitcher: {play.pitcher.name}")
+if play.game:
+    print(f"Game: {play.game.matchup_display}")
+```
+
+#### Decision Model (`decision.py`)
+Tracks pitching decisions (wins, losses, saves, holds) for game results.
+
+**Key Features:**
+- **Pitching decisions**: Win, Loss, Save, Hold, Blown Save flags
+- **Game metadata**: game_id, season, week, game_num
+- **Pitcher workload**: rest_ip, rest_required, inherited runners
+- **Human-readable repr**: Shows decision type (W/L/SV/HLD/BS)
+
+**Usage Example:**
+```python
+decision = Decision(
+    id=456,
+    game_id=567,
+    season=12,
+    week=5,
+    game_num=2,
+    pitcher_id=200,
+    team_id=10,
+    win=1,  # Winning pitcher
+    is_start=True,
+    rest_ip=7.0,
+    rest_required=4
+)
+
+print(decision)
+# Output: Decision(pitcher_id=200, game_id=567, type=W)
+```
+
+**Field Categories:**
+- **Game Context**: game_id, season, week, game_num
+- **Pitcher**: pitcher_id, team_id
+- **Decisions**: win, loss, hold, is_save, b_save (all 0 or 1)
+- **Workload**: is_start, irunners, irunners_scored, rest_ip, rest_required
+
+**Data Pipeline:**
+```
+Google Sheets Scorecard
+       ↓
+SheetsService.read_playtable_data() → 68 fields per play
+       ↓
+PlayService.create_plays_batch() → Validate with Play model
+       ↓
+Database API /plays endpoint
+       ↓
+PlayService.get_top_plays_by_wpa() → Return Play objects
+       ↓
+Play.descriptive_text() → Human-readable descriptions
+```
+
 ## Model Categories
 
 ### Core Entities
@@ -53,6 +219,8 @@ class SBABaseModel(BaseModel):
 
 #### Game Operations
 - **`game.py`** - Individual game results and scheduling
+- **`play.py`** (NEW - January 2025) - Play-by-play data for game submissions
+- **`decision.py`** (NEW - January 2025) - Pitching decisions and game results
 - **`transaction.py`** - Player transactions (trades, waivers, etc.)
 
 #### Draft System

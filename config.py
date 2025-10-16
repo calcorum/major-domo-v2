@@ -25,7 +25,10 @@ class BotConfig(BaseSettings):
     log_level: str = "INFO"
     environment: str = "development"
     testing: bool = False
-    
+
+    # Google Sheets settings
+    sheets_credentials_path: str = "/data/major-domo-service-creds.json"
+
     # Optional Redis caching settings
     redis_url: str = ""  # Empty string means no Redis caching
     redis_cache_ttl: int = 300  # 5 minutes default TTL
