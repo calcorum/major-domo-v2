@@ -9,6 +9,7 @@ from typing import Optional, List
 import discord
 from discord.ext import commands
 
+from config import get_config
 from services.player_service import player_service
 from models.player import Player
 from utils.logging import get_contextual_logger
@@ -329,7 +330,6 @@ class EnhancedPlayerCommands(commands.Cog):
     @logged_command("/player-search-modal")
     async def player_search_modal(self, interaction: discord.Interaction):
         """Demonstrate modal-based player search."""
-from config import get_config
         modal = PlayerSearchModal()
         await interaction.response.send_modal(modal)
         

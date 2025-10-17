@@ -9,6 +9,7 @@ from typing import Optional, List
 import discord
 from discord.ext import commands
 
+from config import get_config
 from services.team_service import team_service
 from models.team import Team
 from utils.logging import get_contextual_logger
@@ -307,5 +308,4 @@ class MigrationExampleCommands(commands.Cog):
 
 async def setup(bot: commands.Bot):
     """Load the migration example commands cog."""
-from config import get_config
     await bot.add_cog(MigrationExampleCommands(bot))

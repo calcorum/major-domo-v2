@@ -9,6 +9,7 @@ from discord import app_commands
 from discord.ext import commands
 from typing import List, Optional
 
+from config import get_config
 from utils.decorators import logged_command
 from utils.logging import get_contextual_logger, set_discord_context
 from services.chart_service import get_chart_service, Chart
@@ -633,7 +634,6 @@ class ChartCategoryGroup(app_commands.Group):
 
 async def setup(bot: commands.Bot):
     """Setup function for chart commands."""
-from config import get_config
     await bot.add_cog(ChartCommands(bot))
     bot.tree.add_command(ChartManageGroup())
     bot.tree.add_command(ChartCategoryGroup())

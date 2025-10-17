@@ -9,6 +9,7 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 
+from config import get_config
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
 from utils.autocomplete import player_autocomplete, major_league_team_autocomplete, team_autocomplete
@@ -531,5 +532,4 @@ class TradeCommands(commands.Cog):
 
 async def setup(bot):
     """Setup function for the cog."""
-from config import get_config
     await bot.add_cog(TradeCommands(bot))

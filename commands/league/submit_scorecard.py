@@ -23,10 +23,7 @@ from utils.discord_helpers import send_to_channel, format_key_plays
 from utils.team_utils import get_user_major_league_team
 from views.embeds import EmbedTemplate
 from views.confirmations import ConfirmationView
-from constants import (
-    SBA_NETWORK_NEWS_CHANNEL,
-    SBA_PLAYERS_ROLE_NAME
-)
+from config import get_config
 from exceptions import SheetsException, APIException
 from models.team import Team
 from models.player import Player
@@ -50,7 +47,7 @@ class SubmitScorecardCommands(commands.Cog):
     @app_commands.describe(
         sheet_url="Full URL to the Google Sheets scorecard"
     )
-    @app_commands.checks.has_any_role(SBA_PLAYERS_ROLE_NAME)
+    @app_commands.checks.has_any_role(get_config().sba_players_role_name)
     @logged_command("/submit-scorecard")
     async def submit_scorecard(
         self,
@@ -357,7 +354,7 @@ class SubmitScorecardCommands(commands.Cog):
             # Phase 13: Post to News Channel
             await send_to_channel(
                 self.bot,
-                SBA_NETWORK_NEWS_CHANNEL,
+                get_config().sba_network_news_channel,
                 content=None,
                 embed=results_embed
             )

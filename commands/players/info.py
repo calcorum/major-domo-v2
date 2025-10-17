@@ -8,6 +8,8 @@ from typing import Optional, List
 import discord
 from discord.ext import commands
 
+from config import get_config
+
 from services.player_service import player_service
 from services.stats_service import stats_service
 from utils.logging import get_contextual_logger
@@ -172,7 +174,6 @@ class PlayerInfoCommands(commands.Cog):
         pitching_stats=None
     ) -> discord.Embed:
         """Create a comprehensive player embed with statistics."""
-from config import get_config
         # Determine embed color based on team
         embed_color = EmbedColors.PRIMARY
         if hasattr(player, 'team') and player.team and hasattr(player.team, 'color'):

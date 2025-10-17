@@ -10,6 +10,7 @@ from typing import Optional
 import discord
 from discord.ext import commands
 
+from config import get_config
 from services.team_service import team_service
 from services.schedule_service import ScheduleService
 from services.league_service import league_service
@@ -351,7 +352,6 @@ class VoiceChannelCommands(commands.Cog):
     @commands.command(name="private")
     async def deprecated_private_voice(self, ctx: commands.Context):
         """Deprecated command - redirect to new slash command."""
-from config import get_config
         embed = EmbedTemplate.info(
             title="Command Deprecated",
             description=(

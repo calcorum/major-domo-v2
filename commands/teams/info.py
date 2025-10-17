@@ -3,6 +3,7 @@ Team information commands for Discord Bot v2.0
 """
 import logging
 from typing import Optional
+from config import get_config
 
 import discord
 from discord.ext import commands
@@ -128,7 +129,6 @@ class TeamInfoCommands(commands.Cog):
 
     async def _create_team_embed(self, team: Team, standings_data: Optional[dict] = None) -> discord.Embed:
         """Create a rich embed for team information."""
-from config import get_config
         embed = EmbedTemplate.create_base_embed(
             title=f"{team.abbrev} - {team.lname}",
             description=f"Season {team.season} Team Information",

@@ -99,7 +99,7 @@ class DiceRollCommands(commands.Cog):
         roll_results = self._parse_and_roll_multiple_dice(dice_notation)
 
         # Create embed for the roll results
-        embed = self._create_multi_roll_embed(dice_notation, roll_results, interaction.user)
+        embed = self._create_multi_roll_embed(dice_notation, roll_results, interaction.user, set_author=False)
         embed.title = f'At bat roll for {interaction.user.display_name}'
         await interaction.followup.send(embed=embed)
 
@@ -146,8 +146,8 @@ class DiceRollCommands(commands.Cog):
         roll_results = self._roll_weighted_scout_dice(card_type_value)
 
         # Create embed for the roll results
-        embed = self._create_multi_roll_embed("1d6;2d6;1d20", roll_results, interaction.user)
-        embed.title = f'Scouting roll for {interaction.user.display_name} ({card_type.name})'
+        embed = self._create_multi_roll_embed("1d6;2d6;1d20", roll_results, interaction.user, set_author=False)
+        embed.title = f'Scouting roll for {interaction.user.display_name}'
         await interaction.followup.send(embed=embed)
 
     @discord.app_commands.command(
@@ -416,7 +416,7 @@ class DiceRollCommands(commands.Cog):
             14: '2-base error for e28 -> e31, e34, e35, e50\n1-base error for e14, e16, e19, e20, e22, e32, e39, e44, e56, e62',
             13: '2-base error for e41, e47, e53, e59\n1-base error for e10, e15, e23, e25, e28, e30, e32, e33, e35, e44, e65',
             12: '2-base error for e62\n1-base error for e12, e17, e22, e24, e27, e29, e34 -> e50, e56 -> e59, e65',
-            11: '2-base error for e56, e65\n1-base error for e13, e18, e20, e21, e23, e26, e28, e31 -> e33, e35, e37, e41 -> e53, e59, e65',
+            11: '2-base error for e56, e65\n1-base error for e13, e18, e20, e21, e23, e26, e28, e31 -> e33, e35, e37, e41 -> e53, e59',
             10: '1-base error for e26, e31, e41, e53 -> 65',
             9: '1-base error for e24, e27, e29, e34, e37, e39, e47 -> e65',
             8: '1-base error for e25, e30, e33, e47, e53, e56, e62, e65',
@@ -637,18 +637,19 @@ class DiceRollCommands(commands.Cog):
 
         return [first_d6_result, second_result, third_result]
 
-    def _create_multi_roll_embed(self, dice_notation: str, roll_results: list[DiceRoll], user: discord.User | discord.Member) -> discord.Embed:
+    def _create_multi_roll_embed(self, dice_notation: str, roll_results: list[DiceRoll], user: discord.User | discord.Member, set_author: bool = True) -> discord.Embed:
         """Create an embed for multiple dice roll results."""
         embed = EmbedTemplate.create_base_embed(
             title="🎲 Dice Roll",
             color=EmbedColors.PRIMARY
         )
 
-        # Set user info
-        embed.set_author(
-            name=user.display_name,
-            icon_url=user.display_avatar.url
-        )
+        if set_author:
+            # Set user info
+            embed.set_author(
+                name=user.name,
+                icon_url=user.display_avatar.url
+            )
 
         # Create summary line with totals
         totals = [str(result.total) for result in roll_results]

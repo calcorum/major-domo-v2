@@ -7,6 +7,8 @@ from typing import Optional, Union, Any, List
 from datetime import datetime
 from dataclasses import dataclass
 
+from config import get_config
+
 import discord
 
 
@@ -384,7 +386,6 @@ class EmbedBuilder:
     
     def author(self, name: str, url: Optional[str] = None, icon_url: Optional[str] = None) -> 'EmbedBuilder':
         """Set embed author."""
-from config import get_config
         self._embed.set_author(name=name, url=url, icon_url=icon_url)
         return self
     

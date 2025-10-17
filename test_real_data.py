@@ -19,6 +19,7 @@ os.environ.setdefault('LOG_LEVEL', 'DEBUG')
 os.environ.setdefault('ENVIRONMENT', 'testing')
 os.environ.setdefault('TESTING', 'true')
 
+from config import get_config
 from services.player_service import player_service
 from utils.logging import get_contextual_logger, set_discord_context
 from api.client import cleanup_global_client

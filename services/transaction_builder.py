@@ -9,6 +9,7 @@ from enum import Enum
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
+from config import get_config
 from models.transaction import Transaction
 from models.team import Team
 from models.player import Player
@@ -522,7 +523,6 @@ def get_transaction_builder(user_id: int, team: Team) -> TransactionBuilder:
 
 def clear_transaction_builder(user_id: int) -> None:
     """Clear transaction builder for a user."""
-from config import get_config
     if user_id in _active_builders:
         del _active_builders[user_id]
         logger.info(f"Cleared transaction builder for user {user_id}")

@@ -7,6 +7,7 @@ from typing import Optional, Dict, Any, List
 import discord
 from discord.ext import commands
 
+from config import get_config
 from models.player import Player
 from services import team_service, player_service
 from models.team import Team
@@ -140,7 +141,6 @@ class TeamRosterCommands(commands.Cog):
     def _create_player_list_embed(self, team: Team, roster_name: str, 
                                  players: List[Dict[str, Any]]) -> discord.Embed:
         """Create an embed with detailed player list."""
-from config import get_config
         roster_titles = {
             'active': 'Active Roster',
             'longil': 'Minor League',

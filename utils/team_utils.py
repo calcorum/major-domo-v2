@@ -8,6 +8,7 @@ import discord
 
 from models.team import Team
 from services.team_service import team_service
+from config import get_config
 
 
 async def get_user_major_league_team(
@@ -88,7 +89,6 @@ async def get_team_by_abbrev_with_validation(
     Returns:
         Team object if found, None if not (error message already sent)
     """
-from config import get_config
     try:
         team = await team_service.get_team_by_abbrev(team_abbrev, season)
 

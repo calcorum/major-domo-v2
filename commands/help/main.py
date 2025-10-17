@@ -8,6 +8,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from config import get_config
 from services.help_commands_service import (
     help_commands_service,
     HelpCommandNotFoundError,
@@ -368,7 +369,6 @@ class HelpCommands(commands.Cog):
         show_deleted: bool = False
     ):
         """Browse all help topics with optional category filter."""
-from config import get_config
         await interaction.response.defer()
 
         try:

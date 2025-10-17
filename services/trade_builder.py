@@ -8,6 +8,7 @@ from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timezone
 import uuid
 
+from config import get_config
 from models.trade import Trade, TradeParticipant, TradeMove, TradeStatus
 from models.team import Team, RosterType
 from models.player import Player
@@ -466,7 +467,6 @@ def get_trade_builder(user_id: int, initiating_team: Team) -> TradeBuilder:
 
 def clear_trade_builder(user_id: int) -> None:
     """Clear trade builder for a user."""
-from config import get_config
     trade_key = f"{user_id}:trade"
     if trade_key in _active_trade_builders:
         del _active_trade_builders[trade_key]

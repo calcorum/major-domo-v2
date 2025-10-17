@@ -6,6 +6,7 @@ Handles team-related operations with roster management and league queries.
 import logging
 from typing import Optional, List, Dict, Any
 
+from config import get_config
 from services.base_service import BaseService
 from models.team import Team, RosterType
 from exceptions import APIException
@@ -299,7 +300,6 @@ class TeamService(BaseService[Team]):
     
     async def get_current_season_teams(self) -> List[Team]:
         """
-from config import get_config
         Get all teams for the current season.
         
         Returns:

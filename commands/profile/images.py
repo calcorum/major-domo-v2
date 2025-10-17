@@ -12,6 +12,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from config import get_config
 from services.player_service import player_service
 from services.team_service import team_service
 from utils.logging import get_contextual_logger
@@ -229,7 +230,6 @@ class ImageCommands(commands.Cog):
         image_url: str
     ):
         """Update a player's image (fancy card or headshot)."""
-from config import get_config
         # Defer response for potentially slow operations
         await interaction.response.defer(ephemeral=True)
 

@@ -6,6 +6,7 @@ Handles player-related operations with team population and search functionality.
 import logging
 from typing import Optional, List, TYPE_CHECKING
 
+from config import get_config
 from services.base_service import BaseService
 from models.player import Player
 from exceptions import APIException
@@ -191,7 +192,7 @@ class PlayerService(BaseService[Player]):
         """
         try:
             if season is None:
-                                season = get_config().sba_current_season
+                season = get_config().sba_current_season
 
             # Use the existing name-based search that actually works
             players = await self.get_players_by_name(query, season)
@@ -278,7 +279,6 @@ class PlayerService(BaseService[Player]):
     
     async def update_player(self, player_id: int, updates: dict) -> Optional[Player]:
         """
-from config import get_config
         Update player information.
 
         Args:

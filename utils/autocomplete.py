@@ -7,6 +7,7 @@ from typing import List, Optional
 import discord
 from discord import app_commands
 
+from config import get_config
 from services.player_service import player_service
 from services.team_service import team_service
 from utils.team_utils import get_user_major_league_team
@@ -149,7 +150,6 @@ async def major_league_team_autocomplete(
 
         # Filter to only Major League teams using the model's helper method
         from models.team import RosterType
-from config import get_config
         ml_teams = [
             team for team in all_teams
             if team.roster_type() == RosterType.MAJOR_LEAGUE

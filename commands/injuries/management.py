@@ -153,10 +153,11 @@ class InjuryGroup(app_commands.Group):
                 gif_search_text = ['well shit', 'well fuck', 'god dammit']
             else:
                 gif_search_text = ['bummer', 'well damn']
+            if player.is_pitcher:
+                result_text += ' plus their current rest requirement'
         elif injury_result == 'REM':
             if player.is_pitcher:
                 result_text = '**FATIGUED**'
-                embed.set_footer(text='For pitchers, add their current rest to the injury')
             else:
                 result_text = "**REMAINDER OF GAME**"
             embed.color = discord.Color.gold()

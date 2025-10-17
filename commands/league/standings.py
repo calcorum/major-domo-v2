@@ -8,6 +8,7 @@ from typing import Optional
 import discord
 from discord.ext import commands
 
+from config import get_config
 from services.standings_service import standings_service
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
@@ -249,5 +250,4 @@ class StandingsCommands(commands.Cog):
 
 async def setup(bot: commands.Bot):
     """Load the standings commands cog."""
-from config import get_config
     await bot.add_cog(StandingsCommands(bot))

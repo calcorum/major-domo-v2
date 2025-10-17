@@ -6,6 +6,7 @@ Handles league-wide operations including current state, standings, and season in
 import logging
 from typing import Optional, List, Dict, Any
 
+from config import get_config
 from services.base_service import BaseService
 from models.current import Current
 from exceptions import APIException
@@ -112,7 +113,6 @@ class LeagueService(BaseService[Current]):
     
     async def get_league_leaders(self, stat_type: str = 'batting', season: Optional[int] = None, limit: int = 10) -> Optional[List[Dict[str, Any]]]:
         """
-from config import get_config
         Get league leaders for a specific statistic category.
         
         Args:

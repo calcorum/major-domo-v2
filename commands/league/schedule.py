@@ -9,6 +9,7 @@ import asyncio
 import discord
 from discord.ext import commands
 
+from config import get_config
 from services.schedule_service import schedule_service
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
@@ -349,5 +350,4 @@ class ScheduleCommands(commands.Cog):
 
 async def setup(bot: commands.Bot):
     """Load the schedule commands cog."""
-from config import get_config
     await bot.add_cog(ScheduleCommands(bot))
