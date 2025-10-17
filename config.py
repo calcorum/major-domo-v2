@@ -68,6 +68,10 @@ class BotConfig(BaseSettings):
     # Google Sheets settings
     sheets_credentials_path: str = "/app/data/major-domo-service-creds.json"
 
+    # Giphy API settings
+    giphy_api_key: str = "H86xibttEuUcslgmMM6uu74IgLEZ7UOD"
+    giphy_translate_url: str = "https://api.giphy.com/v1/gifs/translate"
+
     # Optional Redis caching settings
     redis_url: str = ""  # Empty string means no Redis caching
     redis_cache_ttl: int = 300  # 5 minutes default TTL

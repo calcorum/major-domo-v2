@@ -427,10 +427,114 @@ INFO - Development mode: no command changes detected, skipping sync
 4. **Monitor Discord API** - watch for rate limiting or errors
 5. **Use development mode** - auto-sync helps debug command issues
 
+## 📦 Command Groups Pattern
+
+### **⚠️ CRITICAL: Use `app_commands.Group`, NOT `commands.GroupCog`**
+
+Discord.py provides two ways to create command groups (e.g., `/injury roll`, `/injury clear`):
+1. **`app_commands.Group`** ✅ **RECOMMENDED - Use this pattern**
+2. **`commands.GroupCog`** ❌ **AVOID - Has interaction timing issues**
+
+### **Why `commands.GroupCog` Fails**
+
+`commands.GroupCog` has a critical bug that causes **duplicate interaction processing**, leading to:
+- **404 "Unknown interaction" errors** when trying to defer/respond
+- **Interaction already acknowledged errors** in error handlers
+- **Commands fail randomly** even with proper error handling
+
+**Root Cause:** GroupCog triggers the command handler twice for a single interaction, causing the first execution to consume the interaction token before the second execution can respond.
+
+### **✅ Correct Pattern: `app_commands.Group`**
+
+Use the same pattern as `ChartCategoryGroup` and `ChartManageGroup`:
+
+```python
+from discord import app_commands
+from discord.ext import commands
+from utils.decorators import logged_command
+
+class InjuryGroup(app_commands.Group):
+    """Injury management command group."""
+
+    def __init__(self):
+        super().__init__(
+            name="injury",
+            description="Injury management commands"
+        )
+        self.logger = get_contextual_logger(f'{__name__}.InjuryGroup')
+
+    @app_commands.command(name="roll", description="Roll for injury")
+    @logged_command("/injury roll")
+    async def injury_roll(self, interaction: discord.Interaction, player_name: str):
+        """Roll for injury using player's injury rating."""
+        await interaction.response.defer()
+
+        # Command implementation
+        # No try/catch needed - @logged_command handles it
+
+async def setup(bot: commands.Bot):
+    """Setup function for loading the injury commands."""
+    bot.tree.add_command(InjuryGroup())
+```
+
+### **Key Differences**
+
+| Feature | `app_commands.Group` ✅ | `commands.GroupCog` ❌ |
+|---------|------------------------|------------------------|
+| **Registration** | `bot.tree.add_command(Group())` | `await bot.add_cog(Cog(bot))` |
+| **Initialization** | `__init__(self)` no bot param | `__init__(self, bot)` requires bot |
+| **Decorator Support** | `@logged_command` works perfectly | Causes duplicate execution |
+| **Interaction Handling** | Single execution, reliable | Duplicate execution, 404 errors |
+| **Recommended Use** | ✅ All command groups | ❌ Never use |
+
+### **Migration from GroupCog to Group**
+
+If you have an existing `commands.GroupCog`, convert it:
+
+1. **Change class inheritance:**
+   ```python
+   # Before
+   class InjuryCog(commands.GroupCog, name="injury"):
+       def __init__(self, bot):
+           self.bot = bot
+           super().__init__()
+
+   # After
+   class InjuryGroup(app_commands.Group):
+       def __init__(self):
+           super().__init__(name="injury", description="...")
+   ```
+
+2. **Update registration:**
+   ```python
+   # Before
+   await bot.add_cog(InjuryCog(bot))
+
+   # After
+   bot.tree.add_command(InjuryGroup())
+   ```
+
+3. **Remove duplicate interaction checks:**
+   ```python
+   # Before (needed for GroupCog bug workaround)
+   if not interaction.response.is_done():
+       await interaction.response.defer()
+
+   # After (clean, simple)
+   await interaction.response.defer()
+   ```
+
+### **Working Examples**
+
+**Good examples to reference:**
+- `commands/utilities/charts.py` - `ChartManageGroup` and `ChartCategoryGroup`
+- `commands/injuries/management.py` - `InjuryGroup`
+
+Both use `app_commands.Group` successfully with `@logged_command` decorators.
+
 ## 🚦 Future Enhancements
 
 ### **Planned Features**
-- **Command Groups**: Discord.py command groups for better organization (`/player info`, `/player stats`)
 - **Permission Decorators**: Role-based command restrictions per package
 - **Dynamic Loading**: Hot-reload commands without bot restart
 - **Usage Metrics**: Command usage tracking and analytics

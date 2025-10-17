@@ -1,103 +1,23 @@
 """
-Giphy Service for Soak Easter Egg
+Giphy Service Wrapper for Soak Commands
 
-Provides async interface to Giphy API with disappointment-based search phrases.
+This module provides backwards compatibility for existing soak commands
+by re-exporting functions from the centralized GiphyService in services/.
+
+All new code should import from services.giphy_service instead.
 """
-import random
-import logging
-from typing import List, Optional
-import aiohttp
+from services import giphy_service
 
-logger = logging.getLogger(f'{__name__}.GiphyService')
-
-# Giphy API configuration
-GIPHY_API_KEY = 'H86xibttEuUcslgmMM6uu74IgLEZ7UOD'
-GIPHY_TRANSLATE_URL = 'https://api.giphy.com/v1/gifs/translate'
-
-# Disappointment tier configuration
-DISAPPOINTMENT_TIERS = {
-    'tier_1': {
-        'max_seconds': 1800,  # 30 minutes
-        'phrases': [
-            "extremely disappointed",
-            "so disappointed",
-            "are you kidding me",
-            "seriously",
-            "unbelievable"
-        ],
-        'description': "Maximum Disappointment"
-    },
-    'tier_2': {
-        'max_seconds': 7200,  # 2 hours
-        'phrases': [
-            "very disappointed",
-            "can't believe you",
-            "not happy",
-            "shame on you",
-            "facepalm"
-        ],
-        'description': "Severe Disappointment"
-    },
-    'tier_3': {
-        'max_seconds': 21600,  # 6 hours
-        'phrases': [
-            "disappointed",
-            "not impressed",
-            "shaking head",
-            "eye roll",
-            "really"
-        ],
-        'description': "Strong Disappointment"
-    },
-    'tier_4': {
-        'max_seconds': 86400,  # 24 hours
-        'phrases': [
-            "mildly disappointed",
-            "not great",
-            "could be better",
-            "sigh",
-            "seriously"
-        ],
-        'description': "Moderate Disappointment"
-    },
-    'tier_5': {
-        'max_seconds': 604800,  # 7 days
-        'phrases': [
-            "slightly disappointed",
-            "oh well",
-            "shrug",
-            "meh",
-            "not bad"
-        ],
-        'description': "Mild Disappointment"
-    },
-    'tier_6': {
-        'max_seconds': float('inf'),  # 7+ days
-        'phrases': [
-            "not disappointed",
-            "relieved",
-            "proud",
-            "been worse",
-            "fine i guess"
-        ],
-        'description': "Minimal Disappointment"
-    },
-    'first_ever': {
-        'phrases': [
-            "here we go",
-            "oh boy",
-            "uh oh",
-            "getting started",
-            "and so it begins"
-        ],
-        'description': "The Beginning"
-    }
-}
+# Re-export tier configuration for backwards compatibility
+from services.giphy_service import DISAPPOINTMENT_TIERS
 
 
-def get_tier_for_seconds(seconds_elapsed: Optional[int]) -> str:
+def get_tier_for_seconds(seconds_elapsed):
     """
     Determine disappointment tier based on elapsed time.
+
+    This is a wrapper function for backwards compatibility.
+    Use services.giphy_service.GiphyService.get_tier_for_seconds() directly in new code.
 
     Args:
         seconds_elapsed: Seconds since last soak, or None for first ever
@@ -105,19 +25,15 @@ def get_tier_for_seconds(seconds_elapsed: Optional[int]) -> str:
     Returns:
         Tier key string (e.g., 'tier_1', 'first_ever')
     """
-    if seconds_elapsed is None:
-        return 'first_ever'
-
-    for tier_key in ['tier_1', 'tier_2', 'tier_3', 'tier_4', 'tier_5', 'tier_6']:
-        if seconds_elapsed <= DISAPPOINTMENT_TIERS[tier_key]['max_seconds']:
-            return tier_key
-
-    return 'tier_6'  # Fallback to lowest disappointment
+    return giphy_service.get_tier_for_seconds(seconds_elapsed)
 
 
-def get_random_phrase_for_tier(tier_key: str) -> str:
+def get_random_phrase_for_tier(tier_key):
     """
     Get a random search phrase from the specified tier.
+
+    This is a wrapper function for backwards compatibility.
+    Use services.giphy_service.GiphyService.get_random_phrase_for_tier() directly in new code.
 
     Args:
         tier_key: Tier identifier (e.g., 'tier_1', 'first_ever')
@@ -125,13 +41,15 @@ def get_random_phrase_for_tier(tier_key: str) -> str:
     Returns:
         Random search phrase from that tier
     """
-    phrases = DISAPPOINTMENT_TIERS[tier_key]['phrases']
-    return random.choice(phrases)
+    return giphy_service.get_random_phrase_for_tier(tier_key)
 
 
-def get_tier_description(tier_key: str) -> str:
+def get_tier_description(tier_key):
     """
     Get the human-readable description for a tier.
+
+    This is a wrapper function for backwards compatibility.
+    Use services.giphy_service.GiphyService.get_tier_description() directly in new code.
 
     Args:
         tier_key: Tier identifier
@@ -139,12 +57,15 @@ def get_tier_description(tier_key: str) -> str:
     Returns:
         Description string
     """
-    return DISAPPOINTMENT_TIERS[tier_key]['description']
+    return giphy_service.get_tier_description(tier_key)
 
 
-async def get_disappointment_gif(tier_key: str) -> Optional[str]:
+async def get_disappointment_gif(tier_key):
     """
     Fetch a GIF from Giphy based on disappointment tier.
+
+    This is a wrapper function for backwards compatibility.
+    Use services.giphy_service.GiphyService.get_disappointment_gif() directly in new code.
 
     Randomly selects a search phrase from the tier and queries Giphy.
     Filters out Trump GIFs (legacy behavior).
@@ -156,40 +77,8 @@ async def get_disappointment_gif(tier_key: str) -> Optional[str]:
     Returns:
         GIF URL string, or None if all attempts fail
     """
-    phrases = DISAPPOINTMENT_TIERS[tier_key]['phrases']
-
-    # Shuffle phrases for variety and retry capability
-    shuffled_phrases = random.sample(phrases, len(phrases))
-
-    async with aiohttp.ClientSession() as session:
-        for phrase in shuffled_phrases:
-            try:
-                url = f"{GIPHY_TRANSLATE_URL}?s={phrase}&api_key={GIPHY_API_KEY}"
-
-                async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-
-                        # Filter out Trump GIFs (legacy behavior)
-                        gif_title = data.get('data', {}).get('title', '').lower()
-                        if 'trump' in gif_title:
-                            logger.debug(f"Filtered out Trump GIF for phrase: {phrase}")
-                            continue
-
-                        gif_url = data.get('data', {}).get('url')
-                        if gif_url:
-                            logger.info(f"Successfully fetched GIF for phrase: {phrase}")
-                            return gif_url
-                        else:
-                            logger.warning(f"No GIF URL in response for phrase: {phrase}")
-                    else:
-                        logger.warning(f"Giphy API returned status {resp.status} for phrase: {phrase}")
-
-            except aiohttp.ClientError as e:
-                logger.error(f"HTTP error fetching GIF for phrase '{phrase}': {e}")
-            except Exception as e:
-                logger.error(f"Unexpected error fetching GIF for phrase '{phrase}': {e}")
-
-    # All phrases failed
-    logger.error(f"Failed to fetch any GIF for tier: {tier_key}")
-    return None
+    try:
+        return await giphy_service.get_disappointment_gif(tier_key)
+    except Exception:
+        # Return None for backwards compatibility with old error handling
+        return None
