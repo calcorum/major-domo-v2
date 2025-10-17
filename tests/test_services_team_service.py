@@ -4,6 +4,7 @@ Tests for TeamService functionality
 import pytest
 from unittest.mock import AsyncMock
 
+from config import get_config
 from services.team_service import TeamService, team_service
 from models.team import Team
 from exceptions import APIException
@@ -314,7 +315,6 @@ class TestGlobalTeamServiceInstance:
     
     def test_team_service_global(self):
         """Test global team service instance."""
-from config import get_config
         assert isinstance(team_service, TeamService)
         assert team_service.model_class == Team
         assert team_service.endpoint == 'teams'

@@ -4,6 +4,7 @@ Tests for PlayerService functionality
 import pytest
 from unittest.mock import AsyncMock
 
+from config import get_config
 from services.player_service import PlayerService, player_service
 from models.player import Player
 from exceptions import APIException
@@ -338,7 +339,6 @@ class TestGlobalPlayerServiceInstance:
     @pytest.mark.asyncio
     async def test_service_independence(self):
         """Test that service instances are independent."""
-from config import get_config
         service1 = PlayerService()
         service2 = PlayerService()
         

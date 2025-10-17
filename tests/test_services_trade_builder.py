@@ -7,6 +7,7 @@ move validation, and trade validation logic.
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from config import get_config
 from services.trade_builder import (
     TradeBuilder,
     TradeValidationResult,
@@ -548,7 +549,6 @@ class TestTradeValidationResult:
 
         # Mock participant validations
         from services.transaction_builder import RosterValidationResult
-from config import get_config
 
         team1_validation = RosterValidationResult(
             is_legal=False,
