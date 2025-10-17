@@ -211,7 +211,7 @@ class HelpCommandDeleteConfirmView(BaseView):
         self.result = True
 
         embed = EmbedTemplate.success(
-            title="✅ Help Topic Deleted",
+            title="Help Topic Deleted",
             description=f"The help topic `/help {self.help_command.name}` has been deleted (soft delete)."
         )
 

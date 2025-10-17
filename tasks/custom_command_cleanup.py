@@ -233,7 +233,7 @@ class CustomCommandCleanupTask:
         plural = len(commands) > 1
         
         embed = EmbedTemplate.warning(
-            title="⚠️ Custom Command Cleanup Warning",
+            title="Custom Command Cleanup Warning",
             description=f"The following custom command{'s' if plural else ''} will be deleted in 30 days if not used:"
         )
         
@@ -273,7 +273,7 @@ class CustomCommandCleanupTask:
         plural = len(commands) > 1
         
         embed = EmbedTemplate.error(
-            title="🗑️ Custom Commands Deleted",
+            title="Custom Commands Deleted",
             description=f"The following custom command{'s' if plural else ''} {'have' if plural else 'has'} been automatically deleted due to inactivity:"
         )
         

@@ -119,18 +119,18 @@ class CustomCommandCreateConfirmationView(BaseView):
             )
             
             embed = EmbedTemplate.success(
-                title="✅ Command Created",
+                title="Command Created",
                 description=f"The command `/cc {self.command_data['name']}` has been created successfully!"
             )
             
         except BotException as e:
             embed = EmbedTemplate.error(
-                title="❌ Creation Failed",
+                title="Creation Failed",
                 description=f"Failed to create command: {str(e)}"
             )
         except Exception as e:
             embed = EmbedTemplate.error(
-                title="❌ Unexpected Error",
+                title="Unexpected Error",
                 description="An unexpected error occurred while creating the command."
             )
         
@@ -268,18 +268,18 @@ class CustomCommandEditConfirmationView(BaseView):
             )
             
             embed = EmbedTemplate.success(
-                title="✅ Command Updated",
+                title="Command Updated",
                 description=f"The command `/cc {self.edit_data['name']}` has been updated successfully!"
             )
             
         except BotException as e:
             embed = EmbedTemplate.error(
-                title="❌ Update Failed",
+                title="Update Failed",
                 description=f"Failed to update command: {str(e)}"
             )
         except Exception as e:
             embed = EmbedTemplate.error(
-                title="❌ Unexpected Error",
+                title="Unexpected Error",
                 description="An unexpected error occurred while updating the command."
             )
         
@@ -571,7 +571,7 @@ class SingleCommandManagementView(BaseView):
     async def delete_command(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Delete the command with confirmation."""
         embed = EmbedTemplate.warning(
-            title="⚠️ Delete Command",
+            title="Delete Command",
             description=f"Are you sure you want to delete `/cc {self.command.name}`?"
         )
         
@@ -594,7 +594,7 @@ class SingleCommandManagementView(BaseView):
         if confirmation_view.result:
             # User confirmed deletion
             embed = EmbedTemplate.success(
-                title="✅ Command Deleted",
+                title="Command Deleted",
                 description=f"The command `/cc {self.command.name}` has been deleted."
             )
             await interaction.edit_original_response(embed=embed, view=None)
@@ -632,9 +632,10 @@ class CustomCommandListView(PaginationView):
     def _create_embeds_from_search_result(self, search_result: CustomCommandSearchResult) -> List[discord.Embed]:
         """Create embeds from search result."""
         if not search_result.commands:
-            embed = EmbedTemplate.info(
+            embed = EmbedTemplate.create_base_embed(
                 title="🔍 Custom Commands",
-                description="No custom commands found matching your criteria."
+                description="No custom commands found matching your criteria.",
+                color=EmbedColors.INFO
             )
             return [embed]
         
@@ -725,9 +726,10 @@ class CustomCommandSearchModal(BaseModal):
         self.is_submitted = True
         
         # Show confirmation
-        embed = EmbedTemplate.info(
+        embed = EmbedTemplate.create_base_embed(
             title="🔍 Search Submitted",
-            description="Searching for custom commands..."
+            description="Searching for custom commands...",
+            color=EmbedColors.INFO
         )
         
         criteria = []
