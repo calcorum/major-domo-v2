@@ -339,7 +339,10 @@ class APIClient:
 
         # Add data as query parameters if requested
         if use_query_params and data:
-            params = [(k, str(v)) for k, v in data.items()]
+            # Handle None values by converting to empty string
+            # The database API's PATCH endpoint treats empty strings as NULL for nullable fields
+            # Example: {'il_return': None} → ?il_return= → Database sets il_return to NULL
+            params = [(k, '' if v is None else str(v)) for k, v in data.items()]
             url = self._add_params(url, params)
 
         await self._ensure_session()
