@@ -33,6 +33,7 @@ class BotConfig(BaseSettings):
     weeks_per_season: int = 18
     games_per_week: int = 4
     modern_stats_start_season: int = 8
+    offseason_flag: bool = False  # When True, relaxes roster limits and disables weekly freeze/thaw
 
     # Current Season Constants
     sba_current_season: int = 12

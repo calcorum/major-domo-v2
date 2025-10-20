@@ -32,26 +32,76 @@ class LeagueService(BaseService[Current]):
     async def get_current_state(self) -> Optional[Current]:
         """
         Get the current league state including week, season, and settings.
-        
+
         Returns:
             Current league state or None if not available
         """
         try:
             client = await self.get_client()
             data = await client.get('current')
-            
+
             if data:
                 current = Current.from_api_data(data)
                 logger.debug(f"Retrieved current state: Week {current.week}, Season {current.season}")
                 return current
-            
+
             logger.debug("No current state data found")
             return None
-            
+
         except Exception as e:
             logger.error(f"Failed to get current league state: {e}")
             return None
-    
+
+    async def update_current_state(
+        self,
+        week: Optional[int] = None,
+        freeze: Optional[bool] = None
+    ) -> Optional[Current]:
+        """
+        Update current league state (week and/or freeze status).
+
+        This is typically used by automated tasks to increment the week
+        and toggle freeze status during weekly operations.
+
+        Args:
+            week: New week number (None to leave unchanged)
+            freeze: New freeze status (None to leave unchanged)
+
+        Returns:
+            Updated Current object or None if update failed
+
+        Raises:
+            APIException: If the update operation fails
+        """
+        try:
+            # Build update data
+            update_data = {}
+            if week is not None:
+                update_data['week'] = week
+            if freeze is not None:
+                update_data['freeze'] = freeze
+
+            if not update_data:
+                logger.warning("update_current_state called with no updates")
+                return await self.get_current_state()
+
+            # Current state always has ID of 1 (single record)
+            current_id = 1
+
+            # Use BaseService patch method
+            updated_current = await self.patch(current_id, update_data)
+
+            if updated_current:
+                logger.info(f"Updated current state: {update_data}")
+                return updated_current
+            else:
+                logger.error("Failed to update current state - patch returned None")
+                return None
+
+        except Exception as e:
+            logger.error(f"Error updating current state: {e}")
+            raise APIException(f"Failed to update current state: {e}")
+
     async def get_standings(self, season: Optional[int] = None) -> Optional[List[Dict[str, Any]]]:
         """
         Get league standings for a season.

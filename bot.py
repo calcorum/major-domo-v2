@@ -173,6 +173,11 @@ class SBABot(commands.Bot):
             from tasks.custom_command_cleanup import setup_cleanup_task
             self.custom_command_cleanup = setup_cleanup_task(self)
 
+            # Initialize transaction freeze/thaw task
+            from tasks.transaction_freeze import setup_freeze_task
+            self.transaction_freeze = setup_freeze_task(self)
+            self.logger.info("✅ Transaction freeze/thaw task started")
+
             # Initialize voice channel cleanup service
             from commands.voice.cleanup_service import VoiceChannelCleanupService
             self.voice_cleanup_service = VoiceChannelCleanupService()
@@ -313,7 +318,7 @@ class SBABot(commands.Bot):
     async def close(self):
         """Clean shutdown of the bot."""
         self.logger.info("Bot shutting down...")
-        
+
         # Stop background tasks
         if hasattr(self, 'custom_command_cleanup'):
             try:
@@ -322,13 +327,20 @@ class SBABot(commands.Bot):
             except Exception as e:
                 self.logger.error(f"Error stopping cleanup task: {e}")
 
+        if hasattr(self, 'transaction_freeze'):
+            try:
+                self.transaction_freeze.weekly_loop.cancel()
+                self.logger.info("Transaction freeze/thaw task stopped")
+            except Exception as e:
+                self.logger.error(f"Error stopping transaction freeze task: {e}")
+
         if hasattr(self, 'voice_cleanup_service'):
             try:
                 self.voice_cleanup_service.stop_monitoring()
                 self.logger.info("Voice channel cleanup service stopped")
             except Exception as e:
                 self.logger.error(f"Error stopping voice cleanup service: {e}")
-        
+
         # Call parent close method
         await super().close()
         self.logger.info("Bot shutdown complete")
