@@ -380,7 +380,7 @@ class TransactionBuilder:
             ml_limit = 26
             mil_limit = 6
         else:
-            ml_limit = 25
+            ml_limit = 26
             mil_limit = 14
         
         # Validate roster limits

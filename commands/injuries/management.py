@@ -20,10 +20,12 @@ from config import get_config
 from models.current import Current
 from models.injury import Injury
 from models.player import Player
+from models.team import RosterType
 from services.player_service import player_service
 from services.injury_service import injury_service
 from services.league_service import league_service
 from services.giphy_service import GiphyService
+from utils import team_utils
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
 from utils.autocomplete import player_autocomplete
@@ -608,6 +610,9 @@ class InjuryGroup(app_commands.Group):
             inline=True
         )
 
+        if player.team.roster_type() != RosterType.MAJOR_LEAGUE:
+            responder_team = await team_utils.get_user_major_league_team(interaction.user.id)
+
         # Create callback for confirmation
         async def clear_confirm_callback(button_interaction: discord.Interaction):
             """Handle confirmation to clear injury."""
@@ -666,7 +671,7 @@ class InjuryGroup(app_commands.Group):
         view = ConfirmationView(
             user_id=interaction.user.id,
             timeout=180.0,  # 3 minutes for confirmation
-            responders=[player.team.gmid, player.team.gmid2] if player.team else None,
+            responders=[responder_team.gmid, responder_team.gmid2] if responder_team else None,
             confirm_callback=clear_confirm_callback,
             confirm_label="Clear Injury",
             cancel_label="Cancel"

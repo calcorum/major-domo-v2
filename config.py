@@ -46,7 +46,7 @@ class BotConfig(BaseSettings):
 
     # Draft Constants
     default_pick_minutes: int = 10
-    draft_rounds: int = 25
+    draft_rounds: int = 32
 
     # Special Team IDs
     free_agent_team_id: int = 498
@@ -64,7 +64,7 @@ class BotConfig(BaseSettings):
     # Application settings
     log_level: str = "INFO"
     environment: str = "development"
-    testing: bool = False
+    testing: bool = True
 
     # Google Sheets settings
     sheets_credentials_path: str = "/app/data/major-domo-service-creds.json"

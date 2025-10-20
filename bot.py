@@ -93,7 +93,7 @@ class SBABot(commands.Bot):
         # Initialize cleanup tasks
         await self._setup_background_tasks()
         
-        # Smart command syncing: auto-sync in development if changes detected
+        # Smart command syncing: auto-sync in development if changes detected; !admin-sync for first sync
         config = get_config()
         if config.is_development:
             if await self._should_sync_commands():
@@ -104,7 +104,7 @@ class SBABot(commands.Bot):
                 self.logger.info("Development mode: no command changes detected, skipping sync")
         else:
             self.logger.info("Production mode: commands loaded but not auto-synced")
-            self.logger.info("Use /sync command to manually sync when needed")
+            self.logger.info("Use /admin-sync command to manually sync when needed")
     
     async def _load_command_packages(self):
         """Load all command packages with resilient error handling."""
@@ -290,7 +290,7 @@ class SBABot(commands.Bot):
     async def _sync_commands(self):
         """Internal method to sync commands."""
         config = get_config()
-        if config.guild_id:
+        if config.testing and config.guild_id:
             guild = discord.Object(id=config.guild_id)
             self.tree.copy_global_to(guild=guild)
             synced = await self.tree.sync(guild=guild)

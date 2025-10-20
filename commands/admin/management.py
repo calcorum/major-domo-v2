@@ -3,7 +3,6 @@ Admin Management Commands
 
 Administrative commands for league management and bot maintenance.
 """
-from typing import Optional, Union
 import asyncio
 
 import discord
@@ -25,6 +24,14 @@ class AdminCommands(commands.Cog):
     
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         """Check if user has admin permissions."""
+        # Check if interaction is from a guild and user is a Member
+        if not isinstance(interaction.user, discord.Member):
+            await interaction.response.send_message(
+                "❌ Admin commands can only be used in a server.",
+                ephemeral=True
+            )
+            return False
+
         if not interaction.user.guild_permissions.administrator:
             await interaction.response.send_message(
                 "❌ You need administrator permissions to use admin commands.",
@@ -196,20 +203,64 @@ class AdminCommands(commands.Cog):
         name="admin-sync",
         description="Sync application commands with Discord"
     )
+    @app_commands.describe(
+        local="Sync to this guild only (fast, for development)",
+        clear_local="Clear locally synced commands (does not sync after clearing)"
+    )
     @logged_command("/admin-sync")
-    async def admin_sync(self, interaction: discord.Interaction):
+    async def admin_sync(
+        self,
+        interaction: discord.Interaction,
+        local: bool = False,
+        clear_local: bool = False
+    ):
         """Sync slash commands with Discord API."""
         await interaction.response.defer()
-        
+
         try:
-            synced_commands = await self.bot.tree.sync()
-            
+            # Clear local commands if requested
+            if clear_local:
+                if not interaction.guild_id:
+                    raise ValueError("Cannot clear local commands outside of a guild")
+
+                self.logger.info(f"Clearing local commands for guild {interaction.guild_id}")
+                self.bot.tree.clear_commands(guild=discord.Object(id=interaction.guild_id))
+
+                embed = EmbedTemplate.create_base_embed(
+                    title="✅ Local Commands Cleared",
+                    description=f"Cleared all commands synced to this guild",
+                    color=EmbedColors.SUCCESS
+                )
+                embed.add_field(
+                    name="Clear Details",
+                    value=f"**Guild ID:** {interaction.guild_id}\n"
+                          f"**Time:** {discord.utils.utcnow().strftime('%H:%M:%S UTC')}\n"
+                          f"**Note:** Commands not synced after clearing",
+                    inline=False
+                )
+                await interaction.followup.send(embed=embed)
+                return
+
+            # Determine sync target
+            if local:
+                if not interaction.guild_id:
+                    raise ValueError("Cannot sync locally outside of a guild")
+                guild = discord.Object(id=interaction.guild_id)
+                sync_type = "local guild"
+            else:
+                guild = None
+                sync_type = "globally"
+
+            # Perform sync
+            self.logger.info(f"Syncing commands {sync_type}")
+            synced_commands = await self.bot.tree.sync(guild=guild)
+
             embed = EmbedTemplate.create_base_embed(
                 title="✅ Commands Synced Successfully",
-                description=f"Synced {len(synced_commands)} application commands",
+                description=f"Synced {len(synced_commands)} application commands {sync_type}",
                 color=EmbedColors.SUCCESS
             )
-            
+
             # Show some of the synced commands
             command_names = [cmd.name for cmd in synced_commands[:10]]
             embed.add_field(
@@ -218,23 +269,73 @@ class AdminCommands(commands.Cog):
                       (f"\n... and {len(synced_commands) - 10} more" if len(synced_commands) > 10 else ""),
                 inline=False
             )
-            
+
             embed.add_field(
                 name="Sync Details",
                 value=f"**Total Commands:** {len(synced_commands)}\n"
-                      f"**Guild ID:** {interaction.guild_id}\n"
+                      f"**Sync Type:** {sync_type.title()}\n"
+                      f"**Guild ID:** {interaction.guild_id or 'N/A'}\n"
                       f"**Time:** {discord.utils.utcnow().strftime('%H:%M:%S UTC')}",
                 inline=False
             )
-            
+
         except Exception as e:
+            self.logger.error(f"Sync failed: {e}", exc_info=True)
             embed = EmbedTemplate.create_base_embed(
                 title="❌ Sync Failed",
                 description=f"Failed to sync commands: {str(e)}",
                 color=EmbedColors.ERROR
             )
-        
+
         await interaction.followup.send(embed=embed)
+
+    @commands.command(name="admin-sync")
+    @commands.has_permissions(administrator=True)
+    async def admin_sync_prefix(self, ctx: commands.Context):
+        """
+        Prefix command version of admin-sync for bootstrap scenarios.
+
+        Use this when slash commands aren't synced yet and you can't access /admin-sync.
+        """
+        self.logger.info(f"Prefix command !admin-sync invoked by {ctx.author} in {ctx.guild}")
+
+        try:
+            synced_commands = await self.bot.tree.sync()
+
+            embed = EmbedTemplate.create_base_embed(
+                title="✅ Commands Synced Successfully",
+                description=f"Synced {len(synced_commands)} application commands",
+                color=EmbedColors.SUCCESS
+            )
+
+            # Show some of the synced commands
+            command_names = [cmd.name for cmd in synced_commands[:10]]
+            embed.add_field(
+                name="Synced Commands",
+                value="\n".join([f"• /{name}" for name in command_names]) +
+                      (f"\n... and {len(synced_commands) - 10} more" if len(synced_commands) > 10 else ""),
+                inline=False
+            )
+
+            embed.add_field(
+                name="Sync Details",
+                value=f"**Total Commands:** {len(synced_commands)}\n"
+                      f"**Guild ID:** {ctx.guild.id}\n"
+                      f"**Time:** {discord.utils.utcnow().strftime('%H:%M:%S UTC')}",
+                inline=False
+            )
+
+            embed.set_footer(text="💡 Use /admin-sync (slash command) for future syncs")
+
+        except Exception as e:
+            self.logger.error(f"Prefix command sync failed: {e}", exc_info=True)
+            embed = EmbedTemplate.create_base_embed(
+                title="❌ Sync Failed",
+                description=f"Failed to sync commands: {str(e)}",
+                color=EmbedColors.ERROR
+            )
+
+        await ctx.send(embed=embed)
     
     @app_commands.command(
         name="admin-clear",
@@ -254,7 +355,15 @@ class AdminCommands(commands.Cog):
             return
         
         await interaction.response.defer()
-        
+
+        # Verify channel type supports purge
+        if not isinstance(interaction.channel, (discord.TextChannel, discord.Thread, discord.VoiceChannel, discord.StageChannel)):
+            await interaction.followup.send(
+                "❌ Cannot purge messages in this channel type.",
+                ephemeral=True
+            )
+            return
+
         try:
             deleted = await interaction.channel.purge(limit=count)
             
@@ -276,10 +385,11 @@ class AdminCommands(commands.Cog):
             # Send confirmation and auto-delete after 5 seconds
             message = await interaction.followup.send(embed=embed)
             await asyncio.sleep(5)
-            try:
-                await message.delete()
-            except discord.NotFound:
-                pass  # Message already deleted
+            if message:
+                try:
+                    await message.delete()
+                except discord.NotFound:
+                    pass  # Message already deleted
                 
         except discord.Forbidden:
             await interaction.followup.send(
@@ -320,10 +430,12 @@ class AdminCommands(commands.Cog):
             text=f"Announcement by {interaction.user.display_name}",
             icon_url=interaction.user.display_avatar.url
         )
-        
-        content = "@everyone" if mention_everyone else None
-        
-        await interaction.followup.send(content=content, embed=embed)
+
+        # Send with or without mention based on flag
+        if mention_everyone:
+            await interaction.followup.send(content="@everyone", embed=embed)
+        else:
+            await interaction.followup.send(embed=embed)
         
         # Log the announcement
         self.logger.info(
