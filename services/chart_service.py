@@ -235,6 +235,58 @@ class ChartService:
         self._save_charts()
         logger.info(f"Removed chart: {key}")
 
+    def add_image_to_chart(self, key: str, url: str) -> None:
+        """
+        Add an additional image URL to an existing chart.
+
+        Args:
+            key: Chart key to add image to
+            url: Image URL to append
+
+        Raises:
+            BotException: If chart doesn't exist or URL already exists
+        """
+        if key not in self._charts:
+            raise BotException(f"Chart '{key}' not found")
+
+        chart = self._charts[key]
+
+        # Check if URL already exists
+        if url in chart.urls:
+            raise BotException(f"Image URL already exists in chart '{key}'")
+
+        chart.urls.append(url)
+        self._save_charts()
+        logger.info(f"Added image to chart: {key} (now {len(chart.urls)} images)")
+
+    def remove_image_from_chart(self, key: str, url: str) -> None:
+        """
+        Remove an image URL from an existing chart.
+
+        Args:
+            key: Chart key to remove image from
+            url: Image URL to remove
+
+        Raises:
+            BotException: If chart doesn't exist, URL not found, or would leave chart with no images
+        """
+        if key not in self._charts:
+            raise BotException(f"Chart '{key}' not found")
+
+        chart = self._charts[key]
+
+        # Check if URL exists
+        if url not in chart.urls:
+            raise BotException(f"Image URL not found in chart '{key}'")
+
+        # Don't allow removing the last image
+        if len(chart.urls) <= 1:
+            raise BotException(f"Cannot remove the last image from chart '{key}'")
+
+        chart.urls.remove(url)
+        self._save_charts()
+        logger.info(f"Removed image from chart: {key} (now {len(chart.urls)} images)")
+
     def add_category(self, key: str, display_name: str) -> None:
         """
         Add a new category.
