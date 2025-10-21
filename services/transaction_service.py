@@ -187,7 +187,80 @@ class TransactionService(BaseService[Transaction]):
                 is_legal=False,
                 errors=[f"Validation error: {str(e)}"]
             )
-    
+
+    async def create_transaction_batch(self, transactions: List[Transaction]) -> List[Transaction]:
+        """
+        Create multiple transactions via API POST (for immediate execution).
+
+        This is used for real-time transactions (like IL moves) that need to be
+        posted to the database immediately rather than scheduled for later processing.
+
+        The API expects a TransactionList format:
+        {
+            "count": 2,
+            "moves": [
+                {
+                    "week": 17,
+                    "player_id": 123,
+                    "oldteam_id": 10,
+                    "newteam_id": 11,
+                    "season": 12,
+                    "moveid": "Season-012-Week-17-123456",
+                    "cancelled": false,
+                    "frozen": false
+                },
+                ...
+            ]
+        }
+
+        Args:
+            transactions: List of Transaction objects to create
+
+        Returns:
+            List of created Transaction objects with API-assigned IDs
+
+        Raises:
+            APIException: If transaction creation fails
+        """
+        try:
+            # Convert Transaction objects to API format (simple ID references only)
+            moves = []
+            for transaction in transactions:
+                move = {
+                    "week": transaction.week,
+                    "player_id": transaction.player.id,
+                    "oldteam_id": transaction.oldteam.id,
+                    "newteam_id": transaction.newteam.id,
+                    "season": transaction.season,
+                    "moveid": transaction.moveid,
+                    "cancelled": transaction.cancelled or False,
+                    "frozen": transaction.frozen or False
+                }
+                moves.append(move)
+
+            # Create batch request payload
+            batch_data = {
+                "count": len(moves),
+                "moves": moves
+            }
+
+            # POST batch to API
+            client = await self.get_client()
+            response = await client.post(self.endpoint, data=batch_data)
+
+            # API returns a string like "2 transactions have been added"
+            # We need to return the original Transaction objects (they won't have IDs assigned by API)
+            if response and isinstance(response, str) and "transactions have been added" in response:
+                logger.info(f"Successfully created batch: {response}")
+                return transactions
+            else:
+                logger.error(f"Unexpected API response: {response}")
+                raise APIException(f"Unexpected API response: {response}")
+
+        except Exception as e:
+            logger.error(f"Error creating transaction batch: {e}")
+            raise APIException(f"Failed to create transactions: {e}")
+
     async def cancel_transaction(self, transaction_id: str) -> bool:
         """
         Cancel a pending transaction.

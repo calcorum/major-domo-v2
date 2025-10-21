@@ -298,6 +298,38 @@ class PlayerService(BaseService[Player]):
             logger.error(f"Failed to update player {player_id}: {e}")
             return None
 
+    async def update_player_team(self, player_id: int, new_team_id: int) -> Optional[Player]:
+        """
+        Update a player's team assignment (for real-time IL moves).
+
+        This is used for immediate roster changes where the player needs to show
+        up on their new team right away, rather than waiting for transaction processing.
+
+        Args:
+            player_id: Player ID to update
+            new_team_id: New team ID to assign
+
+        Returns:
+            Updated player instance or None
+
+        Raises:
+            APIException: If player update fails
+        """
+        try:
+            logger.info(f"Updating player {player_id} team to {new_team_id}")
+            updated_player = await self.update_player(player_id, {'team_id': new_team_id})
+
+            if updated_player:
+                logger.info(f"Successfully updated player {player_id} to team {new_team_id}")
+                return updated_player
+            else:
+                logger.error(f"Failed to update player {player_id} team - no response from API")
+                raise APIException(f"Failed to update player {player_id} team assignment")
+
+        except Exception as e:
+            logger.error(f"Error updating player {player_id} team: {e}")
+            raise APIException(f"Failed to update player team: {e}")
+
 
 # Global service instance - will be properly initialized in __init__.py
 player_service = PlayerService()
