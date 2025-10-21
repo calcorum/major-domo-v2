@@ -202,7 +202,7 @@ class PlayerStatsView(BaseView):
 
             # Add Major League affiliate if this is a Minor League team
             if player.team.roster_type() == RosterType.MINOR_LEAGUE:
-                major_affiliate = player.team.major_league_affiliate()
+                major_affiliate = await player.team.major_league_affiliate()
                 if major_affiliate:
                     embed.add_field(
                         name="Major Affiliate",
