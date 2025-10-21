@@ -610,7 +610,10 @@ class InjuryGroup(app_commands.Group):
             inline=True
         )
 
-        if player.team.roster_type() != RosterType.MAJOR_LEAGUE:
+        # Initialize responder_team to None for major league teams
+        if player.team.roster_type() == RosterType.MAJOR_LEAGUE:
+            responder_team = player.team
+        else:
             responder_team = await team_utils.get_user_major_league_team(interaction.user.id)
 
         # Create callback for confirmation
