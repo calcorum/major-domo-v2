@@ -161,7 +161,7 @@ class PlayerInfoCommands(commands.Cog):
             season=search_season,
             batting_stats=batting_stats,
             pitching_stats=pitching_stats,
-            user_id=interaction.user.id
+            user_id=None # setting to None so any GM can toggle the stats views
         )
 
         # Get initial embed with stats hidden
