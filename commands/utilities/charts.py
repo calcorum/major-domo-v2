@@ -420,6 +420,47 @@ class ChartManageGroup(app_commands.Group):
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
+    @app_commands.command(
+        name="reload",
+        description="Reload charts from charts.json file"
+    )
+    @logged_command("/chart-manage reload")
+    async def reload(
+        self,
+        interaction: discord.Interaction
+    ):
+        """Reload charts from the JSON file (useful after manual file edits)."""
+        # Check permissions
+        if not has_manage_permission(interaction):
+            embed = EmbedTemplate.error(
+                title="Permission Denied",
+                description=f"Only administrators and users with the **{get_config().help_editor_role_name}** role can manage charts."
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
+        set_discord_context(
+            interaction=interaction,
+            command="/chart-manage reload"
+        )
+
+        # Reload charts from file
+        self.chart_service.reload_charts()
+
+        # Count loaded charts
+        chart_count = len(self.chart_service.get_all_charts())
+        category_count = len(self.chart_service.get_categories())
+
+        # Success response
+        embed = EmbedTemplate.success(
+            title="Charts Reloaded",
+            description="Successfully reloaded charts from charts.json"
+        )
+        embed.add_field(name="Charts Loaded", value=str(chart_count), inline=True)
+        embed.add_field(name="Categories", value=str(category_count), inline=True)
+
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
 
 class ChartCategoryGroup(app_commands.Group):
     """Chart category management commands for administrators and help editors."""
