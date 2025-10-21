@@ -406,13 +406,27 @@ class InjuryGroup(app_commands.Group):
 
         # Check if player already has an active injury
         existing_injury = await injury_service.get_active_injury(player.id, current.season)
+
+        # Data consistency check: If injury exists but il_return is None, it's stale data
         if existing_injury:
-            embed = EmbedTemplate.error(
-                title="Already Injured",
-                description=f"Hm. It looks like {player.name} is already hurt."
-            )
-            await interaction.followup.send(embed=embed, ephemeral=True)
-            return
+            if not player.il_return:
+                # Stale injury record - clear it automatically
+                self.logger.warning(
+                    f"Found stale injury record for {player.name} (injury {existing_injury.id}): "
+                    f"is_active=True but il_return=None. Auto-clearing stale record."
+                )
+                await injury_service.clear_injury(existing_injury.id)
+
+                # Notify user but allow them to proceed
+                self.logger.info(f"Cleared stale injury {existing_injury.id} for player {player.id}")
+            else:
+                # Valid active injury - player is actually injured
+                embed = EmbedTemplate.error(
+                    title="Already Injured",
+                    description=f"Hm. It looks like {player.name} is already hurt (returns {player.il_return})."
+                )
+                await interaction.followup.send(embed=embed, ephemeral=True)
+                return
 
         # Calculate return date
         out_weeks = math.floor(injury_games / 4)
