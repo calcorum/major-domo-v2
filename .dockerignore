@@ -70,6 +70,7 @@ docs/
 # CI/CD
 .github/
 .gitlab-ci.yml
+.gitlab/
 
 # OS
 .DS_Store

@@ -17,14 +17,21 @@ from discord import app_commands
 from discord.ext import commands
 
 from config import get_config
+from models.current import Current
+from models.injury import Injury
+from models.player import Player
+from models.team import RosterType
 from services.player_service import player_service
 from services.injury_service import injury_service
 from services.league_service import league_service
 from services.giphy_service import GiphyService
+from utils import team_utils
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
 from utils.autocomplete import player_autocomplete
+from views.base import ConfirmationView
 from views.embeds import EmbedTemplate
+from views.modals import PitcherRestModal, BatterInjuryModal
 from exceptions import BotException
 
 
@@ -76,6 +83,16 @@ class InjuryGroup(app_commands.Group):
             return
 
         player = players[0]
+
+        # Check if player already has an active injury
+        existing_injury = await injury_service.get_active_injury(player.id, current.season)
+        if existing_injury:
+            embed = EmbedTemplate.error(
+                title="Already Injured",
+                description=f"Hm. It looks like {player.name} is already hurt."
+            )
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            return
 
         # Check for injury_rating field
         if not player.injury_rating:
@@ -145,16 +162,55 @@ class InjuryGroup(app_commands.Group):
             inline=False
         )
 
-        # Format result
+        view = None
+
+        # Format result and create callbacks for confirmation
         if isinstance(injury_result, int):
             result_text = f"**{injury_result} game{'s' if injury_result > 1 else ''}**"
             embed.color = discord.Color.orange()
+
             if injury_result > 6:
                 gif_search_text = ['well shit', 'well fuck', 'god dammit']
             else:
                 gif_search_text = ['bummer', 'well damn']
+
             if player.is_pitcher:
                 result_text += ' plus their current rest requirement'
+
+                # Pitcher callback shows modal to collect rest games
+                async def pitcher_confirm_callback(button_interaction: discord.Interaction):
+                    """Show modal to collect pitcher rest information."""
+                    modal = PitcherRestModal(
+                        player=player,
+                        injury_games=injury_result,
+                        season=current.season
+                    )
+                    await button_interaction.response.send_modal(modal)
+
+                injury_callback = pitcher_confirm_callback
+
+            else:
+                # Batter callback shows modal to collect current week/game
+                async def batter_confirm_callback(button_interaction: discord.Interaction):
+                    """Show modal to collect current week/game information for batter injury."""
+                    modal = BatterInjuryModal(
+                        player=player,
+                        injury_games=injury_result,
+                        season=current.season
+                    )
+                    await button_interaction.response.send_modal(modal)
+
+                injury_callback = batter_confirm_callback
+
+            # Create confirmation view with appropriate callback
+            view = ConfirmationView(
+                user_id=interaction.user.id,
+                timeout=180.0,  # 3 minutes for confirmation
+                responders=[player.team.gmid, player.team.gmid2] if player.team else None,
+                confirm_callback=injury_callback,
+                confirm_label="Log Injury",
+                cancel_label="Ignore Injury"
+            )
         elif injury_result == 'REM':
             if player.is_pitcher:
                 result_text = '**FATIGUED**'
@@ -167,24 +223,27 @@ class InjuryGroup(app_commands.Group):
             embed.color = discord.Color.green()
             gif_search_text = ['we are so back', 'all good', 'totally fine']
 
-        # embed.add_field(name='', value='', inline=False)
-
         embed.add_field(
             name="Injury Length",
             value=result_text,
             inline=True
         )
-        
+
         try:
             injury_gif = await GiphyService().get_gif(
                 phrase_options=gif_search_text
             )
         except Exception:
             injury_gif = ''
-        
+
         embed.set_image(url=injury_gif)
 
-        await interaction.followup.send(embed=embed)
+        # Send confirmation (only include view if injury requires logging)
+        if view is not None:
+            await interaction.followup.send(embed=embed, view=view)
+        else:
+            await interaction.followup.send(embed=embed)
+
 
     def _get_injury_result(self, rating: str, games_played: int, roll: int):
         """
@@ -397,7 +456,7 @@ class InjuryGroup(app_commands.Group):
         # Success response
         embed = EmbedTemplate.success(
             title="Injury Recorded",
-            description=f"{player.name} has been placed on the injured list."
+            description=f"{player.name}'s injury has been logged"
         )
 
         embed.add_field(
@@ -434,9 +493,46 @@ class InjuryGroup(app_commands.Group):
             season=current.season,
             injury_id=injury.id
         )
+    
+    def _calc_injury_dates(self, start_week: int, start_game: int, injury_games: int) -> dict:
+        """
+        Calculate injury dates from start week/game and injury duration.
+
+        Args:
+            start_week: Starting week number
+            start_game: Starting game number (1-4)
+            injury_games: Number of games player will be out
+
+        Returns:
+            Dictionary with calculated injury date fields
+        """
+        # Calculate return date
+        out_weeks = math.floor(injury_games / 4)
+        out_games = injury_games % 4
+
+        return_week = start_week + out_weeks
+        return_game = start_game + 1 + out_games
+
+        if return_game > 4:
+            return_week += 1
+            return_game -= 4
+
+        # Adjust start date if injury starts after game 4
+        actual_start_week = start_week if start_game != 4 else start_week + 1
+        actual_start_game = start_game + 1 if start_game != 4 else 1
+
+        return {
+            'total_games': injury_games,
+            'start_week': actual_start_week,
+            'start_game': actual_start_game,
+            'end_week': return_week,
+            'end_game': return_game
+        }
+
 
     @app_commands.command(name="clear", description="Clear a player's injury (requires SBA Players role)")
     @app_commands.describe(player_name="Player name to clear injury")
+    @app_commands.autocomplete(player_name=player_autocomplete)
     @logged_command("/injury clear")
     async def injury_clear(self, interaction: discord.Interaction, player_name: str):
         """Clear a player's active injury."""
@@ -480,35 +576,18 @@ class InjuryGroup(app_commands.Group):
             await interaction.followup.send(embed=embed, ephemeral=True)
             return
 
-        # Clear the injury
-        success = await injury_service.clear_injury(injury.id)
-
-        if not success:
-            embed = EmbedTemplate.error(
-                title="Error",
-                description="Failed to clear the injury. Please try again."
-            )
-            await interaction.followup.send(embed=embed, ephemeral=True)
-            return
-
-        # Clear player's il_return field
-        await player_service.update_player(player.id, {'il_return': None})
-
-        # Success response
-        embed = EmbedTemplate.success(
-            title="Injury Cleared",
-            description=f"{player.name} has been cleared and is eligible to play again."
+        # Create confirmation embed
+        embed = EmbedTemplate.info(
+            title=f"{player.name}",
+            description=f"Is **{player.name}** cleared to return?"
         )
 
-        embed.add_field(
-            name="Previous Return Date",
-            value=injury.return_date,
-            inline=True
-        )
+        if player.team and player.team.thumbnail is not None:
+            embed.set_thumbnail(url=player.team.thumbnail)
 
         embed.add_field(
-            name="Total Games Missed",
-            value=injury.duration_display,
+            name="Player",
+            value=f"{player.name} ({player.primary_position})",
             inline=True
         )
 
@@ -516,18 +595,90 @@ class InjuryGroup(app_commands.Group):
             embed.add_field(
                 name="Team",
                 value=f"{player.team.lname} ({player.team.abbrev})",
-                inline=False
+                inline=True
             )
 
-        await interaction.followup.send(embed=embed)
-
-        # Log for debugging
-        self.logger.info(
-            f"Injury cleared for {player.name}",
-            player_id=player.id,
-            season=current.season,
-            injury_id=injury.id
+        embed.add_field(
+            name="Expected Return",
+            value=injury.return_date,
+            inline=True
         )
+
+        embed.add_field(
+            name="Games Missed",
+            value=injury.duration_display,
+            inline=True
+        )
+
+        if player.team.roster_type() != RosterType.MAJOR_LEAGUE:
+            responder_team = await team_utils.get_user_major_league_team(interaction.user.id)
+
+        # Create callback for confirmation
+        async def clear_confirm_callback(button_interaction: discord.Interaction):
+            """Handle confirmation to clear injury."""
+            # Clear the injury
+            success = await injury_service.clear_injury(injury.id)
+
+            if not success:
+                error_embed = EmbedTemplate.error(
+                    title="Error",
+                    description="Failed to clear the injury. Please try again."
+                )
+                await button_interaction.response.send_message(embed=error_embed, ephemeral=True)
+                return
+
+            # Clear player's il_return field
+            await player_service.update_player(player.id, {'il_return': None})
+
+            # Success response
+            success_embed = EmbedTemplate.success(
+                title="Injury Cleared",
+                description=f"{player.name} has been cleared and is eligible to play again."
+            )
+
+            success_embed.add_field(
+                name="Injury Return Date",
+                value=injury.return_date,
+                inline=True
+            )
+
+            success_embed.add_field(
+                name="Total Games Missed",
+                value=injury.duration_display,
+                inline=True
+            )
+
+            if player.team:
+                success_embed.add_field(
+                    name="Team",
+                    value=f"{player.team.lname}",
+                    inline=False
+                )
+                if player.team.thumbnail is not None:
+                    success_embed.set_thumbnail(url=player.team.thumbnail)
+
+            await button_interaction.response.send_message(embed=success_embed)
+
+            # Log for debugging
+            self.logger.info(
+                f"Injury cleared for {player.name}",
+                player_id=player.id,
+                season=current.season,
+                injury_id=injury.id
+            )
+
+        # Create confirmation view
+        view = ConfirmationView(
+            user_id=interaction.user.id,
+            timeout=180.0,  # 3 minutes for confirmation
+            responders=[responder_team.gmid, responder_team.gmid2] if responder_team else None,
+            confirm_callback=clear_confirm_callback,
+            confirm_label="Clear Injury",
+            cancel_label="Cancel"
+        )
+
+        # Send confirmation embed with view
+        await interaction.followup.send(embed=embed, view=view)
 
 
 async def setup(bot: commands.Bot):

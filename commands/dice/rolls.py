@@ -11,8 +11,12 @@ from dataclasses import dataclass
 import discord
 from discord.ext import commands
 
+from models.team import Team
+from services.team_service import team_service
+from utils import team_utils
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
+from utils.team_utils import get_user_major_league_team
 from views.embeds import EmbedColors, EmbedTemplate
 
 
@@ -93,13 +97,20 @@ class DiceRollCommands(commands.Cog):
     async def ab_dice(self, interaction: discord.Interaction):
         """Roll the standard baseball at-bat dice combination."""
         await interaction.response.defer()
+        embed_color = await self._get_channel_embed_color(interaction)
 
         # Use the standard baseball dice combination
         dice_notation = "1d6;2d6;1d20"
         roll_results = self._parse_and_roll_multiple_dice(dice_notation)
 
         # Create embed for the roll results
-        embed = self._create_multi_roll_embed(dice_notation, roll_results, interaction.user, set_author=False)
+        embed = self._create_multi_roll_embed(
+            dice_notation, 
+            roll_results, 
+            interaction.user, 
+            set_author=False,
+            embed_color=embed_color
+        )
         embed.title = f'At bat roll for {interaction.user.display_name}'
         await interaction.followup.send(embed=embed)
 
@@ -107,6 +118,10 @@ class DiceRollCommands(commands.Cog):
     async def ab_dice_prefix(self, ctx: commands.Context):
         """Roll baseball at-bat dice using prefix commands (!ab, !atbat)."""
         self.logger.info(f"At Bat dice command started by {ctx.author.display_name}")
+        team = await get_user_major_league_team(user_id=ctx.author.id)
+        embed_color = EmbedColors.PRIMARY
+        if team is not None and team.color is not None:
+            embed_color = int(team.color,16)
 
         # Use the standard baseball dice combination
         dice_notation = "1d6;2d6;1d20"
@@ -115,7 +130,7 @@ class DiceRollCommands(commands.Cog):
         self.logger.info("At Bat dice rolled successfully", roll_count=len(roll_results))
 
         # Create embed for the roll results
-        embed = self._create_multi_roll_embed(dice_notation, roll_results, ctx.author)
+        embed = self._create_multi_roll_embed(dice_notation, roll_results, ctx.author, set_author=False, embed_color=embed_color)
         embed.title = f'At bat roll for {ctx.author.display_name}'
         await ctx.send(embed=embed)
 
@@ -158,6 +173,7 @@ class DiceRollCommands(commands.Cog):
         position="Defensive position"
     )
     @discord.app_commands.choices(position=[
+        discord.app_commands.Choice(name="Pitcher (P)", value="P"),
         discord.app_commands.Choice(name="Catcher (C)", value="C"),
         discord.app_commands.Choice(name="First Base (1B)", value="1B"),
         discord.app_commands.Choice(name="Second Base (2B)", value="2B"),
@@ -212,6 +228,82 @@ class DiceRollCommands(commands.Cog):
         embed = self._create_fielding_embed(parsed_position, roll_results, ctx.author)
         await ctx.send(embed=embed)
 
+    @discord.app_commands.command(
+        name="jump",
+        description="Roll for baserunner's jump before stealing"
+    )
+    @logged_command("/jump")
+    async def jump_dice(self, interaction: discord.Interaction):
+        """Roll to check for a baserunner's jump before attempting to steal a base."""
+        await interaction.response.defer()
+        embed_color = await self._get_channel_embed_color(interaction)
+
+        # Roll 1d20 for pickoff/balk check
+        check_roll = random.randint(1, 20)
+
+        # Roll 2d6 for jump rating
+        jump_result = self._parse_and_roll_single_dice("2d6")
+
+        # Roll another 1d20 for pickoff/balk resolution
+        resolution_roll = random.randint(1, 20)
+
+        # Create embed based on check roll
+        embed = self._create_jump_embed(
+            check_roll,
+            jump_result,
+            resolution_roll,
+            interaction.user,
+            embed_color,
+            show_author=False
+        )
+        await interaction.followup.send(embed=embed)
+
+    @commands.command(name="j", aliases=["jump"])
+    async def jump_dice_prefix(self, ctx: commands.Context):
+        """Roll for baserunner's jump using prefix commands (!j, !jump)."""
+        self.logger.info(f"Jump command started by {ctx.author.display_name}")
+        team = await get_user_major_league_team(user_id=ctx.author.id)
+        embed_color = EmbedColors.PRIMARY
+        if team is not None and team.color is not None:
+            embed_color = int(team.color, 16)
+
+        # Roll 1d20 for pickoff/balk check
+        check_roll = random.randint(1, 20)
+
+        # Roll 2d6 for jump rating
+        jump_result = self._parse_and_roll_single_dice("2d6")
+
+        # Roll another 1d20 for pickoff/balk resolution
+        resolution_roll = random.randint(1, 20)
+
+        self.logger.info("Jump dice rolled successfully", check=check_roll, jump=jump_result.total if jump_result else None, resolution=resolution_roll)
+
+        # Create embed based on check roll
+        embed = self._create_jump_embed(
+            check_roll,
+            jump_result,
+            resolution_roll,
+            ctx.author,
+            embed_color
+        )
+        await ctx.send(embed=embed)
+
+    async def _get_channel_embed_color(self, interaction: discord.Interaction) -> int:
+        # Check if channel is a type that has a name attribute (DMChannel doesn't have one)
+        if isinstance(interaction.channel, (discord.TextChannel, discord.VoiceChannel, discord.Thread)):
+            channel_starter = interaction.channel.name[:6]
+            if '-' in channel_starter:
+                abbrev = channel_starter.split('-')[0]
+                channel_team = await team_service.get_team_by_abbrev(abbrev)
+                if channel_team is not None and channel_team.color is not None:
+                    return int(channel_team.color,16)
+
+        team = await get_user_major_league_team(user_id=interaction.user.id)
+        if team is not None and team.color is not None:
+            return int(team.color,16)
+
+        return EmbedColors.PRIMARY
+
     def _parse_position(self, position: str) -> str | None:
         """Parse and validate fielding position input for prefix commands."""
         if not position:
@@ -221,6 +313,7 @@ class DiceRollCommands(commands.Cog):
 
         # Map common inputs to standard position names
         position_map = {
+            'P': 'P', 'PITCHER': 'P',
             'C': 'C', 'CATCHER': 'C',
             '1': '1B', '1B': '1B', 'FIRST': '1B', 'FIRSTBASE': '1B',
             '2': '2B', '2B': '2B', 'SECOND': '2B', 'SECONDBASE': '2B',
@@ -266,8 +359,8 @@ class DiceRollCommands(commands.Cog):
         # Add fielding check summary
         range_result = self._get_range_result(position, d20_result)
         embed.add_field(
-            name=f"{position} Fielding Check Summary",
-            value=f"```\nRange Result\n 1 | 2 | 3 | 4 | 5\n{range_result}```",
+            name=f"{position} Range Result",
+            value=f"```md\n 1 | 2 | 3 | 4 | 5\n{range_result}```",
             inline=False
         )
 
@@ -280,26 +373,87 @@ class DiceRollCommands(commands.Cog):
                 inline=False
             )
 
-        # Add help commands
-        embed.add_field(
-            name="Help Commands",
-            value="Run !<result> for full chart readout (e.g. !g1 or !do3)",
-            inline=False
+        # # Add help commands
+        # embed.add_field(
+        #     name="Help Commands",
+        #     value="Run !<result> for full chart readout (e.g. !g1 or !do3)",
+        #     inline=False
+        # )
+
+        # # Add references
+        # embed.add_field(
+        #     name="References",
+        #     value="Range Chart / Error Chart / Result Reference",
+        #     inline=False
+        # )
+
+        return embed
+
+    def _create_jump_embed(
+        self,
+        check_roll: int,
+        jump_result: DiceRoll | None,
+        resolution_roll: int,
+        user: discord.User | discord.Member,
+        embed_color: int = EmbedColors.PRIMARY,
+        show_author: bool = True
+    ) -> discord.Embed:
+        """Create an embed for jump roll results."""
+        # Create base embed
+        embed = EmbedTemplate.create_base_embed(
+            title=f"Jump roll for {user.name}",
+            color=embed_color
         )
 
-        # Add references
-        embed.add_field(
-            name="References",
-            value="Range Chart / Error Chart / Result Reference",
-            inline=False
-        )
+        if show_author:
+            # Set user info
+            embed.set_author(
+                name=user.name,
+                icon_url=user.display_avatar.url
+            )
+
+        # Check for pickoff or balk
+        if check_roll == 1:
+            # Pickoff attempt
+            embed.add_field(
+                name="Special",
+                value="```md\nCheck pickoff```",
+                inline=False
+            )
+            embed.add_field(
+                name="Pickoff roll",
+                value=f"```md\n# {resolution_roll}\nDetails:[1d20 ({resolution_roll})]```",
+                inline=False
+            )
+        elif check_roll == 2:
+            # Balk
+            embed.add_field(
+                name="Special",
+                value="```md\nCheck balk```",
+                inline=False
+            )
+            embed.add_field(
+                name="Balk roll",
+                value=f"```md\n# {resolution_roll}\nDetails:[1d20 ({resolution_roll})]```",
+                inline=False
+            )
+        else:
+            # Normal jump - show 2d6 result
+            if jump_result:
+                rolls_str = ' '.join(str(r) for r in jump_result.rolls)
+                embed.add_field(
+                    name="Result",
+                    value=f"```md\n# {jump_result.total}\nDetails:[2d6 ({rolls_str})]```",
+                    inline=False
+                )
 
         return embed
 
     def _get_range_result(self, position: str, d20_roll: int) -> str:
         """Get the range result display for a position and d20 roll."""
-        # Infield positions share the same range chart
-        if position in ['1B', '2B', '3B', 'SS']:
+        if position == 'P':
+            return self._get_pitcher_range(d20_roll)
+        elif position in ['1B', '2B', '3B', 'SS']:
             return self._get_infield_range(d20_roll)
         elif position in ['LF', 'CF', 'RF']:
             return self._get_outfield_range(d20_roll)
@@ -385,10 +539,38 @@ class DiceRollCommands(commands.Cog):
         }
         return catcher_ranges.get(d20_roll, 'Unknown')
 
+    def _get_pitcher_range(self, d20_roll: int) -> str:
+        """Get pitcher range result based on d20 roll."""
+        pitcher_ranges = {
+            1: 'G3  ------SI1------',
+            2: 'G3  ------SI1------',
+            3: '--G3--- ----SI1----',
+            4: '----G3----- --SI1--',
+            5: '------G3------- SI1',
+            6: '------G3------- SI1',
+            7: '--------G3---------',
+            8: 'G2  ------G3-------',
+            9: 'G2  ------G3-------',
+            10: 'G1  G2  ----G3-----',
+            11: 'G1  G2  ----G3-----',
+            12: 'G1  G2  ----G3-----',
+            13: '--G1--- G2  --G3---',
+            14: '--G1--- --G2--- G3',
+            15: '--G1--- ----G2-----',
+            16: '--G1--- ----G2-----',
+            17: '----G1----- --G2---',
+            18: '----G1----- --G2---',
+            19: '------G1------- G2',
+            20: '--------G1---------'
+        }
+        return pitcher_ranges.get(d20_roll, 'Unknown')
+
     def _get_error_result(self, position: str, d6_total: int) -> str:
         """Get the error result for a position and 3d6 total."""
         # Get the appropriate error chart
-        if position == '1B':
+        if position == 'P':
+            return self._get_pitcher_error(d6_total)
+        elif position == '1B':
             return self._get_1b_error(d6_total)
         elif position == '2B':
             return self._get_2b_error(d6_total)
@@ -560,6 +742,28 @@ class DiceRollCommands(commands.Cog):
         }
         return errors.get(d6_total, 'No error')
 
+    def _get_pitcher_error(self, d6_total: int) -> str:
+        """Get Pitcher error result based on 3d6 total."""
+        errors = {
+            18: '2-base error for e4 -> e12, e19 -> e28, e34 -> e43, e46 -> e48',
+            17: '2-base error for e13 -> e28, e44 -> e50',
+            16: '2-base error for e30 -> e48, e50, e51\n1-base error for e8, e11, e16, e23',
+            15: '2-base error for e50, e51\n1-base error for e10 -> e12, e19, e20, e24, e26, e30, e35, e38, e40, e46, e47',
+            14: '1-base error for e4, e14, e18, e21, e22, e26, e31, e35, e42, e43, e48 -> e51',
+            13: '1-base error for e6, e13, e14, e21, e22, e26, e27, e30 -> 34, e38 -> e51',
+            12: '1-base error for e7, e11, e12, e15 -> e19, e22 -> e51',
+            11: '1-base error for e10, e13, e15, e17, e18, e20, e21, e23, e24, e27 -> 38, e40, e42, e44 -> e51',
+            10: '1-base error for e20, e23, e24, e27 -> e51',
+            9: '1-base error for e16, e19, e26, e28, e34 -> e36, e39 -> e51',
+            8: '1-base error for e22, e33, e38, e39, e43 -> e51',
+            7: '1-base error for e14, e21, e36, e39, e42 -> e44, e47 -> e51',
+            6: '1-base error for e8, e22, e38, e39, e43 -> e51',
+            5: 'No error',
+            4: '1-base error for e15, e16, e40',
+            3: '2-base error for e8 -> e12, e26 -> e28, e39 -> e43\n1-base error for e2, e3, e7, e14, e15'
+        }
+        return errors.get(d6_total, 'No error')
+
     def _parse_and_roll_multiple_dice(self, dice_notation: str) -> list[DiceRoll]:
         """Parse dice notation (supports multiple rolls) and return roll results."""
         # Split by semicolon for multiple rolls
@@ -637,11 +841,11 @@ class DiceRollCommands(commands.Cog):
 
         return [first_d6_result, second_result, third_result]
 
-    def _create_multi_roll_embed(self, dice_notation: str, roll_results: list[DiceRoll], user: discord.User | discord.Member, set_author: bool = True) -> discord.Embed:
+    def _create_multi_roll_embed(self, dice_notation: str, roll_results: list[DiceRoll], user: discord.User | discord.Member, set_author: bool = True, embed_color: int = EmbedColors.PRIMARY) -> discord.Embed:
         """Create an embed for multiple dice roll results."""
         embed = EmbedTemplate.create_base_embed(
             title="🎲 Dice Roll",
-            color=EmbedColors.PRIMARY
+            color=embed_color
         )
 
         if set_author:

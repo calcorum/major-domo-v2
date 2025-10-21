@@ -1,0 +1,237 @@
+stages:
+  - test
+  - build
+  - deploy
+
+variables:
+  DOCKER_IMAGE: yourusername/discord-bot-v2
+  DOCKER_DRIVER: overlay2
+  # Semantic versioning - update these for releases
+  VERSION_MAJOR: "2"
+  VERSION_MINOR: "1"
+
+# Test on all branches
+test:
+  stage: test
+  image: python:3.11-slim
+  before_script:
+    - cd discord-app-v2
+    - pip install --cache-dir .cache/pip -r requirements.txt
+  script:
+    - python -m pytest --tb=short -q --cov=. --cov-report=term-missing
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}
+    paths:
+      - .cache/pip
+  only:
+    - branches
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: discord-app-v2/coverage.xml
+
+# Build with versioned tags
+build:
+  stage: build
+  image: docker:24-dind
+  services:
+    - docker:24-dind
+  before_script:
+    - docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD
+  script:
+    - cd discord-app-v2
+
+    # Calculate version tags
+    - export VERSION_PATCH=${CI_PIPELINE_IID}
+    - export FULL_VERSION="v${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}"
+    - export SHORT_SHA=${CI_COMMIT_SHORT_SHA}
+    - export BRANCH_TAG="${CI_COMMIT_REF_SLUG}-${SHORT_SHA}"
+
+    # Build once, tag multiple times
+    - |
+      docker build \
+        --build-arg VERSION=${FULL_VERSION} \
+        --build-arg GIT_COMMIT=${CI_COMMIT_SHA} \
+        --build-arg BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ") \
+        -t ${DOCKER_IMAGE}:${FULL_VERSION} \
+        -t ${DOCKER_IMAGE}:${SHORT_SHA} \
+        -t ${DOCKER_IMAGE}:${BRANCH_TAG} \
+        .
+
+    # Tag as latest only for main branch
+    - |
+      if [ "$CI_COMMIT_BRANCH" == "main" ]; then
+        docker tag ${DOCKER_IMAGE}:${FULL_VERSION} ${DOCKER_IMAGE}:latest
+      fi
+
+    # Tag as staging for develop branch
+    - |
+      if [ "$CI_COMMIT_BRANCH" == "develop" ]; then
+        docker tag ${DOCKER_IMAGE}:${FULL_VERSION} ${DOCKER_IMAGE}:staging
+      fi
+
+    # Push all tags
+    - docker push ${DOCKER_IMAGE}:${FULL_VERSION}
+    - docker push ${DOCKER_IMAGE}:${SHORT_SHA}
+    - docker push ${DOCKER_IMAGE}:${BRANCH_TAG}
+    - |
+      if [ "$CI_COMMIT_BRANCH" == "main" ]; then
+        docker push ${DOCKER_IMAGE}:latest
+      fi
+    - |
+      if [ "$CI_COMMIT_BRANCH" == "develop" ]; then
+        docker push ${DOCKER_IMAGE}:staging
+      fi
+
+    # Save version info for deployment
+    - echo "FULL_VERSION=${FULL_VERSION}" > version.env
+    - echo "SHORT_SHA=${SHORT_SHA}" >> version.env
+    - echo "BRANCH_TAG=${BRANCH_TAG}" >> version.env
+
+  artifacts:
+    reports:
+      dotenv: discord-app-v2/version.env
+
+  only:
+    - main
+    - develop
+    - tags
+
+# Deploy to staging (automatic for develop branch)
+deploy:staging:
+  stage: deploy
+  image: alpine:latest
+  needs:
+    - build
+  before_script:
+    - apk add --no-cache openssh-client
+    - mkdir -p ~/.ssh
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+    - chmod 600 ~/.ssh/id_rsa
+    - ssh-keyscan -H $VPS_HOST >> ~/.ssh/known_hosts
+  script:
+    - echo "Deploying version ${FULL_VERSION} to staging..."
+    - |
+      ssh $VPS_USER@$VPS_HOST << EOF
+        cd /path/to/discord-bot-staging
+
+        # Backup current version
+        docker inspect discord-bot-staging --format='{{.Image}}' > .last_version || true
+
+        # Update docker-compose with specific version
+        sed -i 's|image: ${DOCKER_IMAGE}:.*|image: ${DOCKER_IMAGE}:staging|' docker-compose.yml
+
+        # Pull and deploy
+        docker-compose pull
+        docker-compose up -d
+
+        # Wait for health check
+        sleep 10
+        if docker-compose ps | grep -q "Up (healthy)"; then
+          echo "✅ Deployment successful!"
+          docker image prune -f
+        else
+          echo "❌ Health check failed!"
+          exit 1
+        fi
+      EOF
+  environment:
+    name: staging
+    url: https://staging-bot.yourdomain.com
+  only:
+    - develop
+
+# Deploy to production (manual approval required)
+deploy:production:
+  stage: deploy
+  image: alpine:latest
+  needs:
+    - build
+  before_script:
+    - apk add --no-cache openssh-client
+    - mkdir -p ~/.ssh
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+    - chmod 600 ~/.ssh/id_rsa
+    - ssh-keyscan -H $VPS_HOST >> ~/.ssh/known_hosts
+  script:
+    - echo "Deploying version ${FULL_VERSION} to production..."
+    - |
+      ssh $VPS_USER@$VPS_HOST << EOF
+        cd /path/to/discord-bot
+
+        # Backup current version for rollback
+        docker inspect discord-bot --format='{{.Image}}' > .last_version || true
+        echo "${FULL_VERSION}" > .deployed_version
+
+        # Create deployment record
+        echo "$(date -Iseconds) | ${FULL_VERSION} | ${CI_COMMIT_SHORT_SHA} | ${CI_COMMIT_MESSAGE}" >> deployments.log
+
+        # Update docker-compose with specific version tag
+        sed -i 's|image: ${DOCKER_IMAGE}:.*|image: ${DOCKER_IMAGE}:${FULL_VERSION}|' docker-compose.yml
+
+        # Pull and deploy
+        docker-compose pull
+        docker-compose up -d
+
+        # Wait for health check
+        sleep 10
+        if docker-compose ps | grep -q "Up (healthy)"; then
+          echo "✅ Deployment successful!"
+          echo "Deployed: ${FULL_VERSION}"
+          docker image prune -f
+        else
+          echo "❌ Health check failed! Rolling back..."
+          LAST_VERSION=\$(cat .last_version)
+          sed -i "s|image: ${DOCKER_IMAGE}:.*|image: \${LAST_VERSION}|" docker-compose.yml
+          docker-compose up -d
+          exit 1
+        fi
+      EOF
+  environment:
+    name: production
+    url: https://bot.yourdomain.com
+  when: manual  # Require manual approval
+  only:
+    - main
+    - tags
+
+# Rollback job (manual trigger)
+rollback:production:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache openssh-client
+    - mkdir -p ~/.ssh
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+    - chmod 600 ~/.ssh/id_rsa
+    - ssh-keyscan -H $VPS_HOST >> ~/.ssh/known_hosts
+  script:
+    - |
+      ssh $VPS_USER@$VPS_HOST << 'EOF'
+        cd /path/to/discord-bot
+
+        # Show recent deployments
+        echo "Recent deployments:"
+        tail -n 10 deployments.log
+
+        # Get last successful version
+        LAST_VERSION=$(cat .last_version)
+        echo ""
+        echo "Rolling back to: ${LAST_VERSION}"
+
+        # Rollback
+        sed -i "s|image: ${DOCKER_IMAGE}:.*|image: ${LAST_VERSION}|" docker-compose.yml
+        docker-compose up -d
+
+        # Record rollback
+        echo "$(date -Iseconds) | ROLLBACK | ${LAST_VERSION}" >> deployments.log
+
+        echo "✅ Rollback complete!"
+      EOF
+  environment:
+    name: production
+    action: rollback
+  when: manual
+  only:
+    - main

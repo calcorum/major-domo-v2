@@ -14,8 +14,7 @@ from services.player_service import player_service
 from services.stats_service import stats_service
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
-from views.embeds import EmbedColors, EmbedTemplate
-from models.team import RosterType
+from views.players import PlayerStatsView
 
 
 async def player_name_autocomplete(
@@ -155,176 +154,21 @@ class PlayerInfoCommands(commands.Cog):
                             batting_stats=bool(batting_stats), 
                             pitching_stats=bool(pitching_stats))
         
-        # Create comprehensive player embed with statistics
-        self.logger.debug("Creating Discord embed with statistics")
-        embed = await self._create_player_embed_with_stats(
-            player_with_team, 
-            search_season, 
-            batting_stats, 
-            pitching_stats
-        )
-        
-        await interaction.followup.send(embed=embed)
-    
-    async def _create_player_embed_with_stats(
-        self, 
-        player, 
-        season: int, 
-        batting_stats=None, 
-        pitching_stats=None
-    ) -> discord.Embed:
-        """Create a comprehensive player embed with statistics."""
-        # Determine embed color based on team
-        embed_color = EmbedColors.PRIMARY
-        if hasattr(player, 'team') and player.team and hasattr(player.team, 'color'):
-            try:
-                # Convert hex color string to int
-                embed_color = int(player.team.color, 16)
-            except (ValueError, TypeError):
-                embed_color = EmbedColors.PRIMARY
-        
-        # Create base embed
-        embed = EmbedTemplate.create_base_embed(
-            title=f"🏟️ {player.name}",
-            color=embed_color
-        )
-        
-        # Set team logo beside player name (as author icon)
-        if hasattr(player, 'team') and player.team and hasattr(player.team, 'thumbnail') and player.team.thumbnail:
-            embed.set_author(
-                name=player.name,
-                icon_url=player.team.thumbnail
-            )
-            # Remove the emoji from title since we're using author
-            embed.title = None
-        
-        # Basic info section
-        embed.add_field(
-            name="Position",
-            value=player.primary_position,
-            inline=True
-        )
-        
-        if hasattr(player, 'team') and player.team:
-            embed.add_field(
-                name="Team",
-                value=f"{player.team.abbrev} - {player.team.sname}",
-                inline=True
-            )
-
-            # Add Major League affiliate if this is a Minor League team
-            if player.team.roster_type() == RosterType.MINOR_LEAGUE:
-                major_affiliate = player.team.get_major_league_affiliate()
-                if major_affiliate:
-                    embed.add_field(
-                        name="Major Affiliate",
-                        value=major_affiliate,
-                        inline=True
-                    )
-        
-        embed.add_field(
-            name="sWAR",
-            value=f"{player.wara:.1f}",
-            inline=True
+        # Create interactive player view with toggleable statistics
+        self.logger.debug("Creating PlayerStatsView with toggleable statistics")
+        view = PlayerStatsView(
+            player=player_with_team,
+            season=search_season,
+            batting_stats=batting_stats,
+            pitching_stats=pitching_stats,
+            user_id=interaction.user.id
         )
 
-        embed.add_field(
-            name="Player ID",
-            value=str(player.id),
-            inline=True
-        )
-        
-        # All positions if multiple
-        if len(player.positions) > 1:
-            embed.add_field(
-                name="Positions",
-                value=", ".join(player.positions),
-                inline=True
-            )
-        
-        embed.add_field(
-            name="Season",
-            value=str(season),
-            inline=True
-        )
+        # Get initial embed with stats hidden
+        embed = await view.get_initial_embed()
 
-        # Add injury rating if available
-        if player.injury_rating:
-            embed.add_field(
-                name="Injury Rating",
-                value=player.injury_rating,
-                inline=True
-            )
-        
-        # Add batting stats if available
-        if batting_stats:
-            self.logger.debug("Adding batting statistics to embed")
-            batting_value = (
-                f"**AVG/OBP/SLG:** {batting_stats.avg:.3f}/{batting_stats.obp:.3f}/{batting_stats.slg:.3f}\n"
-                f"**OPS:** {batting_stats.ops:.3f} | **wOBA:** {batting_stats.woba:.3f}\n"
-                f"**HR:** {batting_stats.homerun} | **RBI:** {batting_stats.rbi} | **R:** {batting_stats.run}\n"
-                f"**AB:** {batting_stats.ab} | **H:** {batting_stats.hit} | **BB:** {batting_stats.bb} | **SO:** {batting_stats.so}"
-            )
-            embed.add_field(
-                name="⚾ Batting Stats",
-                value=batting_value,
-                inline=False
-            )
-        
-        # Add pitching stats if available
-        if pitching_stats:
-            self.logger.debug("Adding pitching statistics to embed")
-            ip = pitching_stats.innings_pitched
-            pitching_value = (
-                f"**W-L:** {pitching_stats.win}-{pitching_stats.loss} | **ERA:** {pitching_stats.era:.2f}\n"
-                f"**WHIP:** {pitching_stats.whip:.2f} | **IP:** {ip:.1f}\n"
-                f"**SO:** {pitching_stats.so} | **BB:** {pitching_stats.bb} | **H:** {pitching_stats.hits}\n"
-                f"**GS:** {pitching_stats.gs} | **SV:** {pitching_stats.saves} | **HLD:** {pitching_stats.hold}"
-            )
-            embed.add_field(
-                name="🥎 Pitching Stats", 
-                value=pitching_value,
-                inline=False
-            )
-        
-        # Add a note if no stats are available
-        if not batting_stats and not pitching_stats:
-            embed.add_field(
-                name="📊 Statistics",
-                value="No statistics available for this season.",
-                inline=False
-            )
-        
-        # Set player card as main image
-        if player.image:
-            embed.set_image(url=player.image)
-            self.logger.debug("Player card image added to embed", image_url=player.image)
-        
-        # Set thumbnail with priority: fancycard → headshot → team logo
-        thumbnail_url = None
-        thumbnail_source = None
-        
-        if hasattr(player, 'vanity_card') and player.vanity_card:
-            thumbnail_url = player.vanity_card
-            thumbnail_source = "fancycard"
-        elif hasattr(player, 'headshot') and player.headshot:
-            thumbnail_url = player.headshot
-            thumbnail_source = "headshot"
-        elif hasattr(player, 'team') and player.team and hasattr(player.team, 'thumbnail') and player.team.thumbnail:
-            thumbnail_url = player.team.thumbnail
-            thumbnail_source = "team logo"
-        
-        if thumbnail_url:
-            embed.set_thumbnail(url=thumbnail_url)
-            self.logger.debug(f"Thumbnail set from {thumbnail_source}", thumbnail_url=thumbnail_url)
-        
-        # Footer with player ID and additional info
-        footer_text = f"Player ID: {player.id}"
-        if batting_stats and pitching_stats:
-            footer_text += " • Two-way player"
-        embed.set_footer(text=footer_text)
-        
-        return embed
+        # Send with interactive view
+        await interaction.followup.send(embed=embed, view=view)
 
 
 async def setup(bot: commands.Bot):

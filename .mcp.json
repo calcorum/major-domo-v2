@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "readme-context": {
+      "command": "node",
+      "args": [
+        "/home/cal/.claude/mcp-servers/readme-context/dist/index.js"
+      ],
+      "env": {
+        "PROJECT_ROOT": "/mnt/NV2/Development/major-domo/discord-app-v2"
+      }
+    }
+  }
+}

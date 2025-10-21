@@ -93,7 +93,7 @@ class SBABot(commands.Bot):
         # Initialize cleanup tasks
         await self._setup_background_tasks()
         
-        # Smart command syncing: auto-sync in development if changes detected
+        # Smart command syncing: auto-sync in development if changes detected; !admin-sync for first sync
         config = get_config()
         if config.is_development:
             if await self._should_sync_commands():
@@ -104,7 +104,7 @@ class SBABot(commands.Bot):
                 self.logger.info("Development mode: no command changes detected, skipping sync")
         else:
             self.logger.info("Production mode: commands loaded but not auto-synced")
-            self.logger.info("Use /sync command to manually sync when needed")
+            self.logger.info("Use /admin-sync command to manually sync when needed")
     
     async def _load_command_packages(self):
         """Load all command packages with resilient error handling."""
@@ -172,6 +172,11 @@ class SBABot(commands.Bot):
             # Initialize custom command cleanup task
             from tasks.custom_command_cleanup import setup_cleanup_task
             self.custom_command_cleanup = setup_cleanup_task(self)
+
+            # Initialize transaction freeze/thaw task
+            from tasks.transaction_freeze import setup_freeze_task
+            self.transaction_freeze = setup_freeze_task(self)
+            self.logger.info("✅ Transaction freeze/thaw task started")
 
             # Initialize voice channel cleanup service
             from commands.voice.cleanup_service import VoiceChannelCleanupService
@@ -285,7 +290,7 @@ class SBABot(commands.Bot):
     async def _sync_commands(self):
         """Internal method to sync commands."""
         config = get_config()
-        if config.guild_id:
+        if config.testing and config.guild_id:
             guild = discord.Object(id=config.guild_id)
             self.tree.copy_global_to(guild=guild)
             synced = await self.tree.sync(guild=guild)
@@ -313,7 +318,7 @@ class SBABot(commands.Bot):
     async def close(self):
         """Clean shutdown of the bot."""
         self.logger.info("Bot shutting down...")
-        
+
         # Stop background tasks
         if hasattr(self, 'custom_command_cleanup'):
             try:
@@ -322,13 +327,20 @@ class SBABot(commands.Bot):
             except Exception as e:
                 self.logger.error(f"Error stopping cleanup task: {e}")
 
+        if hasattr(self, 'transaction_freeze'):
+            try:
+                self.transaction_freeze.weekly_loop.cancel()
+                self.logger.info("Transaction freeze/thaw task stopped")
+            except Exception as e:
+                self.logger.error(f"Error stopping transaction freeze task: {e}")
+
         if hasattr(self, 'voice_cleanup_service'):
             try:
                 self.voice_cleanup_service.stop_monitoring()
                 self.logger.info("Voice channel cleanup service stopped")
             except Exception as e:
                 self.logger.error(f"Error stopping voice cleanup service: {e}")
-        
+
         # Call parent close method
         await super().close()
         self.logger.info("Bot shutdown complete")

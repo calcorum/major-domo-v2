@@ -4,7 +4,7 @@ Base View Classes for Discord Bot v2.0
 Provides foundational view components with consistent styling and behavior.
 """
 import logging
-from typing import Optional, Any, Callable, Awaitable
+from typing import List, Optional, Any, Callable, Awaitable, Union
 from datetime import datetime, timezone
 
 import discord
@@ -21,20 +21,22 @@ class BaseView(discord.ui.View):
         *,
         timeout: float = 180.0,
         user_id: Optional[int] = None,
+        responders: Optional[List[int | None]] = None,
         logger_name: Optional[str] = None
     ):
         super().__init__(timeout=timeout)
         self.user_id = user_id
+        self.responders = responders
         self.logger = get_contextual_logger(logger_name or f'{__name__}.BaseView')
         self.interaction_count = 0
         self.created_at = datetime.now(timezone.utc)
         
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         """Check if user is authorized to interact with this view."""
-        if self.user_id is None:
+        if self.user_id is None and self.responders is None:
             return True
             
-        if interaction.user.id != self.user_id:
+        if (self.user_id is not None and interaction.user.id != self.user_id) or (self.responders is not None and interaction.user.id not in self.responders):
             await interaction.response.send_message(
                 "❌ You cannot interact with this menu.",
                 ephemeral=True
@@ -95,14 +97,15 @@ class ConfirmationView(BaseView):
     def __init__(
         self,
         *,
-        user_id: int,
+        user_id: Optional[int] = None,
+        responders: Optional[List[int | None]] = None,
         timeout: float = 60.0,
         confirm_callback: Optional[Callable[[discord.Interaction], Awaitable[None]]] = None,
         cancel_callback: Optional[Callable[[discord.Interaction], Awaitable[None]]] = None,
         confirm_label: str = "Confirm",
         cancel_label: str = "Cancel"
     ):
-        super().__init__(timeout=timeout, user_id=user_id, logger_name=f'{__name__}.ConfirmationView')
+        super().__init__(timeout=timeout, user_id=user_id, responders=responders, logger_name=f'{__name__}.ConfirmationView')
         self.confirm_callback = confirm_callback
         self.cancel_callback = cancel_callback
         self.result: Optional[bool] = None

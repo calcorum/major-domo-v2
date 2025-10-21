@@ -11,6 +11,7 @@ from discord.ext import commands
 
 from .management import AdminCommands
 from .users import UserManagementCommands
+from .league_management import LeagueManagementCommands
 
 logger = logging.getLogger(f'{__name__}.setup_admin')
 
@@ -25,6 +26,7 @@ async def setup_admin(bot: commands.Bot) -> Tuple[int, int, List[str]]:
     admin_cogs: List[Tuple[str, Type[commands.Cog]]] = [
         ("AdminCommands", AdminCommands),
         ("UserManagementCommands", UserManagementCommands),
+        ("LeagueManagementCommands", LeagueManagementCommands),
     ]
     
     successful = 0

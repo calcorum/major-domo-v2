@@ -1,0 +1,49 @@
+# Enhanced Dockerfile with Version Metadata
+# Rename to Dockerfile when ready to use
+
+# Build stage
+FROM python:3.11-slim as builder
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --user --no-cache-dir -r requirements.txt
+
+# Runtime stage
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Copy dependencies from builder
+COPY --from=builder /root/.local /root/.local
+ENV PATH=/root/.local/bin:$PATH
+
+# Add version metadata as build args
+ARG VERSION="dev"
+ARG GIT_COMMIT="unknown"
+ARG BUILD_DATE="unknown"
+
+# Store as labels (visible via `docker inspect`)
+LABEL org.opencontainers.image.version="${VERSION}"
+LABEL org.opencontainers.image.revision="${GIT_COMMIT}"
+LABEL org.opencontainers.image.created="${BUILD_DATE}"
+LABEL org.opencontainers.image.title="Discord Bot v2.0"
+LABEL org.opencontainers.image.description="SBA Discord Bot - Modernized"
+
+# Store as environment variables (accessible in bot)
+ENV BOT_VERSION="${VERSION}"
+ENV BOT_GIT_COMMIT="${GIT_COMMIT}"
+ENV BOT_BUILD_DATE="${BUILD_DATE}"
+
+# Copy application
+COPY . .
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD python -c "import discord; print('ok')" || exit 1
+
+CMD ["python", "bot.py"]

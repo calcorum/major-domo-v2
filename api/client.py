@@ -7,7 +7,7 @@ Provides connection pooling, proper error handling, and session management.
 import aiohttp
 import logging
 from typing import Optional, List, Dict, Any, Union
-from urllib.parse import urljoin
+from urllib.parse import urljoin, quote
 from contextlib import asynccontextmanager
 
 from config import get_config
@@ -60,26 +60,28 @@ class APIClient:
             'User-Agent': 'SBA-Discord-Bot-v2/1.0'
         }
     
-    def _build_url(self, endpoint: str, api_version: int = 3, object_id: Optional[int] = None) -> str:
+    def _build_url(self, endpoint: str, api_version: int = 3, object_id: Optional[Union[int, str]] = None) -> str:
         """
         Build complete API URL from components.
-        
+
         Args:
             endpoint: API endpoint path
             api_version: API version number (default: 3)
-            object_id: Optional object ID to append
-            
+            object_id: Optional object ID to append (int for numeric IDs, str for moveids)
+
         Returns:
             Complete URL for API request
         """
         # Handle already complete URLs
         if endpoint.startswith(('http://', 'https://')) or '/api/' in endpoint:
             return endpoint
-            
+
         path = f"v{api_version}/{endpoint}"
         if object_id is not None:
-            path += f"/{object_id}"
-            
+            # URL-encode the object_id to handle special characters (e.g., colons in moveids)
+            encoded_id = quote(str(object_id), safe='')
+            path += f"/{encoded_id}"
+
         return urljoin(self.base_url.rstrip('/') + '/', path)
     
     def _add_params(self, url: str, params: Optional[List[tuple]] = None) -> str:
@@ -121,9 +123,9 @@ class APIClient:
             logger.debug("Created new aiohttp session with connection pooling")
     
     async def get(
-        self, 
-        endpoint: str, 
-        object_id: Optional[int] = None, 
+        self,
+        endpoint: str,
+        object_id: Optional[Union[int, str]] = None,
         params: Optional[List[tuple]] = None,
         api_version: int = 3,
         timeout: Optional[int] = None
@@ -251,10 +253,10 @@ class APIClient:
             raise APIException(f"POST failed: {e}")
     
     async def put(
-        self, 
-        endpoint: str, 
+        self,
+        endpoint: str,
         data: Dict[str, Any],
-        object_id: Optional[int] = None,
+        object_id: Optional[Union[int, str]] = None,
         api_version: int = 3,
         timeout: Optional[int] = None
     ) -> Optional[Dict[str, Any]]:
@@ -313,7 +315,7 @@ class APIClient:
         self,
         endpoint: str,
         data: Optional[Dict[str, Any]] = None,
-        object_id: Optional[int] = None,
+        object_id: Optional[Union[int, str]] = None,
         api_version: int = 3,
         timeout: Optional[int] = None,
         use_query_params: bool = False
@@ -339,13 +341,17 @@ class APIClient:
 
         # Add data as query parameters if requested
         if use_query_params and data:
-            params = [(k, str(v)) for k, v in data.items()]
+            # Handle None values by converting to empty string
+            # The database API's PATCH endpoint treats empty strings as NULL for nullable fields
+            # Example: {'il_return': None} → ?il_return= → Database sets il_return to NULL
+            params = [(k, '' if v is None else str(v)) for k, v in data.items()]
             url = self._add_params(url, params)
 
         await self._ensure_session()
 
         try:
             logger.debug(f"PATCH: {endpoint} id: {object_id} data: {data} use_query_params: {use_query_params}")
+            logger.debug(f"PATCH URL: {url}")
 
             request_timeout = aiohttp.ClientTimeout(total=timeout) if timeout else None
 
@@ -353,6 +359,7 @@ class APIClient:
             kwargs = {}
             if data is not None and not use_query_params:
                 kwargs['json'] = data
+                logger.debug(f"PATCH JSON body: {data}")
 
             async with self._session.patch(url, timeout=request_timeout, **kwargs) as response:
                 if response.status == 401:
@@ -381,9 +388,9 @@ class APIClient:
             raise APIException(f"PATCH failed: {e}")
     
     async def delete(
-        self, 
-        endpoint: str, 
-        object_id: Optional[int] = None,
+        self,
+        endpoint: str,
+        object_id: Optional[Union[int, str]] = None,
         api_version: int = 3,
         timeout: Optional[int] = None
     ) -> bool:

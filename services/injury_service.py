@@ -155,13 +155,22 @@ class InjuryService(BaseService[Injury]):
                 'is_active': True
             }
 
-            injury = await self.create(injury_data)
-            if injury:
-                logger.info(f"Created injury for player {player_id}: {total_games} games")
-                return injury
+            # Call the API to create the injury
+            client = await self.get_client()
+            response = await client.post(self.endpoint, injury_data)
 
-            logger.error(f"Failed to create injury for player {player_id}")
-            return None
+            if not response:
+                logger.error(f"Failed to create injury for player {player_id}: No response from API")
+                return None
+
+            # Merge the request data with the response to ensure all required fields are present
+            # (API may not return all fields that were sent)
+            merged_data = {**injury_data, **response}
+
+            # Create Injury model from merged data
+            injury = Injury.from_api_data(merged_data)
+            logger.info(f"Created injury for player {player_id}: {total_games} games")
+            return injury
 
         except Exception as e:
             logger.error(f"Error creating injury for player {player_id}: {e}")

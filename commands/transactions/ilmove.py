@@ -1,9 +1,13 @@
 """
-Modern /dropadd Command
+/ilmove Command - Real-time IL/Roster Moves
 
-Interactive transaction builder with real-time validation and elegant UX.
+Interactive transaction builder for immediate roster changes (current week).
+Unlike /dropadd which schedules moves for next week, /ilmove:
+- Creates transactions for THIS week
+- Immediately posts transactions to database
+- Immediately updates player team assignments
 """
-from typing import Optional, List
+from typing import Optional
 
 import discord
 from discord.ext import commands
@@ -27,36 +31,36 @@ from services.team_service import team_service
 from views.transaction_embed import TransactionEmbedView, create_transaction_embed
 
 
-class DropAddCommands(commands.Cog):
-    """Modern transaction builder commands."""
-    
+class ILMoveCommands(commands.Cog):
+    """Real-time roster move commands (IL, activations, etc)."""
+
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.logger = get_contextual_logger(f'{__name__}.DropAddCommands')
-    
-    
+        self.logger = get_contextual_logger(f'{__name__}.ILMoveCommands')
+
+
     @app_commands.command(
-        name="dropadd",
-        description="Build a transaction for next week"
+        name="ilmove",
+        description="Build a real-time roster move (executed immediately for this week)"
     )
     @app_commands.describe(
         player="Player name; begin typing for autocomplete",
-        destination="Where to move the player: Major League, Minor League, or Free Agency"
+        destination="Where to move the player: Major League, Minor League, or Injured List"
     )
     @app_commands.autocomplete(player=player_autocomplete)
     @app_commands.choices(destination=[
         app_commands.Choice(name="Major League", value="ml"),
         app_commands.Choice(name="Minor League", value="mil"),
-        app_commands.Choice(name="Free Agency", value="fa")
+        app_commands.Choice(name="Injured List", value="il")
     ])
-    @logged_command("/dropadd")
-    async def dropadd(
+    @logged_command("/ilmove")
+    async def ilmove(
         self,
         interaction: discord.Interaction,
         player: Optional[str] = None,
         destination: Optional[str] = None
     ):
-        """Interactive transaction builder for complex player moves."""
+        """Interactive transaction builder for immediate roster moves."""
         await interaction.response.defer(ephemeral=True)
 
         # Get user's major league team
@@ -74,8 +78,8 @@ class DropAddCommands(commands.Cog):
 
             if success:
                 # Move added successfully - show updated transaction builder
-                embed = await create_transaction_embed(builder, command_name="/dropadd")
-                view = TransactionEmbedView(builder, interaction.user.id, submission_handler="scheduled", command_name="/dropadd")
+                embed = await create_transaction_embed(builder, command_name="/ilmove")
+                view = TransactionEmbedView(builder, interaction.user.id, submission_handler="immediate", command_name="/ilmove")
 
                 success_msg = f"✅ **Added {player} → {destination.upper()}**"
                 if builder.move_count > 1:
@@ -91,8 +95,8 @@ class DropAddCommands(commands.Cog):
 
             else:
                 # Failed to add move - still show current transaction state
-                embed = await create_transaction_embed(builder, command_name="/dropadd")
-                view = TransactionEmbedView(builder, interaction.user.id, submission_handler="scheduled", command_name="/dropadd")
+                embed = await create_transaction_embed(builder, command_name="/ilmove")
+                view = TransactionEmbedView(builder, interaction.user.id, submission_handler="immediate", command_name="/ilmove")
 
                 await interaction.followup.send(
                     content=f"❌ **{error_message}**\n"
@@ -104,10 +108,10 @@ class DropAddCommands(commands.Cog):
                 self.logger.warning(f"Failed to add move: {player} → {destination}: {error_message}")
         else:
             # No parameters or incomplete parameters - show current transaction state
-            embed = await create_transaction_embed(builder, command_name="/dropadd")
-            view = TransactionEmbedView(builder, interaction.user.id, submission_handler="scheduled", command_name="/dropadd")
+            embed = await create_transaction_embed(builder, command_name="/ilmove")
+            view = TransactionEmbedView(builder, interaction.user.id, submission_handler="immediate", command_name="/ilmove")
             await interaction.followup.send(embed=embed, view=view, ephemeral=True)
-    
+
     async def _add_quick_move(
         self,
         builder: TransactionBuilder,
@@ -120,7 +124,7 @@ class DropAddCommands(commands.Cog):
         Args:
             builder: TransactionBuilder instance
             player_name: Name of player to move
-            destination_str: Destination string (ml, mil, fa)
+            destination_str: Destination string (ml, mil, il)
 
         Returns:
             Tuple of (success: bool, error_message: str)
@@ -131,7 +135,7 @@ class DropAddCommands(commands.Cog):
             if not players:
                 self.logger.error(f"Player not found: {player_name}")
                 return False, f"Player '{player_name}' not found"
-            
+
             # Use exact match if available, otherwise first result
             player = None
             for p in players:
@@ -147,25 +151,24 @@ class DropAddCommands(commands.Cog):
                 # Player belongs to another team if:
                 # 1. They have a team assigned AND
                 # 2. That team is not Free Agency (abbrev != 'FA') AND
-                # 3. That team is not the user's team
+                # 3. That team is not in the same organization as the user's team
                 if (player.team.abbrev != 'FA' and
-                    player.team.id != builder.team.id):
+                    not builder.team.is_same_organization(player.team)):
                     self.logger.warning(f"Player {player.name} belongs to {player.team.abbrev}, cannot add to {builder.team.abbrev} transaction")
                     return False, f"{player.name} belongs to {player.team.abbrev} and cannot be added to your transaction"
-            
+
             # Parse destination
             destination_map = {
                 "ml": RosterType.MAJOR_LEAGUE,
                 "mil": RosterType.MINOR_LEAGUE,
                 "il": RosterType.INJURED_LIST,
-                "fa": RosterType.FREE_AGENCY
             }
-            
+
             to_roster = destination_map.get(destination_str.lower())
             if not to_roster:
                 self.logger.error(f"Invalid destination: {destination_str}")
                 return False, f"Invalid destination: {destination_str}"
-            
+
             # Determine player's current roster status by checking actual roster data
             # Note: Minor League players have different team_id than Major League team
             self.logger.debug(f"Player {player.name} team_id: {player.team_id}, Builder team_id: {builder.team.id}")
@@ -187,23 +190,27 @@ class DropAddCommands(commands.Cog):
                     from_roster = RosterType.INJURED_LIST
                     self.logger.debug(f"Player {player.name} found on injured list")
                 else:
-                    # Player not found on user's roster - they're from another team or free agency
-                    from_roster = RosterType.FREE_AGENCY
-                    self.logger.debug(f"Player {player.name} not found on user's roster, treating as free agency")
+                    # Player not found on user's roster - cannot move with /ilmove
+                    from_roster = None
+                    self.logger.warning(f"Player {player.name} not found on {builder.team.abbrev} roster")
+                    return False, f"{player.name} is not on your roster (use /dropadd for FA signings)"
             else:
-                # Couldn't load roster data, assume free agency as safest fallback
-                from_roster = RosterType.FREE_AGENCY
-                self.logger.warning(f"Could not load roster data, assuming {player.name} is free agency")
-            
+                # Couldn't load roster data
+                self.logger.error(f"Could not load roster data for {builder.team.abbrev}")
+                return False, "Could not load roster data. Please try again."
+
+            if from_roster is None:
+                return False, f"{player.name} is not on your roster"
+
             # Create move
             move = TransactionMove(
                 player=player,
                 from_roster=from_roster,
                 to_roster=to_roster,
-                from_team=None if from_roster == RosterType.FREE_AGENCY else builder.team,
-                to_team=None if to_roster == RosterType.FREE_AGENCY else builder.team
+                from_team=builder.team,
+                to_team=builder.team
             )
-            
+
             success, error_message = builder.add_move(move)
             if not success:
                 self.logger.warning(f"Failed to add quick move: {error_message}")
@@ -213,23 +220,23 @@ class DropAddCommands(commands.Cog):
         except Exception as e:
             self.logger.error(f"Error adding quick move: {e}")
             return False, f"Error adding move: {str(e)}"
-    
+
     @app_commands.command(
-        name="cleartransaction",
-        description="Clear your current transaction builder"
+        name="clearilmove",
+        description="Clear your current IL move transaction builder"
     )
-    @logged_command("/cleartransaction")
-    async def clear_transaction(self, interaction: discord.Interaction):
-        """Clear the user's current transaction builder."""
+    @logged_command("/clearilmove")
+    async def clear_ilmove(self, interaction: discord.Interaction):
+        """Clear the user's current IL move transaction builder."""
         clear_transaction_builder(interaction.user.id)
-        
+
         await interaction.response.send_message(
-            "✅ Your transaction builder has been cleared.",
+            "✅ Your IL move transaction builder has been cleared.",
             ephemeral=True
         )
-    
+
 
 
 async def setup(bot):
     """Setup function for the cog."""
-    await bot.add_cog(DropAddCommands(bot))
+    await bot.add_cog(ILMoveCommands(bot))

@@ -33,6 +33,7 @@ class BotConfig(BaseSettings):
     weeks_per_season: int = 18
     games_per_week: int = 4
     modern_stats_start_season: int = 8
+    offseason_flag: bool = False  # When True, relaxes roster limits and disables weekly freeze/thaw
 
     # Current Season Constants
     sba_current_season: int = 12
@@ -45,7 +46,7 @@ class BotConfig(BaseSettings):
 
     # Draft Constants
     default_pick_minutes: int = 10
-    draft_rounds: int = 25
+    draft_rounds: int = 32
 
     # Special Team IDs
     free_agent_team_id: int = 498
@@ -63,7 +64,7 @@ class BotConfig(BaseSettings):
     # Application settings
     log_level: str = "INFO"
     environment: str = "development"
-    testing: bool = False
+    testing: bool = True
 
     # Google Sheets settings
     sheets_credentials_path: str = "/app/data/major-domo-service-creds.json"

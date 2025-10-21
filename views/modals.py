@@ -486,3 +486,356 @@ def validate_season(season: str) -> bool:
         return 1 <= season_num <= 50
     except ValueError:
         return False
+
+
+class BatterInjuryModal(BaseModal):
+    """Modal for collecting current week/game when logging batter injury."""
+
+    def __init__(
+        self,
+        player: 'Player',
+        injury_games: int,
+        season: int,
+        *,
+        timeout: Optional[float] = 300.0
+    ):
+        """
+        Initialize batter injury modal.
+
+        Args:
+            player: Player object for the injured batter
+            injury_games: Injury games from roll
+            season: Current season number
+            timeout: Modal timeout in seconds
+        """
+        super().__init__(title=f"Batter Injury - {player.name}", timeout=timeout)
+
+        self.player = player
+        self.injury_games = injury_games
+        self.season = season
+
+        # Current week input
+        self.current_week = discord.ui.TextInput(
+            label="Current Week",
+            placeholder="Enter current week number (e.g., 5)",
+            required=True,
+            max_length=2,
+            style=discord.TextStyle.short
+        )
+
+        # Current game input
+        self.current_game = discord.ui.TextInput(
+            label="Current Game",
+            placeholder="Enter current game number (1-4)",
+            required=True,
+            max_length=1,
+            style=discord.TextStyle.short
+        )
+
+        self.add_item(self.current_week)
+        self.add_item(self.current_game)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        """Handle batter injury input and log injury."""
+        from services.player_service import player_service
+        from services.injury_service import injury_service
+        import math
+
+        # Validate current week
+        try:
+            week = int(self.current_week.value)
+            if week < 1 or week > 18:
+                raise ValueError("Week must be between 1 and 18")
+        except ValueError:
+            embed = EmbedTemplate.error(
+                title="Invalid Week",
+                description="Current week must be a number between 1 and 18."
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
+        # Validate current game
+        try:
+            game = int(self.current_game.value)
+            if game < 1 or game > 4:
+                raise ValueError("Game must be between 1 and 4")
+        except ValueError:
+            embed = EmbedTemplate.error(
+                title="Invalid Game",
+                description="Current game must be a number between 1 and 4."
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
+        # Calculate injury dates
+        out_weeks = math.floor(self.injury_games / 4)
+        out_games = self.injury_games % 4
+
+        return_week = week + out_weeks
+        return_game = game + 1 + out_games
+
+        if return_game > 4:
+            return_week += 1
+            return_game -= 4
+
+        # Adjust start date if injury starts after game 4
+        start_week = week if game != 4 else week + 1
+        start_game = game + 1 if game != 4 else 1
+
+        return_date = f'w{return_week:02d}g{return_game}'
+
+        # Create injury record
+        try:
+            injury = await injury_service.create_injury(
+                season=self.season,
+                player_id=self.player.id,
+                total_games=self.injury_games,
+                start_week=start_week,
+                start_game=start_game,
+                end_week=return_week,
+                end_game=return_game
+            )
+
+            if not injury:
+                raise ValueError("Failed to create injury record")
+
+            # Update player's il_return field
+            await player_service.update_player(self.player.id, {'il_return': return_date})
+
+            # Success response
+            embed = EmbedTemplate.success(
+                title="Injury Logged",
+                description=f"{self.player.name}'s injury has been logged."
+            )
+
+            embed.add_field(
+                name="Duration",
+                value=f"{self.injury_games} game{'s' if self.injury_games > 1 else ''}",
+                inline=True
+            )
+
+            embed.add_field(
+                name="Return Date",
+                value=return_date,
+                inline=True
+            )
+
+            if self.player.team:
+                embed.add_field(
+                    name="Team",
+                    value=f"{self.player.team.lname} ({self.player.team.abbrev})",
+                    inline=False
+                )
+
+            self.is_submitted = True
+            self.result = {
+                'injury_id': injury.id,
+                'total_games': self.injury_games,
+                'return_date': return_date
+            }
+
+            await interaction.response.send_message(embed=embed)
+
+        except Exception as e:
+            self.logger.error("Failed to create batter injury", error=e, player_id=self.player.id)
+            embed = EmbedTemplate.error(
+                title="Error",
+                description="Failed to log the injury. Please try again or contact an administrator."
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
+class PitcherRestModal(BaseModal):
+    """Modal for collecting pitcher rest games when logging injury."""
+
+    def __init__(
+        self,
+        player: 'Player',
+        injury_games: int,
+        season: int,
+        *,
+        timeout: Optional[float] = 300.0
+    ):
+        """
+        Initialize pitcher rest modal.
+
+        Args:
+            player: Player object for the injured pitcher
+            injury_games: Base injury games from roll
+            season: Current season number
+            timeout: Modal timeout in seconds
+        """
+        super().__init__(title=f"Pitcher Rest - {player.name}", timeout=timeout)
+
+        self.player = player
+        self.injury_games = injury_games
+        self.season = season
+
+        # Current week input
+        self.current_week = discord.ui.TextInput(
+            label="Current Week",
+            placeholder="Enter current week number (e.g., 5)",
+            required=True,
+            max_length=2,
+            style=discord.TextStyle.short
+        )
+
+        # Current game input
+        self.current_game = discord.ui.TextInput(
+            label="Current Game",
+            placeholder="Enter current game number (1-4)",
+            required=True,
+            max_length=1,
+            style=discord.TextStyle.short
+        )
+
+        # Rest games input
+        self.rest_games = discord.ui.TextInput(
+            label="Pitcher Rest Games",
+            placeholder="Enter number of rest games (0 or more)",
+            required=True,
+            max_length=2,
+            style=discord.TextStyle.short
+        )
+
+        self.add_item(self.current_week)
+        self.add_item(self.current_game)
+        self.add_item(self.rest_games)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        """Handle pitcher rest input and log injury."""
+        from services.player_service import player_service
+        from services.injury_service import injury_service
+        from models.injury import Injury
+        import math
+
+        # Validate current week
+        try:
+            week = int(self.current_week.value)
+            if week < 1 or week > 18:
+                raise ValueError("Week must be between 1 and 18")
+        except ValueError:
+            embed = EmbedTemplate.error(
+                title="Invalid Week",
+                description="Current week must be a number between 1 and 18."
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
+        # Validate current game
+        try:
+            game = int(self.current_game.value)
+            if game < 1 or game > 4:
+                raise ValueError("Game must be between 1 and 4")
+        except ValueError:
+            embed = EmbedTemplate.error(
+                title="Invalid Game",
+                description="Current game must be a number between 1 and 4."
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
+        # Validate rest games
+        try:
+            rest = int(self.rest_games.value)
+            if rest < 0:
+                raise ValueError("Rest games cannot be negative")
+        except ValueError:
+            embed = EmbedTemplate.error(
+                title="Invalid Rest Games",
+                description="Rest games must be a non-negative number."
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
+        # Calculate total injury
+        total_injury_games = self.injury_games + rest
+
+        # Calculate injury dates
+        out_weeks = math.floor(total_injury_games / 4)
+        out_games = total_injury_games % 4
+
+        return_week = week + out_weeks
+        return_game = game + 1 + out_games
+
+        if return_game > 4:
+            return_week += 1
+            return_game -= 4
+
+        # Adjust start date if injury starts after game 4
+        start_week = week if game != 4 else week + 1
+        start_game = game + 1 if game != 4 else 1
+
+        return_date = f'w{return_week:02d}g{return_game}'
+
+        # Create injury record
+        try:
+            injury = await injury_service.create_injury(
+                season=self.season,
+                player_id=self.player.id,
+                total_games=total_injury_games,
+                start_week=start_week,
+                start_game=start_game,
+                end_week=return_week,
+                end_game=return_game
+            )
+
+            if not injury:
+                raise ValueError("Failed to create injury record")
+
+            # Update player's il_return field
+            await player_service.update_player(self.player.id, {'il_return': return_date})
+
+            # Success response
+            embed = EmbedTemplate.success(
+                title="Injury Logged",
+                description=f"{self.player.name}'s injury has been logged."
+            )
+
+            embed.add_field(
+                name="Base Injury",
+                value=f"{self.injury_games} game{'s' if self.injury_games > 1 else ''}",
+                inline=True
+            )
+
+            embed.add_field(
+                name="Rest Requirement",
+                value=f"{rest} game{'s' if rest > 1 else ''}",
+                inline=True
+            )
+
+            embed.add_field(
+                name="Total Duration",
+                value=f"{total_injury_games} game{'s' if total_injury_games > 1 else ''}",
+                inline=True
+            )
+
+            embed.add_field(
+                name="Return Date",
+                value=return_date,
+                inline=True
+            )
+
+            if self.player.team:
+                embed.add_field(
+                    name="Team",
+                    value=f"{self.player.team.lname} ({self.player.team.abbrev})",
+                    inline=False
+                )
+
+            self.is_submitted = True
+            self.result = {
+                'injury_id': injury.id,
+                'total_games': total_injury_games,
+                'return_date': return_date
+            }
+
+            await interaction.response.send_message(embed=embed)
+
+        except Exception as e:
+            self.logger.error("Failed to create pitcher injury", error=e, player_id=self.player.id)
+            embed = EmbedTemplate.error(
+                title="Error",
+                description="Failed to log the injury. Please try again or contact an administrator."
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)

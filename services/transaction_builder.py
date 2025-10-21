@@ -380,7 +380,7 @@ class TransactionBuilder:
             ml_limit = 26
             mil_limit = 6
         else:
-            ml_limit = 25
+            ml_limit = 26
             mil_limit = 14
         
         # Validate roster limits
@@ -452,16 +452,35 @@ class TransactionBuilder:
         
         for move in self.moves:
             # Determine old and new teams based on roster locations
+            # We need to map RosterType to the actual team (ML, MiL, or IL affiliate)
             if move.from_roster == RosterType.FREE_AGENCY:
                 old_team = fa_team
             else:
-                old_team = move.from_team or self.team
-                
+                base_team = move.from_team or self.team
+                # Get the appropriate affiliate based on roster type
+                if move.from_roster == RosterType.MAJOR_LEAGUE:
+                    old_team = base_team  # Already ML team
+                elif move.from_roster == RosterType.MINOR_LEAGUE:
+                    old_team = await base_team.minor_league_affiliate()
+                elif move.from_roster == RosterType.INJURED_LIST:
+                    old_team = await base_team.injured_list_affiliate()
+                else:
+                    old_team = base_team
+
             if move.to_roster == RosterType.FREE_AGENCY:
                 new_team = fa_team
             else:
-                new_team = move.to_team or self.team
-            
+                base_team = move.to_team or self.team
+                # Get the appropriate affiliate based on roster type
+                if move.to_roster == RosterType.MAJOR_LEAGUE:
+                    new_team = base_team  # Already ML team
+                elif move.to_roster == RosterType.MINOR_LEAGUE:
+                    new_team = await base_team.minor_league_affiliate()
+                elif move.to_roster == RosterType.INJURED_LIST:
+                    new_team = await base_team.injured_list_affiliate()
+                else:
+                    new_team = base_team
+
             # For cases where we don't have specific teams, fall back to defaults
             if not old_team:
                 continue

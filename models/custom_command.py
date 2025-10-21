@@ -27,7 +27,7 @@ class CustomCommand(SBABaseModel):
     id: int = Field(..., description="Database ID") # type: ignore
     name: str = Field(..., description="Command name (unique)")
     content: str = Field(..., description="Command response content")
-    creator_id: int = Field(..., description="ID of the creator")
+    creator_id: Optional[int] = Field(None, description="ID of the creator (may be missing from execute endpoint)")
     creator: Optional[CustomCommandCreator] = Field(None, description="Creator details")
     
     # Timestamps
