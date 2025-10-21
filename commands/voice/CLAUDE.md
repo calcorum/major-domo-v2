@@ -65,6 +65,7 @@ This directory contains Discord slash commands for creating and managing voice c
 - **Restart Resilience**: JSON file persistence survives bot restarts
 - **Startup Verification**: Validates tracked channels still exist on bot startup
 - **Graceful Error Handling**: Continues operation even if individual operations fail
+- **Scorecard Cleanup**: Automatically unpublishes scorecards when associated voice channels are deleted
 
 ## Architecture
 
@@ -123,6 +124,29 @@ if hasattr(self.bot, 'voice_cleanup_service'):
     cleanup_service.tracker.add_channel(channel, channel_type, interaction.user.id)
 ```
 
+### Scorecard Cleanup Integration
+When a voice channel is cleaned up (deleted after being empty for the configured threshold), the cleanup service automatically unpublishes any scorecard associated with that voice channel's text channel. This prevents the live scorebug tracker from continuing to update scores for games that no longer have active voice channels.
+
+**Cleanup Flow**:
+1. Voice channel becomes empty and exceeds empty threshold
+2. Cleanup service deletes the voice channel
+3. Service checks if voice channel has associated `text_channel_id`
+4. If found, unpublishes scorecard from that text channel
+5. Live scorebug tracker stops updating that scorecard
+
+**Integration Points**:
+- `cleanup_service.py` imports `ScorecardTracker` from `commands.gameplay.scorecard_tracker`
+- Scorecard unpublishing happens in three scenarios:
+  - Normal cleanup (channel deleted after being empty)
+  - Stale channel cleanup (channel already deleted externally)
+  - Startup verification (channel no longer exists when bot starts)
+
+**Logging**:
+```
+✅ Cleaned up empty voice channel: Gameplay Phoenix (ID: 123456789)
+📋 Unpublished scorecard from text channel 987654321 (voice channel cleanup)
+```
+
 ### JSON Data Structure
 ```json
 {
@@ -135,11 +159,14 @@ if hasattr(self.bot, 'voice_cleanup_service'):
       "created_at": "2025-01-15T10:30:00",
       "last_checked": "2025-01-15T10:35:00",
       "empty_since": "2025-01-15T10:32:00",
-      "creator_id": "111222333"
+      "creator_id": "111222333",
+      "text_channel_id": "555666777"
     }
   }
 }
 ```
+
+**Note**: The `text_channel_id` field links the voice channel to its associated text channel, enabling automatic scorecard cleanup when the voice channel is deleted.
 
 ## Configuration
 

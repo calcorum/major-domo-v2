@@ -121,6 +121,7 @@ class SBABot(commands.Bot):
         from commands.profile import setup_profile_commands
         from commands.soak import setup_soak
         from commands.injuries import setup_injuries
+        from commands.gameplay import setup_gameplay
 
         # Define command packages to load
         command_packages = [
@@ -137,6 +138,7 @@ class SBABot(commands.Bot):
             ("profile", setup_profile_commands),
             ("soak", setup_soak),
             ("injuries", setup_injuries),
+            ("gameplay", setup_gameplay),
         ]
         
         total_successful = 0
@@ -186,6 +188,11 @@ class SBABot(commands.Bot):
             import asyncio
             asyncio.create_task(self.voice_cleanup_service.start_monitoring(self))
             self.logger.info("✅ Voice channel cleanup service started")
+
+            # Initialize live scorebug tracker
+            from tasks.live_scorebug_tracker import setup_scorebug_tracker
+            self.live_scorebug_tracker = setup_scorebug_tracker(self)
+            self.logger.info("✅ Live scorebug tracker started")
 
             self.logger.info("✅ Background tasks initialized successfully")
 
@@ -340,6 +347,13 @@ class SBABot(commands.Bot):
                 self.logger.info("Voice channel cleanup service stopped")
             except Exception as e:
                 self.logger.error(f"Error stopping voice cleanup service: {e}")
+
+        if hasattr(self, 'live_scorebug_tracker'):
+            try:
+                self.live_scorebug_tracker.update_loop.cancel()
+                self.logger.info("Live scorebug tracker stopped")
+            except Exception as e:
+                self.logger.error(f"Error stopping live scorebug tracker: {e}")
 
         # Call parent close method
         await super().close()
