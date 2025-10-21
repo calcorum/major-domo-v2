@@ -236,7 +236,7 @@ class ChartManageGroup(app_commands.Group):
         key="Unique identifier for the chart (e.g., 'rest', 'sac-bunt')",
         name="Display name for the chart",
         category="Category key (use autocomplete)",
-        url="Image URL for the chart",
+        url="Image URL(s) - comma-separated for multiple images",
         description="Optional description of the chart"
     )
     @app_commands.autocomplete(category=category_autocomplete)
@@ -274,12 +274,18 @@ class ChartManageGroup(app_commands.Group):
                 f"Invalid category. Must be one of: {', '.join(valid_categories)}"
             )
 
+        # Parse comma-separated URLs
+        urls = [u.strip() for u in url.split(',') if u.strip()]
+
+        if not urls:
+            raise BotException("At least one valid URL is required")
+
         # Add chart (service will handle duplicate key check)
         self.chart_service.add_chart(
             key=key,
             name=name,
             category=category,
-            urls=[url],
+            urls=urls,
             description=description or ""
         )
 
@@ -290,7 +296,8 @@ class ChartManageGroup(app_commands.Group):
         )
         embed.add_field(name="Key", value=key, inline=True)
         embed.add_field(name="Category", value=category, inline=True)
-        embed.set_image(url=url)
+        embed.add_field(name="Images", value=str(len(urls)), inline=True)
+        embed.set_image(url=urls[0])
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -417,6 +424,148 @@ class ChartManageGroup(app_commands.Group):
 
         if url:
             embed.set_image(url=url)
+
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @app_commands.command(
+        name="reload",
+        description="Reload charts from charts.json file"
+    )
+    @logged_command("/chart-manage reload")
+    async def reload(
+        self,
+        interaction: discord.Interaction
+    ):
+        """Reload charts from the JSON file (useful after manual file edits)."""
+        # Check permissions
+        if not has_manage_permission(interaction):
+            embed = EmbedTemplate.error(
+                title="Permission Denied",
+                description=f"Only administrators and users with the **{get_config().help_editor_role_name}** role can manage charts."
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
+        set_discord_context(
+            interaction=interaction,
+            command="/chart-manage reload"
+        )
+
+        # Reload charts from file
+        self.chart_service.reload_charts()
+
+        # Count loaded charts
+        chart_count = len(self.chart_service.get_all_charts())
+        category_count = len(self.chart_service.get_categories())
+
+        # Success response
+        embed = EmbedTemplate.success(
+            title="Charts Reloaded",
+            description="Successfully reloaded charts from charts.json"
+        )
+        embed.add_field(name="Charts Loaded", value=str(chart_count), inline=True)
+        embed.add_field(name="Categories", value=str(category_count), inline=True)
+
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @app_commands.command(
+        name="add-image",
+        description="Add an additional image to an existing chart"
+    )
+    @app_commands.describe(
+        key="Chart key to add image to",
+        url="Image URL to add"
+    )
+    @app_commands.autocomplete(key=chart_autocomplete)
+    @logged_command("/chart-manage add-image")
+    async def add_image(
+        self,
+        interaction: discord.Interaction,
+        key: str,
+        url: str
+    ):
+        """Add an additional image URL to an existing chart."""
+        # Check permissions
+        if not has_manage_permission(interaction):
+            embed = EmbedTemplate.error(
+                title="Permission Denied",
+                description=f"Only administrators and users with the **{get_config().help_editor_role_name}** role can manage charts."
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
+        set_discord_context(
+            interaction=interaction,
+            command="/chart-manage add-image",
+            chart_key=key
+        )
+
+        # Add image to chart
+        self.chart_service.add_image_to_chart(key, url)
+
+        # Get updated chart
+        chart = self.chart_service.get_chart(key)
+        if chart is None:
+            raise BotException(f"Chart '{key}' not found after adding image")
+
+        # Success response
+        embed = EmbedTemplate.success(
+            title="Image Added to Chart",
+            description=f"Successfully added image to chart '{chart.name}'"
+        )
+        embed.add_field(name="Chart Key", value=key, inline=True)
+        embed.add_field(name="Total Images", value=str(len(chart.urls)), inline=True)
+        embed.set_image(url=url)
+
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @app_commands.command(
+        name="remove-image",
+        description="Remove an image from a multi-image chart"
+    )
+    @app_commands.describe(
+        key="Chart key to remove image from",
+        url="Image URL to remove"
+    )
+    @app_commands.autocomplete(key=chart_autocomplete)
+    @logged_command("/chart-manage remove-image")
+    async def remove_image(
+        self,
+        interaction: discord.Interaction,
+        key: str,
+        url: str
+    ):
+        """Remove an image URL from an existing chart."""
+        # Check permissions
+        if not has_manage_permission(interaction):
+            embed = EmbedTemplate.error(
+                title="Permission Denied",
+                description=f"Only administrators and users with the **{get_config().help_editor_role_name}** role can manage charts."
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
+        set_discord_context(
+            interaction=interaction,
+            command="/chart-manage remove-image",
+            chart_key=key
+        )
+
+        # Remove image from chart
+        self.chart_service.remove_image_from_chart(key, url)
+
+        # Get updated chart
+        chart = self.chart_service.get_chart(key)
+        if chart is None:
+            raise BotException(f"Chart '{key}' not found after removing image")
+
+        # Success response
+        embed = EmbedTemplate.success(
+            title="Image Removed from Chart",
+            description=f"Successfully removed image from chart '{chart.name}'"
+        )
+        embed.add_field(name="Chart Key", value=key, inline=True)
+        embed.add_field(name="Remaining Images", value=str(len(chart.urls)), inline=True)
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
