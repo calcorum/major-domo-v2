@@ -78,7 +78,7 @@ async def _begin_freeze(self, current: Current):
 See `services/CLAUDE.md` for complete service layer best practices.
 
 ### Base Task Pattern
-All tasks follow a consistent structure:
+All tasks follow a consistent structure with **MANDATORY** safe startup:
 
 ```python
 from discord.ext import tasks
@@ -105,11 +105,131 @@ class ExampleTask:
 
     @task_loop.before_loop
     async def before_task(self):
-        """Wait for bot to be ready before starting."""
+        """Wait for bot to be ready before starting - REQUIRED FOR SAFE STARTUP."""
         await self.bot.wait_until_ready()
+        self.logger.info("Bot is ready, task starting")
 ```
 
+### 🚨 CRITICAL: Safe Startup Pattern
+
+**EVERY background task MUST use the `@task.before_loop` decorator with `await self.bot.wait_until_ready()`.**
+
+This pattern prevents tasks from executing before:
+- Discord connection is established
+- Bot guilds are fully loaded
+- Bot cache is populated
+- Service dependencies are available
+
+#### ✅ CORRECT Pattern (Always Use This)
+```python
+@tasks.loop(minutes=3)
+async def my_task_loop(self):
+    """Main task logic."""
+    # Your task code here
+    pass
+
+@my_task_loop.before_loop
+async def before_my_task(self):
+    """Wait for bot to be ready before starting - REQUIRED."""
+    await self.bot.wait_until_ready()
+    self.logger.info("Bot is ready, my_task starting")
+```
+
+#### ❌ WRONG Pattern (Will Cause Errors)
+```python
+@tasks.loop(minutes=3)
+async def my_task_loop(self):
+    """Main task logic."""
+    # Task starts immediately - bot may not be ready!
+    # This will cause AttributeError, NoneType errors, etc.
+    pass
+
+# Missing @before_loop - BAD!
+```
+
+#### Why This Is Critical
+Without the `before_loop` pattern:
+- **Guild lookup fails** - `bot.get_guild()` returns `None`
+- **Channel lookup fails** - `guild.text_channels` is empty or incomplete
+- **Cache errors** - Discord objects not fully populated
+- **Service failures** - Dependencies may not be initialized
+- **Race conditions** - Task runs before bot state is stable
+
+#### Implementation Checklist
+When creating a new task, ensure:
+- [ ] `@tasks.loop()` decorator on main loop method
+- [ ] `@task.before_loop` decorator on before method
+- [ ] `await self.bot.wait_until_ready()` in before method
+- [ ] Log message confirming task is ready to start
+- [ ] Task started in `__init__()` with `self.task_loop.start()`
+- [ ] Task cancelled in `cog_unload()` with `self.task_loop.cancel()`
+
 ## Current Tasks
+
+### Live Scorebug Tracker (`live_scorebug_tracker.py`)
+**Purpose:** Automated live game score updates for active games
+
+**Schedule:** Every 3 minutes
+
+**Operations:**
+- **Live Scores Channel Update:**
+  - Reads all published scorecards from ScorecardTracker
+  - Generates compact scorebug embeds for active games
+  - Clears and updates `#live-sba-scores` channel
+  - Filters out final games (only shows active/in-progress)
+
+- **Voice Channel Description Update:**
+  - For each active scorecard, checks for associated voice channel
+  - Updates voice channel topic with live score (e.g., "BOS 4 @ 3 NYY")
+  - Adds "- FINAL" suffix when game completes
+  - Gracefully handles missing or deleted voice channels
+
+#### Key Features
+- **Restart Resilience:** Uses JSON-based scorecard tracking
+- **Voice Integration:** Bi-directional integration with voice channel system
+- **Rate Limiting:** 1-second delay between scorecard reads
+- **Error Resilience:** Continues operation despite individual failures
+- **Safe Startup:** Uses `@before_loop` pattern with `await bot.wait_until_ready()`
+
+#### Configuration
+The tracker respects configuration settings:
+
+```python
+# config.py settings
+guild_id: int  # Target guild for operations
+```
+
+**Environment Variables:**
+- `GUILD_ID` - Discord server ID
+
+#### Scorecard Publishing
+Users publish scorecards via `/publish-scorecard <url>`:
+- Validates Google Sheets access and structure
+- Stores text_channel_id → sheet_url mapping in JSON
+- Persists across bot restarts
+
+#### Voice Channel Association
+When voice channels are created:
+- Text channel ID stored in voice channel tracking data
+- Enables scorebug → voice channel lookup
+- Voice channel topic updated every 3 minutes with live scores
+
+**Automatic Cleanup Integration:**
+When voice channels are cleaned up (deleted after being empty):
+- Voice cleanup service automatically unpublishes the associated scorecard
+- Prevents live scorebug tracker from updating scores for games without active voice channels
+- Ensures scorecard tracking stays synchronized with voice channel state
+- Reduces unnecessary API calls to Google Sheets for inactive games
+
+#### Channel Requirements
+- **#live-sba-scores** - Live scorebug display channel
+
+#### Error Handling
+- Comprehensive try/catch blocks with structured logging
+- Graceful degradation if channels not found
+- Silent skip for deleted voice channels
+- Prevents duplicate error messages
+- Continues operation despite individual scorecard failures
 
 ### Transaction Freeze/Thaw (`transaction_freeze.py`)
 **Purpose:** Automated weekly system for freezing transactions and processing contested player acquisitions

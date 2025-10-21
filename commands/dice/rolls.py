@@ -17,6 +17,7 @@ from utils import team_utils
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
 from utils.team_utils import get_user_major_league_team
+from utils.text_utils import split_text_for_fields
 from views.embeds import EmbedColors, EmbedTemplate
 
 
@@ -29,6 +30,127 @@ class DiceRoll:
     rolls: list[int]
     total: int
 
+INFIELD_X_CHART = {
+    'si1': {
+        'rp': 'Runner on first: Line drive hits the runner! Runner on first is out. Batter goes to first with single '
+              'and all other runners hold.\nNo runner on first: batter singles, runners advance 1 base.',
+        'e1': 'Single and Error, batter to second, runners advance 2 bases.',
+        'e2': 'Single and Error, batter to third, all runners score.',
+        'no': 'Single, runners advance 1 base.'
+    },
+    'spd': {
+        'rp': 'No effect; proceed with speed check',
+        'e1': 'Single and Error, batter to second, runners advance 2 bases.',
+        'e2': 'Single and Error, batter to third, all runners score.',
+        'no': 'Speed check, safe range equals batter\'s running rating, SI* result if safe, gb C if out'
+    },
+    'po': {
+        'rp': 'The batters hits a popup. None of the fielders take charge on the play and the ball drops in the '
+              'infield for a single! All runners advance 1 base.',
+        'e1': 'The catcher drops a popup for an error. All runners advance 1 base.',
+        'e2': 'The catcher grabs a squib in front of the plate and throws it into right field. The batter goes to '
+              'second and all runners score.',
+        'no': 'The batter pops out to the catcher.'
+    },
+    'wp': {
+        'rp': 'Automatic wild pitch. Catcher has trouble finding it and all base runners advance 2 bases.',
+        'no': 'Automatic wild pitch, all runners advance 1 base and batter rolls AB again.'
+    },
+    'x': {
+        'rp': 'Runner(s) on base: pitcher trips during his delivery and the ball sails for automatic wild pitch, '
+              'runners advance 1 base and batter rolls AB again.',
+        'no': 'Wild pitch check (credited as a PB). If a passed ball occurs, batter rerolls AB. '
+              'If no passed ball occurs, the batter fouls out to the catcher.'
+    },
+    'fo': {
+        'rp': 'Batter swings and misses, but is awarded first base on a catcher interference call! Baserunners advance '
+              'only if forced.',
+        'e1': 'The catcher drops a foul popup for an error. Batter rolls AB again.',
+        'e2': 'The catcher drops a foul popup for an error. Batter rolls AB again.',
+        'no': 'Runner(s) on base: make a passed ball check. If no passed ball, batter pops out to the catcher. If a '
+              'passed ball occurs, batter roll his AB again.\nNo runners: batter pops out to the catcher'
+    },
+    'g1': {
+        'rp': 'Runner on first: runner on first breaks up the double play, but umpires call runner interference and '
+              'the batter is out on GIDP.\nNo runners: Batter grounds out.',
+        'e1': 'Error, batter to first, runners advance 1 base.',
+        'e2': 'Error, batter to second, runners advance 2 bases.',
+        'no': 'Consult Groundball Chart: `!gbA`'
+    },
+    'g2': {
+        'rp': 'Batter lines the ball off the pitcher to the fielder who makes the play to first for the out! Runners '
+              'advance only if forced.',
+        'e1': 'Error, batter to first, runners advance 1 base.',
+        'e2': 'Error, batter to second, runners advance 2 bases.',
+        'no': 'Consult Groundball Chart: `!gbB`'
+    },
+    'g3': {
+        'rp': 'Batter lines the ball off the mound and deflects to the fielder who makes the play to first for the '
+              'out! Runners advance 1 base.',
+        'e1': 'Error, batter to first, runners advance 1 base.',
+        'e2': 'Error, batter to second, runners advance 2 bases.',
+        'no': 'Consult Groundball Chart: `!gbC`'
+    },
+}
+OUTFIELD_X_CHART = {
+    'si2': {
+        'rp': 'Batter singles, baserunners advance 2 bases. As the batter rounds first, the fielder throws behind him '
+              'and catches him off the bag for an out!',
+        'e1': 'Single and error, batter to second, runners advance 2 bases.',
+        'e2': 'Single and error, batter to third, all runners score.',
+        'e3': 'Single and error, batter to third, all runners score',
+        'no': 'Single, all runners advance 2 bases.'
+    },
+    'do2': {
+        'rp': 'Batter doubles, runners advance 2 bases. The outfielder throws the ball to the shortstop who executes a '
+              'hidden ball trick! Runner on second is called out!',
+        'e1': 'Double and error, batter to third, all runners score.',
+        'e2': 'Double and error, batter to third, and all runners score.',
+        'e3': 'Double and error, batter and all runners score. Little league home run!',
+        'no': 'Double, all runners advance 2 bases.'
+    },
+    'do3': {
+        'rp': 'Runner(s) on base: batter doubles and runners advance three bases as the outfielders collide!\n'
+              'No runners: Batter doubles, but the play is appealed. The umps rule the batter missed first base so is '
+              'out on the appeal!',
+        'e1': 'Double and error, batter to third, all runners score.',
+        'e2': 'Double and error, batter and all runners score. Little league home run!',
+        'e3': 'Double and error, batter and all runners score. Little league home run!',
+        'no': 'Double, all runners score.'
+    },
+    'tr3': {
+        'rp': 'Batter hits a ball into the gap and the outfielders collide trying to make the play! The ball rolls to '
+              'the wall and the batter trots home with an inside-the-park home run!',
+        'e1': 'Triple and error, batter and all runners score. Little league home run!',
+        'e2': 'Triple and error, batter and all runners score. Little league home run!',
+        'e3': 'Triple and error, batter and all runners score. Little league home run!',
+        'no': 'Triple, all runners score.'
+    },
+    'f1': {
+        'rp': 'The outfielder races back and makes a diving catch and collides with the wall! In the time he takes to '
+              'recuperate, all baserunners tag-up and advance 2 bases.',
+        'e1': '1 base error, runners advance 1 base.',
+        'e2': '2 base error, runners advance 2 bases.',
+        'e3': '3 base error, batter to third, all runners score.',
+        'no': 'Flyball A'
+    },
+    'f2': {
+        'rp': 'The outfielder catches the flyball for an out. If there is a runner on third, he tags-up and scores. '
+              'The play is appealed and the umps rule that the runner left early and is out on the appeal!',
+        'e1': '1 base error, runners advance 1 base.',
+        'e2': '2 base error, runners advance 2 bases.',
+        'e3': '3 base error, batter to third, all runners score.',
+        'no': 'Flyball B'
+    },
+    'f3': {
+        'rp': 'The outfielder makes a running catch in the gap! The lead runner lost track of the ball and was '
+              'advancing - he cannot return in time and is doubled off by the outfielder.',
+        'e1': '1 base error, runners advance 1 base.',
+        'e2': '2 base error, runners advance 2 bases.',
+        'e3': '3 base error, batter to third, all runners score.',
+        'no': 'Flyball C'
+    }
+}
 
 class DiceRollCommands(commands.Cog):
     """Dice rolling command handlers for gameplay."""
@@ -191,16 +313,17 @@ class DiceRollCommands(commands.Cog):
     ):
         """Roll Super Advanced fielding dice for a defensive position."""
         await interaction.response.defer()
+        embed_color = await self._get_channel_embed_color(interaction)
 
         # Get the position value from the choice
         pos_value = position.value
 
         # Roll the dice - 1d20 and 3d6
-        dice_notation = "1d20;3d6"
+        dice_notation = "1d20;3d6;1d100"
         roll_results = self._parse_and_roll_multiple_dice(dice_notation)
 
         # Create fielding embed
-        embed = self._create_fielding_embed(pos_value, roll_results, interaction.user)
+        embed = self._create_fielding_embed(pos_value, roll_results, interaction.user, embed_color)
         await interaction.followup.send(embed=embed)
 
     @commands.command(name="f", aliases=["fielding", "saf"])
@@ -326,16 +449,23 @@ class DiceRollCommands(commands.Cog):
 
         return position_map.get(pos)
 
-    def _create_fielding_embed(self, position: str, roll_results: list[DiceRoll], user) -> discord.Embed:
+    def _create_fielding_embed(
+            self, 
+            position: str, 
+            roll_results: list[DiceRoll], 
+            user: discord.User | discord.Member, 
+            embed_color: int = EmbedColors.PRIMARY
+    ) -> discord.Embed:
         """Create an embed for fielding roll results."""
         d20_result = roll_results[0].total
         d6_total = roll_results[1].total
         d6_rolls = roll_results[1].rolls
+        d100_result = roll_results[2].total
 
         # Create base embed
         embed = EmbedTemplate.create_base_embed(
             title=f"SA Fielding roll for {user.display_name}",
-            color=EmbedColors.PRIMARY
+            color=embed_color
         )
 
         # Set user info
@@ -364,21 +494,38 @@ class DiceRollCommands(commands.Cog):
             inline=False
         )
 
-        # Add error result
-        error_result = self._get_error_result(position, d6_total)
-        if error_result:
-            embed.add_field(
-                name="Error Result",
-                value=error_result,
-                inline=False
-            )
+        # Add rare play or error result
+        if d100_result == 1:
+            error_result = self._get_rare_play(position, d20_result)
+            base_field_name = "Rare Play Result"
+        else:
+            # Add error result
+            error_result = self._get_error_result(position, d6_total)
+            base_field_name = "Error Result"
 
-        # # Add help commands
-        # embed.add_field(
-        #     name="Help Commands",
-        #     value="Run !<result> for full chart readout (e.g. !g1 or !do3)",
-        #     inline=False
-        # )
+        if error_result:
+            # Split text if it exceeds Discord's field limit
+            result_chunks = split_text_for_fields(error_result, max_length=1024)
+
+            # Add each chunk as a separate field
+            for i, chunk in enumerate(result_chunks):
+                field_name = base_field_name
+                # Add part indicator if multiple chunks
+                if len(result_chunks) > 1:
+                    field_name += f" (Part {i+1}/{len(result_chunks)})"
+
+                embed.add_field(
+                    name=field_name,
+                    value=chunk,
+                    inline=False
+                )
+
+        # Add help commands
+        embed.add_field(
+            name="Help Commands",
+            value="Run /charts for full chart readout",
+            inline=False
+        )
 
         # # Add references
         # embed.add_field(
@@ -564,6 +711,26 @@ class DiceRollCommands(commands.Cog):
             20: '--------G1---------'
         }
         return pitcher_ranges.get(d20_roll, 'Unknown')
+    
+    def _get_rare_play(self, position: str, d20_total: int) -> str:
+        """Get the rare play result for a position and d20 total"""
+        starter = 'Rare play! Take the range result from above and consult the chart below.\n\n'
+        if position == 'P':
+            return starter + self._get_pitcher_rare_play(d20_total)
+        elif position == '1B':
+            return starter + self._get_infield_rare_play(d20_total)
+        elif position == '2B':
+            return starter + self._get_infield_rare_play(d20_total)
+        elif position == '3B':
+            return starter + self._get_infield_rare_play(d20_total)
+        elif position == 'SS':
+            return starter + self._get_infield_rare_play(d20_total)
+        elif position in ['LF', 'RF']:
+            return starter + self._get_outfield_rare_play(d20_total)
+        elif position == 'CF':
+            return starter + self._get_outfield_rare_play(d20_total)
+        
+        raise ValueError(f'Unknown position: {position}')
 
     def _get_error_result(self, position: str, d6_total: int) -> str:
         """Get the error result for a position and 3d6 total."""
@@ -723,22 +890,22 @@ class DiceRollCommands(commands.Cog):
     def _get_catcher_error(self, d6_total: int) -> str:
         """Get Catcher error result based on 3d6 total."""
         errors = {
-            18: 'Passed ball for sb2 -> sb12, sb16 -> sb26\nNo error for sb14',
-            17: 'Passed ball for sb3 -> sb12, sb17 -> sb26\nNo error for sb1, sb13 -> sb15',
-            16: 'Passed ball for sb4 -> sb12, sb18 -> sb26',
-            15: 'Passed ball for sb5 -> sb12, sb19 -> sb26',
-            14: 'Passed ball for sb6 -> sb12, sb20 -> sb26',
-            13: 'Passed ball for sb7 -> sb12, sb21 -> sb26',
-            12: 'Passed ball for sb8 -> sb12, sb22 -> sb26',
-            11: 'Passed ball for sb9 -> sb12, sb23 -> sb26',
-            10: 'Passed ball for sb10 -> sb12, sb24 -> sb26',
-            9: 'Passed ball for sb11, sb12, sb25, sb26',
+            18: '2-base error for e4 -> 16\n1-base error for e2, e3',
+            17: '1-base error for e1, e2, e4, e5, e12 -> e14, e16',
+            16: '1-base error for e3 -> e5, e7, e12 -> e14, e16',
+            15: '1-base error for e7, e8, e12, e13, e15',
+            14: '1-base error for e6',
+            13: '1-base error for e9',
+            12: '1-base error for e10, e14',
+            11: '1-base error for e11, e15',
+            10: 'No error',
+            9: 'No error',
             8: 'No error',
-            7: 'No error',
-            6: 'No error',
+            7: '1-base error for e16',
+            6: '1-base error for e8, e12, e13',
             5: 'No error',
-            4: 'Passed ball for sb1 -> sb12, sb15 -> sb26\nNo error for sb13, sb14',
-            3: 'Passed ball for sb1 -> sb26'
+            4: '1-base error for e5, e13',
+            3: '2-base error for e12 -> e16\n1-base error for e2, e3, e7, e11'
         }
         return errors.get(d6_total, 'No error')
 
@@ -763,6 +930,34 @@ class DiceRollCommands(commands.Cog):
             3: '2-base error for e8 -> e12, e26 -> e28, e39 -> e43\n1-base error for e2, e3, e7, e14, e15'
         }
         return errors.get(d6_total, 'No error')
+
+    def _get_pitcher_rare_play(self, d20_total: int) -> str:
+        return (
+            f'**G3**: {INFIELD_X_CHART["g3"]["rp"]}\n'
+            f'**G2**: {INFIELD_X_CHART["g2"]["rp"]}\n'
+            f'**G1**: {INFIELD_X_CHART["g1"]["rp"]}\n'
+            f'**SI1**: {INFIELD_X_CHART["si1"]["rp"]}\n'
+        )
+
+    def _get_infield_rare_play(self, d20_total: int) -> str:
+        return (
+            f'**G3**: {INFIELD_X_CHART["g3"]["rp"]}\n'
+            f'**G2**: {INFIELD_X_CHART["g2"]["rp"]}\n'
+            f'**G1**: {INFIELD_X_CHART["g1"]["rp"]}\n'
+            f'**SI1**: {INFIELD_X_CHART["si1"]["rp"]}\n'
+            f'**SI2**: {OUTFIELD_X_CHART["si2"]["rp"]}\n'
+        )
+
+    def _get_outfield_rare_play(self, d20_total: int) -> str:
+        return (
+            f'**F1**: {OUTFIELD_X_CHART["f1"]["rp"]}\n'
+            f'**F2**: {OUTFIELD_X_CHART["f2"]["rp"]}\n'
+            f'**F3**: {OUTFIELD_X_CHART["f3"]["rp"]}\n'
+            f'**SI2**: {OUTFIELD_X_CHART["si2"]["rp"]}\n'
+            f'**DO2**: {OUTFIELD_X_CHART["do2"]["rp"]}\n'
+            f'**DO3**: {OUTFIELD_X_CHART["do3"]["rp"]}\n'
+            f'**TR3**: {OUTFIELD_X_CHART["tr3"]["rp"]}\n'
+        )
 
     def _parse_and_roll_multiple_dice(self, dice_notation: str) -> list[DiceRoll]:
         """Parse dice notation (supports multiple rolls) and return roll results."""

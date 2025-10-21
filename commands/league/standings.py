@@ -9,6 +9,7 @@ import discord
 from discord.ext import commands
 
 from config import get_config
+from models.team import Team
 from services.standings_service import standings_service
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
@@ -101,13 +102,15 @@ class StandingsCommands(commands.Cog):
                 embed = await self._create_division_embed(div_name, teams, season)
                 embeds.append(embed)
         
-        # Send first embed, then follow up with others
-        if embeds:
-            await interaction.followup.send(embed=embeds[0])
+        await interaction.followup.send(embeds=embeds)
+        
+        # # Send first embed, then follow up with others
+        # if embeds:
+        #     await interaction.followup.send(embed=embeds[0])
             
-            # Send additional embeds as follow-ups
-            for embed in embeds[1:]:
-                await interaction.followup.send(embed=embed)
+        #     # Send additional embeds as follow-ups
+        #     for embed in embeds[1:]:
+        #         await interaction.followup.send(embed=embed)
     
     async def _show_division_standings(self, interaction: discord.Interaction, season: int, division: str):
         """Show standings for a specific division."""
@@ -147,28 +150,37 @@ class StandingsCommands(commands.Cog):
     async def _create_division_embed(self, division_name: str, teams, season: int) -> discord.Embed:
         """Create an embed for a division's standings."""
         embed = EmbedTemplate.create_base_embed(
-            title=f"🏆 {division_name} Division - Season {season}",
+            title=f"{division_name} Division",
+            description=f'Season {season}',
             color=EmbedColors.PRIMARY
         )
+        lead_team = None
         
         # Create standings table
-        standings_lines = []
+        standing_text = f'```\n# Team  W-L   Win%   RD  GB  St'
         for i, team in enumerate(teams, 1):
+            if lead_team is None:
+                lead_team = team.team
+                if lead_team.color is not None:
+                    embed.color = int(lead_team.color, 16)
+                    embed.description = f'Leader: {lead_team.lname}'
+
             # Format team line
-            team_line = (
-                f"{i}. **{team.team.abbrev}** {team.wins}-{team.losses} "
-                f"({team.winning_percentage:.3f})"
-            )
+            standing_text += f'\n{i}.{team.team.abbrev: >4} {team.wins: >2}-{team.losses: <2} {team.winning_percentage:.3f} {team.run_diff: >4}'
             
             # Add games behind if not first place
             if team.div_gb is not None and team.div_gb > 0:
-                team_line += f" *{team.div_gb:.1f} GB*"
+                standing_text += f' {team.div_gb:4.1f}'
+            else:
+                standing_text += f'     '
             
-            standings_lines.append(team_line)
+            standing_text += f' {team.streak_wl.upper()}{team.streak_num}'
+            
+        standing_text += '\n```'
         
         embed.add_field(
             name="Standings",
-            value="\n".join(standings_lines),
+            value=standing_text,
             inline=False
         )
         

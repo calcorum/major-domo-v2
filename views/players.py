@@ -148,7 +148,7 @@ class PlayerStatsView(BaseView):
                             show_pitching=self.show_pitching)
 
         except Exception as e:
-            self.logger.error("Failed to update embed", error=str(e), exc_info=True)
+            self.logger.error("Failed to update embed", error=e, exc_info=True)
 
             # Try to send error message
             try:
@@ -172,12 +172,10 @@ class PlayerStatsView(BaseView):
 
         # Determine embed color based on team
         embed_color = EmbedColors.PRIMARY
-        if hasattr(player, 'team') and player.team and hasattr(player.team, 'color'):
-            try:
-                # Convert hex color string to int
-                embed_color = int(player.team.color, 16)
-            except (ValueError, TypeError):
-                embed_color = EmbedColors.PRIMARY
+        if player.team and player.team.color:
+            embed_color = int(player.team.color, 16)
+        else:
+            embed_color = EmbedColors.PRIMARY
 
         # Create base embed with player name as title
         # Add injury indicator emoji if player is injured
@@ -204,7 +202,7 @@ class PlayerStatsView(BaseView):
 
             # Add Major League affiliate if this is a Minor League team
             if player.team.roster_type() == RosterType.MINOR_LEAGUE:
-                major_affiliate = player.team.get_major_league_affiliate()
+                major_affiliate = player.team.major_league_affiliate()
                 if major_affiliate:
                     embed.add_field(
                         name="Major Affiliate",

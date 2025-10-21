@@ -64,7 +64,8 @@ class VoiceChannelTracker:
         self,
         channel: discord.VoiceChannel,
         channel_type: str,
-        creator_id: int
+        creator_id: int,
+        text_channel_id: Optional[int] = None
     ) -> None:
         """
         Add a new channel to tracking.
@@ -73,6 +74,7 @@ class VoiceChannelTracker:
             channel: Discord voice channel object
             channel_type: Type of channel ('public' or 'private')
             creator_id: Discord user ID who created the channel
+            text_channel_id: Optional Discord text channel ID associated with this voice channel
         """
         self._data.setdefault("voice_channels", {})[str(channel.id)] = {
             "channel_id": str(channel.id),
@@ -82,7 +84,8 @@ class VoiceChannelTracker:
             "created_at": datetime.now(UTC).isoformat(),
             "last_checked": datetime.now(UTC).isoformat(),
             "empty_since": None,
-            "creator_id": str(creator_id)
+            "creator_id": str(creator_id),
+            "text_channel_id": str(text_channel_id) if text_channel_id else None
         }
         self.save_data()
         logger.info(f"Added channel to tracking: {channel.name} (ID: {channel.id})")
@@ -189,6 +192,29 @@ class VoiceChannelTracker:
         """
         channels = self._data.get("voice_channels", {})
         return channels.get(str(channel_id))
+
+    def get_voice_channel_for_text_channel(self, text_channel_id: int) -> Optional[int]:
+        """
+        Get voice channel ID associated with a text channel.
+
+        Args:
+            text_channel_id: Discord text channel ID
+
+        Returns:
+            Voice channel ID if found, None otherwise
+        """
+        channels = self._data.get("voice_channels", {})
+
+        for voice_channel_id_str, channel_data in channels.items():
+            stored_text_channel_id = channel_data.get("text_channel_id")
+            if stored_text_channel_id:
+                try:
+                    if int(stored_text_channel_id) == text_channel_id:
+                        return int(voice_channel_id_str)
+                except (ValueError, TypeError):
+                    continue
+
+        return None
 
     def cleanup_stale_entries(self, valid_channel_ids: List[int]) -> int:
         """

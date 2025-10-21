@@ -60,6 +60,7 @@ class BotConfig(BaseSettings):
 
     # Base URLs
     sba_base_url: str = "https://sba.manticorum.com"
+    sba_logo_url: str = f'{sba_base_url}/images/sba-logo.png'
 
     # Application settings
     log_level: str = "INFO"

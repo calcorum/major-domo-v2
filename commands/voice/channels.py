@@ -112,10 +112,17 @@ class VoiceChannelCommands(commands.Cog):
             category=voice_category
         )
 
-        # Add to cleanup service tracking
+        # Add to cleanup service tracking with text channel association
         if hasattr(self.bot, 'voice_cleanup_service'):
             cleanup_service = self.bot.voice_cleanup_service  # type: ignore[attr-defined]
-            cleanup_service.tracker.add_channel(channel, channel_type, interaction.user.id)
+            self.logger.info(f"Adding voice channel {channel.name} (ID: {channel.id}) to tracking with text channel {interaction.channel_id}")
+            cleanup_service.tracker.add_channel(
+                channel,
+                channel_type,
+                interaction.user.id,
+                text_channel_id=interaction.channel_id  # Associate with text channel
+            )
+            self.logger.info(f"Successfully added voice channel to tracking")
         else:
             self.logger.warning("Voice cleanup service not available, channel won't be tracked")
 

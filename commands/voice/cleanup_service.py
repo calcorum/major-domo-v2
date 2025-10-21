@@ -10,6 +10,7 @@ import discord
 from discord.ext import commands
 
 from .tracker import VoiceChannelTracker
+from commands.gameplay.scorecard_tracker import ScorecardTracker
 
 logger = logging.getLogger(f'{__name__}.VoiceChannelCleanupService')
 
@@ -23,6 +24,7 @@ class VoiceChannelCleanupService:
     - Automatic empty channel cleanup
     - Configurable cleanup intervals and thresholds
     - Stale entry removal and recovery
+    - Automatic scorecard unpublishing when voice channel is cleaned up
     """
 
     def __init__(self, data_file: str = "data/voice_channels.json"):
@@ -33,6 +35,7 @@ class VoiceChannelCleanupService:
             data_file: Path to the JSON data file for persistence
         """
         self.tracker = VoiceChannelTracker(data_file)
+        self.scorecard_tracker = ScorecardTracker()
         self.cleanup_interval = 60   # 5 minutes check interval
         self.empty_threshold = 5    # Delete after 15 minutes empty
         self._running = False
@@ -111,9 +114,21 @@ class VoiceChannelCleanupService:
                     except (ValueError, TypeError):
                         pass
 
-        # Remove stale entries
+        # Remove stale entries and unpublish associated scorecards
         for channel_id in channels_to_remove:
+            # Get channel data before removing to access text_channel_id
+            channel_data = self.tracker.get_tracked_channel(channel_id)
             self.tracker.remove_channel(channel_id)
+
+            # Unpublish associated scorecard if it exists
+            if channel_data and channel_data.get("text_channel_id"):
+                try:
+                    text_channel_id_int = int(channel_data["text_channel_id"])
+                    was_unpublished = self.scorecard_tracker.unpublish_scorecard(text_channel_id_int)
+                    if was_unpublished:
+                        logger.info(f"📋 Unpublished scorecard from text channel {text_channel_id_int} (stale voice channel)")
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"Invalid text_channel_id in stale voice channel data: {e}")
 
         # Also clean up any additional stale entries
         stale_removed = self.tracker.cleanup_stale_entries(valid_channel_ids)
@@ -238,10 +253,34 @@ class VoiceChannelCleanupService:
 
             logger.info(f"✅ Cleaned up empty voice channel: {channel_name} (ID: {channel_id})")
 
+            # Unpublish associated scorecard if it exists
+            text_channel_id = channel_data.get("text_channel_id")
+            if text_channel_id:
+                try:
+                    text_channel_id_int = int(text_channel_id)
+                    was_unpublished = self.scorecard_tracker.unpublish_scorecard(text_channel_id_int)
+                    if was_unpublished:
+                        logger.info(f"📋 Unpublished scorecard from text channel {text_channel_id_int} (voice channel cleanup)")
+                    else:
+                        logger.debug(f"No scorecard found for text channel {text_channel_id_int}")
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"Invalid text_channel_id in voice channel data: {e}")
+
         except discord.NotFound:
             # Channel was already deleted
             logger.info(f"Channel {channel_data.get('name', 'unknown')} was already deleted")
             self.tracker.remove_channel(int(channel_data["channel_id"]))
+
+            # Still try to unpublish associated scorecard
+            text_channel_id = channel_data.get("text_channel_id")
+            if text_channel_id:
+                try:
+                    text_channel_id_int = int(text_channel_id)
+                    was_unpublished = self.scorecard_tracker.unpublish_scorecard(text_channel_id_int)
+                    if was_unpublished:
+                        logger.info(f"📋 Unpublished scorecard from text channel {text_channel_id_int} (stale voice channel cleanup)")
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"Invalid text_channel_id in voice channel data: {e}")
         except discord.Forbidden:
             logger.error(f"Missing permissions to delete channel {channel_data.get('name', 'unknown')}")
         except Exception as e:

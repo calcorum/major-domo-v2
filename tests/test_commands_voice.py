@@ -292,6 +292,98 @@ class TestVoiceChannelCleanupService:
         # Should have removed from tracking
         assert "123" not in cleanup_service.tracker._data["voice_channels"]
 
+    @pytest.mark.asyncio
+    async def test_cleanup_channel_with_scorecard(self, cleanup_service, mock_bot):
+        """Test that cleaning up a channel also unpublishes associated scorecard."""
+        # Mock guild and channel
+        mock_guild = MagicMock()
+        mock_guild.id = 999
+        mock_channel = AsyncMock(spec=discord.VoiceChannel)
+        mock_channel.id = 123
+        mock_channel.members = []  # Empty channel
+
+        mock_bot.get_guild.return_value = mock_guild
+        mock_guild.get_channel.return_value = mock_channel
+
+        # Add channel to tracking with associated text channel
+        cleanup_service.tracker._data["voice_channels"]["123"] = {
+            "channel_id": "123",
+            "guild_id": "999",
+            "name": "Test Channel",
+            "text_channel_id": "555"
+        }
+
+        # Add a scorecard for the text channel
+        cleanup_service.scorecard_tracker._data = {
+            "scorecards": {
+                "555": {
+                    "text_channel_id": "555",
+                    "sheet_url": "https://example.com/sheet",
+                    "published_at": "2025-01-15T10:30:00",
+                    "publisher_id": "12345"
+                }
+            }
+        }
+
+        channel_data = {
+            "channel_id": "123",
+            "guild_id": "999",
+            "name": "Test Channel",
+            "text_channel_id": "555"
+        }
+
+        await cleanup_service.cleanup_channel(mock_bot, channel_data)
+
+        # Should have deleted the channel
+        mock_channel.delete.assert_called_once_with(reason="Automatic cleanup - empty for 15+ minutes")
+
+        # Should have removed from voice channel tracking
+        assert "123" not in cleanup_service.tracker._data["voice_channels"]
+
+        # Should have unpublished the scorecard
+        assert "555" not in cleanup_service.scorecard_tracker._data["scorecards"]
+
+    @pytest.mark.asyncio
+    async def test_verify_tracked_channels_unpublishes_scorecards(self, cleanup_service, mock_bot):
+        """Test that verifying tracked channels also unpublishes associated scorecards."""
+        # Add test data with a stale voice channel that has an associated scorecard
+        cleanup_service.tracker._data = {
+            "voice_channels": {
+                "123": {
+                    "channel_id": "123",
+                    "guild_id": "999",
+                    "name": "Stale Channel",
+                    "text_channel_id": "555"
+                }
+            }
+        }
+
+        # Add a scorecard for the text channel
+        cleanup_service.scorecard_tracker._data = {
+            "scorecards": {
+                "555": {
+                    "text_channel_id": "555",
+                    "sheet_url": "https://example.com/sheet",
+                    "published_at": "2025-01-15T10:30:00",
+                    "publisher_id": "12345"
+                }
+            }
+        }
+
+        # Mock guild but not the channel (simulating deleted channel)
+        mock_guild = MagicMock()
+        mock_guild.id = 999
+        mock_bot.get_guild.return_value = mock_guild
+        mock_guild.get_channel.return_value = None  # Channel no longer exists
+
+        await cleanup_service.verify_tracked_channels(mock_bot)
+
+        # Voice channel should be removed from tracking
+        assert "123" not in cleanup_service.tracker._data["voice_channels"]
+
+        # Scorecard should be unpublished
+        assert "555" not in cleanup_service.scorecard_tracker._data["scorecards"]
+
 
 class TestVoiceChannelCommands:
     """Test voice channel command functionality."""
