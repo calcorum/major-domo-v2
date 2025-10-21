@@ -85,7 +85,7 @@ class ScorebugCommands(commands.Cog):
 
             # Store the scorecard in the tracker
             self.scorecard_tracker.publish_scorecard(
-                text_channel_id=interaction.channel_id,
+                text_channel_id=interaction.channel_id, # type: ignore
                 sheet_url=url,
                 publisher_id=interaction.user.id
             )
@@ -94,7 +94,7 @@ class ScorebugCommands(commands.Cog):
             embed = EmbedTemplate.success(
                 title="Scorecard Published",
                 description=(
-                    f"Your scorecard has been published to {interaction.channel.mention}\n\n"
+                    f"Your scorecard has been published to {interaction.channel.mention}\n\n" # type: ignore
                     f"**Sheet:** {scorecard.title}\n"
                     f"**Status:** Live tracking enabled\n"
                     f"**Scorecard:** {scorecard_link}\n\n"
@@ -158,7 +158,7 @@ class ScorebugCommands(commands.Cog):
         await interaction.response.defer()
 
         # Check if a scorecard is published in this channel
-        sheet_url = self.scorecard_tracker.get_scorecard(interaction.channel_id)
+        sheet_url = self.scorecard_tracker.get_scorecard(interaction.channel_id) # type: ignore
 
         if not sheet_url:
             embed = EmbedTemplate.error(
@@ -201,7 +201,7 @@ class ScorebugCommands(commands.Cog):
             await interaction.edit_original_response(content=None, embed=embed)
 
             # Update timestamp in tracker
-            self.scorecard_tracker.update_timestamp(interaction.channel_id)
+            self.scorecard_tracker.update_timestamp(interaction.channel_id) # type: ignore
 
         except SheetsException as e:
             embed = EmbedTemplate.error(
