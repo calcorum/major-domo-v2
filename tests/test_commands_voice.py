@@ -458,12 +458,13 @@ class TestVoiceChannelCommands:
 
         with patch('commands.voice.channels.team_service') as mock_team_service:
             with patch('commands.voice.channels.league_service') as mock_league_service:
-                with patch.object(voice_cog.schedule_service, 'get_team_schedule') as mock_schedule:
+                with patch.object(voice_cog.schedule_service, 'get_week_schedule') as mock_schedule:
                     with patch.object(mock_interaction.guild, 'create_voice_channel', return_value=mock_channel) as mock_create:
                         with patch('discord.utils.get') as mock_utils_get:
 
                             mock_team_service.get_teams_by_owner = AsyncMock(return_value=[mock_user_team])
                             mock_league_service.get_current_state = AsyncMock(return_value=mock_current)
+                            # get_week_schedule returns all games for the week (not just team games)
                             mock_schedule.return_value = [mock_game]
 
                             # Mock discord.utils.get calls

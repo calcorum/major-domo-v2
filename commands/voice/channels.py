@@ -224,12 +224,17 @@ class VoiceChannelCommands(commands.Cog):
 
         # Find opponent from current week's schedule
         try:
-            team_games = await self.schedule_service.get_team_schedule(
-                current_season, user_team.abbrev, weeks=1
-            )
+            # Get all games for the current week
+            week_games = await self.schedule_service.get_week_schedule(current_season, current_week)
 
-            current_week_games = [g for g in team_games
-                                 if g.week == current_week and not g.is_completed]
+            # Filter for games involving this team that haven't been completed
+            team_abbrev_upper = user_team.abbrev.upper()
+            current_week_games = [
+                g for g in week_games
+                if (g.away_team.abbrev.upper() == team_abbrev_upper or
+                    g.home_team.abbrev.upper() == team_abbrev_upper)
+                and not g.is_completed
+            ]
 
             if not current_week_games:
                 embed = EmbedTemplate.warning(
