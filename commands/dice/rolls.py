@@ -17,6 +17,7 @@ from utils import team_utils
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
 from utils.team_utils import get_user_major_league_team
+from utils.text_utils import split_text_for_fields
 from views.embeds import EmbedColors, EmbedTemplate
 
 
@@ -493,18 +494,31 @@ class DiceRollCommands(commands.Cog):
             inline=False
         )
 
-        # Add rare play
-        if d100_result >= 1:
+        # Add rare play or error result
+        if d100_result == 1:
             error_result = self._get_rare_play(position, d20_result)
+            base_field_name = "Rare Play Result"
         else:
             # Add error result
             error_result = self._get_error_result(position, d6_total)
+            base_field_name = "Error Result"
+
         if error_result:
-            embed.add_field(
-                name="Error Result",
-                value=error_result,
-                inline=False
-            )
+            # Split text if it exceeds Discord's field limit
+            result_chunks = split_text_for_fields(error_result, max_length=1024)
+
+            # Add each chunk as a separate field
+            for i, chunk in enumerate(result_chunks):
+                field_name = base_field_name
+                # Add part indicator if multiple chunks
+                if len(result_chunks) > 1:
+                    field_name += f" (Part {i+1}/{len(result_chunks)})"
+
+                embed.add_field(
+                    name=field_name,
+                    value=chunk,
+                    inline=False
+                )
 
         # Add help commands
         embed.add_field(
