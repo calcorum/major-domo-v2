@@ -13,7 +13,7 @@ logs/
 
 # Claude files & directories
 .claude/
-CLAUDE.md
+# CLAUDE.md
 .env*
 
 # Distribution / packaging

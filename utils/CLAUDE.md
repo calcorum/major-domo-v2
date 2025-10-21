@@ -1,0 +1,941 @@
+# Utils Package Documentation
+**Discord Bot v2.0 - Utility Functions and Helpers**
+
+This package contains utility functions, helpers, and shared components used throughout the Discord bot application.
+
+## 📋 Table of Contents
+
+1. [**Structured Logging**](#-structured-logging) - Contextual logging with Discord integration
+2. [**Redis Caching**](#-redis-caching) - Optional performance caching system
+3. [**Command Decorators**](#-command-decorators) - Boilerplate reduction decorators
+4. [**Future Utilities**](#-future-utilities) - Planned utility modules
+
+---
+
+## 🔍 Structured Logging
+
+**Location:** `utils/logging.py`  
+**Purpose:** Provides hybrid logging system with contextual information for Discord bot debugging and monitoring.
+
+### **Quick Start**
+
+```python
+from utils.logging import get_contextual_logger, set_discord_context
+
+class YourCommandCog(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+        self.logger = get_contextual_logger(f'{__name__}.YourCommandCog')
+    
+    async def your_command(self, interaction: discord.Interaction, param: str):
+        # Set Discord context for all subsequent log entries
+        set_discord_context(
+            interaction=interaction,
+            command="/your-command",
+            param_value=param
+        )
+        
+        # Start operation timing and get trace ID
+        trace_id = self.logger.start_operation("your_command_operation")
+        
+        try:
+            self.logger.info("Command started")
+            
+            # Your command logic here
+            result = await some_api_call(param)
+            self.logger.debug("API call completed", result_count=len(result))
+            
+            self.logger.info("Command completed successfully")
+            
+        except Exception as e:
+            self.logger.error("Command failed", error=e)
+            self.logger.end_operation(trace_id, "failed")
+            raise
+        else:
+            self.logger.end_operation(trace_id, "completed")
+```
+
+### **Key Features**
+
+#### **🎯 Contextual Information**
+Every log entry automatically includes:
+- **Discord Context**: User ID, guild ID, guild name, channel ID
+- **Command Context**: Command name, parameters
+- **Operation Context**: Trace ID, operation name, execution duration
+- **Custom Fields**: Additional context via keyword arguments
+
+#### **⏱️ Automatic Timing & Tracing**
+```python
+trace_id = self.logger.start_operation("complex_operation")
+# ... do work ...
+self.logger.info("Operation in progress")  # Includes duration_ms in extras
+# ... more work ...
+self.logger.end_operation(trace_id, "completed")  # Final timing log
+```
+
+**Key Behavior:**
+- **`trace_id`**: Promoted to **standard JSON key** (root level) for easy filtering
+- **`duration_ms`**: Available in **extras** when timing is active (optional field)
+- **Context**: All operation context preserved throughout the async operation
+
+#### **🔗 Request Tracing**
+Track a single request through all log entries using trace IDs:
+```bash
+# Find all logs for a specific request (trace_id is now a standard key)
+jq 'select(.trace_id == "abc12345")' logs/discord_bot_v2.json
+```
+
+#### **📤 Hybrid Output**
+- **Console**: Human-readable for development
+- **Traditional File** (`discord_bot_v2.log`): Human-readable with debug info
+- **JSON File** (`discord_bot_v2.json`): Structured for analysis
+
+### **API Reference**
+
+#### **Core Functions**
+
+**`get_contextual_logger(logger_name: str) -> ContextualLogger`**
+```python
+# Get a logger instance for your module
+logger = get_contextual_logger(f'{__name__}.MyClass')
+```
+
+**`set_discord_context(interaction=None, user_id=None, guild_id=None, **kwargs)`**
+```python
+# Set context from Discord interaction (recommended)
+set_discord_context(interaction=interaction, command="/player", player_name="Mike Trout")
+
+# Or set context manually
+set_discord_context(user_id="123456", guild_id="987654", custom_field="value")
+```
+
+**`clear_context()`**
+```python
+# Clear the current logging context (usually not needed)
+clear_context()
+```
+
+#### **ContextualLogger Methods**
+
+**`start_operation(operation_name: str = None) -> str`**
+```python
+# Start timing and get trace ID
+trace_id = logger.start_operation("player_search")
+```
+
+**`end_operation(trace_id: str, operation_result: str = "completed")`**
+```python
+# End operation and log final duration
+logger.end_operation(trace_id, "completed")
+# or
+logger.end_operation(trace_id, "failed")
+```
+
+**`info(message: str, **kwargs)`**
+```python
+logger.info("Player found", player_id=123, team_name="Yankees")
+```
+
+**`debug(message: str, **kwargs)`**
+```python
+logger.debug("API call started", endpoint="players/search", timeout=30)
+```
+
+**`warning(message: str, **kwargs)`**
+```python
+logger.warning("Multiple players found", candidates=["Player A", "Player B"])
+```
+
+**`error(message: str, error: Exception = None, **kwargs)`**
+```python
+# With exception
+logger.error("API call failed", error=e, retry_count=3)
+
+# Without exception
+logger.error("Validation failed", field="player_name", value="invalid")
+```
+
+**`exception(message: str, **kwargs)`**
+```python
+# Automatically captures current exception
+try:
+    risky_operation()
+except:
+    logger.exception("Unexpected error in operation", operation_id=123)
+```
+
+### **Output Examples**
+
+#### **Console Output (Development)**
+```
+2025-08-14 14:32:15,123 - commands.players.info.PlayerInfoCommands - INFO - Player info command started
+2025-08-14 14:32:16,456 - commands.players.info.PlayerInfoCommands - DEBUG - Starting player search
+2025-08-14 14:32:18,789 - commands.players.info.PlayerInfoCommands - INFO - Command completed successfully
+```
+
+#### **JSON Output (Monitoring & Analysis)**
+```json
+{
+  "timestamp": "2025-08-15T14:32:15.123Z",
+  "level": "INFO",
+  "logger": "commands.players.info.PlayerInfoCommands",
+  "message": "Player info command started",
+  "function": "player_info",
+  "line": 50,
+  "trace_id": "abc12345",
+  "context": {
+    "user_id": "123456789",
+    "guild_id": "987654321",
+    "guild_name": "SBA League",
+    "channel_id": "555666777",
+    "command": "/player",
+    "player_name": "Mike Trout",
+    "season": 12,
+    "trace_id": "abc12345",
+    "operation": "player_info_command"
+  },
+  "extra": {
+    "duration_ms": 0
+  }
+}
+```
+
+#### **Error Output with Exception**
+```json
+{
+  "timestamp": "2025-08-15T14:32:18.789Z",
+  "level": "ERROR",
+  "logger": "commands.players.info.PlayerInfoCommands", 
+  "message": "API call failed",
+  "function": "player_info",
+  "line": 125,
+  "trace_id": "abc12345",
+  "exception": {
+    "type": "APITimeout",
+    "message": "Request timed out after 30s",
+    "traceback": "Traceback (most recent call last):\n  File ..."
+  },
+  "context": {
+    "user_id": "123456789",
+    "guild_id": "987654321",
+    "command": "/player",
+    "player_name": "Mike Trout",
+    "trace_id": "abc12345",
+    "operation": "player_info_command"
+  },
+  "extra": {
+    "duration_ms": 30000,
+    "retry_count": 3,
+    "endpoint": "players/search"
+  }
+}
+```
+
+### **Advanced Usage Patterns**
+
+#### **API Call Logging**
+```python
+async def fetch_player_data(self, player_name: str):
+    self.logger.debug("API call started", 
+                     api_endpoint="players/search",
+                     search_term=player_name,
+                     timeout_ms=30000)
+    
+    try:
+        result = await api_client.get("players", params=[("name", player_name)])
+        self.logger.info("API call successful", 
+                        results_found=len(result) if result else 0,
+                        response_size_kb=len(str(result)) // 1024)
+        return result
+        
+    except TimeoutError as e:
+        self.logger.error("API timeout", 
+                         error=e,
+                         endpoint="players/search",
+                         search_term=player_name)
+        raise
+```
+
+#### **Performance Monitoring**
+```python
+async def complex_operation(self, data):
+    trace_id = self.logger.start_operation("complex_operation")
+    
+    # Step 1
+    self.logger.debug("Processing step 1", step="validation")
+    validate_data(data)
+    
+    # Step 2  
+    self.logger.debug("Processing step 2", step="transformation")
+    processed = transform_data(data)
+    
+    # Step 3
+    self.logger.debug("Processing step 3", step="persistence")
+    result = await save_data(processed)
+    
+    self.logger.info("Complex operation completed",
+                    input_size=len(data),
+                    output_size=len(result),
+                    steps_completed=3)
+    
+    # Final log automatically includes total duration_ms
+```
+
+#### **Error Context Enrichment**
+```python
+async def handle_player_command(self, interaction, player_name):
+    set_discord_context(
+        interaction=interaction,
+        command="/player",
+        player_name=player_name,
+        # Add additional context that helps debugging
+        user_permissions=interaction.user.guild_permissions.administrator,
+        guild_member_count=len(interaction.guild.members),
+        request_timestamp=discord.utils.utcnow().isoformat()
+    )
+    
+    try:
+        # Command logic
+        pass
+    except Exception as e:
+        # Error logs will include all the above context automatically
+        self.logger.error("Player command failed", 
+                         error=e,
+                         # Additional error-specific context
+                         error_code="PLAYER_NOT_FOUND",
+                         suggestion="Try using the full player name")
+        raise
+```
+
+### **Querying JSON Logs**
+
+#### **Using jq for Analysis**
+
+**Find all errors:**
+```bash
+jq 'select(.level == "ERROR")' logs/discord_bot_v2.json
+```
+
+**Find slow operations (>5 seconds):**
+```bash
+jq 'select(.extra.duration_ms > 5000)' logs/discord_bot_v2.json
+```
+
+**Track a specific user's activity:**
+```bash
+jq 'select(.context.user_id == "123456789")' logs/discord_bot_v2.json
+```
+
+**Find API timeout errors:**
+```bash
+jq 'select(.exception.type == "APITimeout")' logs/discord_bot_v2.json
+```
+
+**Get error summary by type:**
+```bash
+jq -r 'select(.level == "ERROR") | .exception.type' logs/discord_bot_v2.json | sort | uniq -c
+```
+
+**Trace a complete request:**
+```bash
+jq 'select(.trace_id == "abc12345")' logs/discord_bot_v2.json | jq -s 'sort_by(.timestamp)'
+```
+
+#### **Performance Analysis**
+
+**Average command execution time:**
+```bash
+jq -r 'select(.message == "Command completed successfully") | .extra.duration_ms' logs/discord_bot_v2.json | awk '{sum+=$1; n++} END {print sum/n}'
+```
+
+**Most active users:**
+```bash
+jq -r '.context.user_id' logs/discord_bot_v2.json | sort | uniq -c | sort -nr | head -10
+```
+
+**Command usage statistics:**
+```bash
+jq -r '.context.command' logs/discord_bot_v2.json | sort | uniq -c | sort -nr
+```
+
+### **Best Practices**
+
+#### **✅ Do:**
+1. **Always set Discord context** at the start of command handlers
+2. **Use start_operation()** for timing critical operations
+3. **Call end_operation()** to complete operation timing
+4. **Include relevant context** in log messages via keyword arguments
+5. **Log at appropriate levels** (debug for detailed flow, info for milestones, warning for recoverable issues, error for failures)
+6. **Include error context** when logging exceptions
+7. **Use trace_id for correlation** - it's automatically available as a standard key
+
+#### **❌ Don't:**
+1. **Don't log sensitive information** (passwords, tokens, personal data)
+2. **Don't over-log in tight loops** (use sampling or conditional logging)
+3. **Don't use string formatting in log messages** (use keyword arguments instead)
+4. **Don't forget to handle exceptions** in logging code itself
+5. **Don't manually add trace_id to log messages** - it's handled automatically
+
+#### **🎯 Trace ID & Duration Guidelines:**
+- **`trace_id`**: Automatically promoted to standard key when operation is active
+- **`duration_ms`**: Appears in extras for logs during timed operations
+- **Operation flow**: Always call `start_operation()` → log messages → `end_operation()`
+- **Query logs**: Use `jq 'select(.trace_id == "xyz")'` for request tracing
+
+#### **Performance Considerations**
+- JSON serialization adds minimal overhead (~1-2ms per log entry)
+- Context variables are async-safe and thread-local
+- Log rotation prevents disk space issues
+- Structured queries are much faster than grep on large files
+
+### **Troubleshooting**
+
+#### **Common Issues**
+
+**Logs not appearing:**
+- Check log level configuration in environment
+- Verify logs/ directory permissions
+- Ensure handlers are properly configured
+
+**JSON serialization errors:**
+- Avoid logging complex objects directly
+- Convert objects to strings or dicts before logging
+- The JSONFormatter handles most common types automatically
+
+**Context not appearing in logs:**
+- Ensure `set_discord_context()` is called before logging
+- Context is tied to the current async task
+- Check that context is not cleared prematurely
+
+**Performance issues:**
+- Monitor log file sizes and rotation
+- Consider reducing log level in production
+- Use sampling for high-frequency operations
+
+---
+
+## 🔄 Redis Caching
+
+**Location:** `utils/cache.py`  
+**Purpose:** Optional Redis-based caching system to improve performance for expensive API operations.
+
+### **Quick Start**
+
+```python
+# In your service - caching is added via decorators
+from utils.decorators import cached_api_call, cached_single_item
+
+class PlayerService(BaseService[Player]):
+    @cached_api_call(ttl=600)  # Cache for 10 minutes
+    async def get_players_by_team(self, team_id: int, season: int) -> List[Player]:
+        # Existing method - no changes needed
+        return await self.get_all_items(params=[('team_id', team_id), ('season', season)])
+    
+    @cached_single_item(ttl=300)  # Cache for 5 minutes  
+    async def get_player(self, player_id: int) -> Optional[Player]:
+        # Existing method - no changes needed
+        return await self.get_by_id(player_id)
+```
+
+### **Configuration**
+
+**Environment Variables** (optional):
+```bash
+REDIS_URL=redis://localhost:6379        # Empty string disables caching
+REDIS_CACHE_TTL=300                     # Default TTL in seconds
+```
+
+### **Key Features**
+
+- **Graceful Fallback**: Works perfectly without Redis installed/configured
+- **Zero Breaking Changes**: All existing functionality preserved
+- **Selective Caching**: Add decorators only to expensive methods
+- **Automatic Key Generation**: Cache keys based on method parameters
+- **Intelligent Invalidation**: Cache patterns for data modification
+
+### **Available Decorators**
+
+**`@cached_api_call(ttl=None, cache_key_suffix="")`**
+- For methods returning `List[T]`
+- Caches full result sets (e.g., team rosters, player searches)
+
+**`@cached_single_item(ttl=None, cache_key_suffix="")`**
+- For methods returning `Optional[T]` 
+- Caches individual entities (e.g., specific players, teams)
+
+**`@cache_invalidate("pattern1", "pattern2")`**
+- For data modification methods
+- Clears related cache entries when data changes
+
+### **Usage Examples**
+
+#### **Team Roster Caching**
+```python
+@cached_api_call(ttl=600, cache_key_suffix="roster")
+async def get_players_by_team(self, team_id: int, season: int) -> List[Player]:
+    # 500+ players cached for 10 minutes
+    # Cache key: sba:players_get_players_by_team_roster_<hash>
+```
+
+#### **Search Results Caching**
+```python
+@cached_api_call(ttl=180, cache_key_suffix="search") 
+async def get_players_by_name(self, name: str, season: int) -> List[Player]:
+    # Search results cached for 3 minutes
+    # Reduces API load for common player searches
+```
+
+#### **Cache Invalidation**
+```python
+@cache_invalidate("by_team", "search")
+async def update_player(self, player_id: int, updates: dict) -> Optional[Player]:
+    # Clears team roster and search caches when player data changes
+    result = await self.update_by_id(player_id, updates)
+    return result
+```
+
+### **Performance Impact**
+
+**Memory Usage:**
+- ~1-5MB per cached team roster (500 players)
+- ~1KB per cached individual player
+
+**Performance Gains:**
+- 80-90% reduction in API calls for repeated queries
+- ~50-200ms response time improvement for large datasets
+- Significant reduction in database/API server load
+
+### **Implementation Details**
+
+**Cache Manager** (`utils/cache.py`):
+- Redis connection management with auto-reconnection
+- JSON serialization/deserialization
+- TTL-based expiration
+- Prefix-based cache invalidation
+
+**Base Service Integration**:
+- Automatic cache key generation from method parameters
+- Model serialization/deserialization
+- Error handling and fallback to API calls
+
+---
+
+## 🎯 Command Decorators
+
+**Location:** `utils/decorators.py`  
+**Purpose:** Decorators to reduce boilerplate code in Discord commands and service methods.
+
+### **Command Logging Decorator**
+
+**`@logged_command(command_name=None, log_params=True, exclude_params=None)`**
+
+Automatically handles comprehensive logging for Discord commands:
+
+```python
+from utils.decorators import logged_command
+
+class PlayerCommands(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+        self.logger = get_contextual_logger(f'{__name__}.PlayerCommands')
+    
+    @discord.app_commands.command(name="player")
+    @logged_command("/player", exclude_params=["sensitive_data"])
+    async def player_info(self, interaction, player_name: str, season: int = None):
+        # Clean business logic only - no logging boilerplate needed
+        player = await player_service.search_player(player_name, season)
+        embed = create_player_embed(player)
+        await interaction.followup.send(embed=embed)
+```
+
+**Features:**
+- Automatic Discord context setting with interaction details
+- Operation timing with trace ID generation
+- Parameter logging with exclusion support
+- Error handling and re-raising
+- Preserves Discord.py command registration compatibility
+
+### **Caching Decorators**
+
+See [Redis Caching](#-redis-caching) section above for caching decorator documentation.
+
+---
+
+## 🚀 Discord Helpers
+
+**Location:** `utils/discord_helpers.py` (NEW - January 2025)
+**Purpose:** Common Discord-related helper functions for channel lookups, message sending, and formatting.
+
+### **Available Functions**
+
+#### **`get_channel_by_name(bot, channel_name)`**
+Get a text channel by name from the configured guild:
+
+```python
+from utils.discord_helpers import get_channel_by_name
+
+# In your command or cog
+channel = await get_channel_by_name(self.bot, "sba-network-news")
+if channel:
+    await channel.send("Message content")
+```
+
+**Features:**
+- Retrieves guild ID from environment (`GUILD_ID`)
+- Returns `TextChannel` object or `None` if not found
+- Handles errors gracefully with logging
+- Works across all guilds the bot is in
+
+#### **`send_to_channel(bot, channel_name, content=None, embed=None)`**
+Send a message to a channel by name:
+
+```python
+from utils.discord_helpers import send_to_channel
+
+# Send text message
+success = await send_to_channel(
+    self.bot,
+    "sba-network-news",
+    content="Game results posted!"
+)
+
+# Send embed
+success = await send_to_channel(
+    self.bot,
+    "sba-network-news",
+    embed=results_embed
+)
+
+# Send both
+success = await send_to_channel(
+    self.bot,
+    "sba-network-news",
+    content="Check out these results:",
+    embed=results_embed
+)
+```
+
+**Features:**
+- Combined channel lookup and message sending
+- Supports text content, embeds, or both
+- Returns `True` on success, `False` on failure
+- Comprehensive error logging
+- Non-critical - doesn't raise exceptions
+
+#### **`format_key_plays(plays, away_team, home_team)`**
+Format top plays into embed field text for game results:
+
+```python
+from utils.discord_helpers import format_key_plays
+from services.play_service import play_service
+
+# Get top 3 plays by WPA
+top_plays = await play_service.get_top_plays_by_wpa(game_id, limit=3)
+
+# Format for display
+key_plays_text = format_key_plays(top_plays, away_team, home_team)
+
+# Add to embed
+if key_plays_text:
+    embed.add_field(name="Key Plays", value=key_plays_text, inline=False)
+```
+
+**Output Example:**
+```
+Top 3: (NYY) homers in 2 runs, NYY up 3-1
+Bot 5: (BOS) doubles scoring 1 run, tied at 3
+Top 9: (NYY) singles scoring 1 run, NYY up 4-3
+```
+
+**Features:**
+- Uses `Play.descriptive_text()` for human-readable descriptions
+- Adds score context after each play
+- Shows which team is leading or if tied
+- Returns empty string if no plays provided
+- Handles RBI adjustments for accurate score display
+
+### **Real-World Usage**
+
+#### **Scorecard Submission Results Posting**
+From `commands/league/submit_scorecard.py`:
+
+```python
+# Create results embed
+results_embed = await self._create_results_embed(
+    away_team, home_team, box_score, setup_data,
+    current, sheet_url, wp_id, lp_id, sv_id, hold_ids, game_id
+)
+
+# Post to news channel automatically
+await send_to_channel(
+    self.bot,
+    SBA_NETWORK_NEWS_CHANNEL,  # "sba-network-news"
+    content=None,
+    embed=results_embed
+)
+```
+
+### **Configuration**
+
+These functions rely on environment variables:
+- **`GUILD_ID`**: Discord server ID where channels should be found
+- **`SBA_NETWORK_NEWS_CHANNEL`**: Channel name for game results (constant)
+
+### **Error Handling**
+
+All functions handle errors gracefully:
+- **Channel not found**: Logs warning and returns `None` or `False`
+- **Missing GUILD_ID**: Logs error and returns `None` or `False`
+- **Send failures**: Logs error with details and returns `False`
+- **Empty data**: Returns empty string or `False` without errors
+
+### **Testing Considerations**
+
+When testing commands that use these utilities:
+- Mock `get_channel_by_name()` to return test channel objects
+- Mock `send_to_channel()` to verify message content
+- Mock `format_key_plays()` to verify play formatting logic
+- Use test guild IDs in environment variables
+
+---
+
+## 🚀 Future Utilities
+
+Additional utility modules planned for future implementation:
+
+### **Permission Utilities** (Planned)
+- Permission checking decorators
+- Role validation helpers
+- User authorization utilities
+
+### **API Utilities** (Planned)  
+- Rate limiting decorators
+- Response caching mechanisms
+- Retry logic with exponential backoff
+- Request validation helpers
+
+### **Data Processing** (Planned)
+- CSV/JSON export utilities
+- Statistical calculation helpers
+- Date/time formatting for baseball seasons
+- Text processing and search utilities
+
+### **Testing Utilities** (Planned)
+- Mock Discord objects for testing
+- Fixture generators for common test data
+- Assertion helpers for Discord responses
+- Test database setup and teardown
+
+---
+
+## 📚 Usage Examples by Module
+
+### **Logging Integration in Commands**
+
+```python
+# commands/teams/roster.py
+from utils.logging import get_contextual_logger, set_discord_context
+
+class TeamRosterCommands(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+        self.logger = get_contextual_logger(f'{__name__}.TeamRosterCommands')
+    
+    @discord.app_commands.command(name="roster")
+    async def team_roster(self, interaction, team_name: str, season: int = None):
+        set_discord_context(
+            interaction=interaction,
+            command="/roster", 
+            team_name=team_name,
+            season=season
+        )
+        
+        trace_id = self.logger.start_operation("team_roster_command")
+        
+        try:
+            self.logger.info("Team roster command started")
+            
+            # Command implementation
+            team = await team_service.find_team(team_name)
+            self.logger.debug("Team found", team_id=team.id, team_abbreviation=team.abbrev)
+            
+            players = await team_service.get_roster(team.id, season)
+            self.logger.info("Roster retrieved", player_count=len(players))
+            
+            # Create and send response
+            embed = create_roster_embed(team, players)
+            await interaction.followup.send(embed=embed)
+            
+            self.logger.info("Team roster command completed")
+            
+        except TeamNotFoundError as e:
+            self.logger.warning("Team not found", search_term=team_name)
+            await interaction.followup.send(f"❌ Team '{team_name}' not found", ephemeral=True)
+            
+        except Exception as e:
+            self.logger.error("Team roster command failed", error=e)
+            await interaction.followup.send("❌ Error retrieving team roster", ephemeral=True)
+```
+
+### **Service Layer Logging**
+
+```python
+# services/team_service.py  
+from utils.logging import get_contextual_logger
+
+class TeamService(BaseService[Team]):
+    def __init__(self):
+        super().__init__(Team, 'teams')
+        self.logger = get_contextual_logger(f'{__name__}.TeamService')
+    
+    async def find_team(self, team_name: str) -> Team:
+        self.logger.debug("Starting team search", search_term=team_name)
+        
+        # Try exact match first
+        teams = await self.get_by_field('name', team_name)
+        if len(teams) == 1:
+            self.logger.debug("Exact team match found", team_id=teams[0].id)
+            return teams[0]
+        
+        # Try abbreviation match
+        teams = await self.get_by_field('abbrev', team_name.upper())
+        if len(teams) == 1:
+            self.logger.debug("Team abbreviation match found", team_id=teams[0].id)
+            return teams[0]
+        
+        # Try fuzzy search
+        all_teams = await self.get_all_items()
+        matches = [t for t in all_teams if team_name.lower() in t.name.lower()]
+        
+        if len(matches) == 0:
+            self.logger.warning("No team matches found", search_term=team_name)
+            raise TeamNotFoundError(f"No team found matching '{team_name}'")
+        elif len(matches) > 1:
+            match_names = [t.name for t in matches]
+            self.logger.warning("Multiple team matches found", 
+                              search_term=team_name,
+                              matches=match_names)
+            raise MultipleTeamsFoundError(f"Multiple teams found: {', '.join(match_names)}")
+        
+        self.logger.debug("Fuzzy team match found", team_id=matches[0].id)
+        return matches[0]
+```
+
+---
+
+## 📁 File Structure
+
+```
+utils/
+├── README.md          # This documentation
+├── __init__.py        # Package initialization
+├── cache.py           # Redis caching system
+├── decorators.py      # Command and caching decorators
+├── logging.py         # Structured logging implementation
+└── random_gen.py      # Random generation utilities
+
+# Future files:
+├── discord_helpers.py # Discord utility functions
+├── api_utils.py       # API helper functions  
+├── data_processing.py # Data manipulation utilities
+└── testing.py         # Testing helper functions
+```
+
+---
+
+## 🔍 Autocomplete Functions
+
+**Location:** `utils/autocomplete.py`
+**Purpose:** Shared autocomplete functions for Discord slash command parameters.
+
+### **Available Functions**
+
+#### **Player Autocomplete**
+```python
+async def player_autocomplete(interaction: discord.Interaction, current: str) -> List[discord.app_commands.Choice]:
+    """Autocomplete for player names with priority ordering."""
+```
+
+**Features:**
+- Fuzzy name matching with word boundaries
+- Prioritizes exact matches and starts-with matches
+- Limits to 25 results (Discord limit)
+- Handles API errors gracefully
+
+#### **Team Autocomplete (All Teams)**
+```python
+async def team_autocomplete(interaction: discord.Interaction, current: str) -> List[discord.app_commands.Choice]:
+    """Autocomplete for all team abbreviations."""
+```
+
+**Features:**
+- Matches team abbreviations (e.g., "WV", "NY", "WVMIL")
+- Case-insensitive matching
+- Includes full team names in display
+
+#### **Major League Team Autocomplete**
+```python
+async def major_league_team_autocomplete(interaction: discord.Interaction, current: str) -> List[discord.app_commands.Choice]:
+    """Autocomplete for Major League teams only (filtered by roster type)."""
+```
+
+**Features:**
+- Filters to only Major League teams (≤3 character abbreviations)
+- Uses Team model's `roster_type()` method for accurate filtering
+- Excludes Minor League (MiL) and Injured List (IL) teams
+
+### **Usage in Commands**
+
+```python
+from utils.autocomplete import player_autocomplete, major_league_team_autocomplete
+
+class RosterCommands(commands.Cog):
+    @discord.app_commands.command(name="roster")
+    @discord.app_commands.describe(
+        team="Team abbreviation",
+        player="Player name (optional)"
+    )
+    async def roster_command(
+        self,
+        interaction: discord.Interaction,
+        team: str,
+        player: Optional[str] = None
+    ):
+        # Command logic here
+        pass
+
+    # Autocomplete decorators
+    @roster_command.autocomplete('team')
+    async def roster_team_autocomplete(self, interaction, current):
+        return await major_league_team_autocomplete(interaction, current)
+
+    @roster_command.autocomplete('player')
+    async def roster_player_autocomplete(self, interaction, current):
+        return await player_autocomplete(interaction, current)
+```
+
+### **Recent Fixes (January 2025)**
+
+#### **Team Filtering Issue**
+- **Problem**: `major_league_team_autocomplete` was passing invalid `roster_type` parameter to API
+- **Solution**: Removed parameter and implemented client-side filtering using `team.roster_type()` method
+- **Benefit**: More accurate team filtering that respects edge cases like "BHMIL" vs "BHMMIL"
+
+#### **Test Coverage**
+- Added comprehensive test suite in `tests/test_utils_autocomplete.py`
+- Tests cover all functions, error handling, and edge cases
+- Validates prioritization logic and result limits
+
+### **Implementation Notes**
+
+- **Shared Functions**: Autocomplete logic centralized to avoid duplication across commands
+- **Error Handling**: Functions return empty lists on API errors rather than crashing
+- **Performance**: Uses cached service calls where possible
+- **Discord Limits**: Respects 25-choice limit for autocomplete responses
+
+---
+
+**Last Updated:** January 2025 - Added Autocomplete Functions and Fixed Team Filtering
+**Next Update:** When additional utility modules are added
+
+For questions or improvements to the logging system, check the implementation in `utils/logging.py` or refer to the JSON log outputs in `logs/discord_bot_v2.json`.
