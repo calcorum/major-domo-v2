@@ -225,6 +225,16 @@ class DiceRollCommands(commands.Cog):
         dice_notation = "1d6;2d6;1d20"
         roll_results = self._parse_and_roll_multiple_dice(dice_notation)
 
+        embed_title = 'At bat roll'
+        if roll_results[2].total == 1:
+            embed_title = 'Wild pitch roll'
+            dice_notation = '1d20'
+            roll_results = [self._parse_and_roll_single_dice(dice_notation)]
+        elif roll_results[2].total == 2:
+            embed_title = 'PB roll'
+            dice_notation = '1d20'
+            roll_results = [self._parse_and_roll_single_dice(dice_notation)]
+
         # Create embed for the roll results
         embed = self._create_multi_roll_embed(
             dice_notation, 
@@ -233,7 +243,7 @@ class DiceRollCommands(commands.Cog):
             set_author=False,
             embed_color=embed_color
         )
-        embed.title = f'At bat roll for {interaction.user.display_name}'
+        embed.title = f'{embed_title} for {interaction.user.display_name}'
         await interaction.followup.send(embed=embed)
 
     @commands.command(name="ab", aliases=["atbat"])
@@ -973,7 +983,7 @@ class DiceRollCommands(commands.Cog):
 
         return results
 
-    def _parse_and_roll_single_dice(self, dice_notation: str) -> Optional[DiceRoll]:
+    def _parse_and_roll_single_dice(self, dice_notation: str) -> DiceRoll:
         """Parse single dice notation and return roll results."""
         # Clean the input
         dice_notation = dice_notation.strip().lower().replace(' ', '')
@@ -983,14 +993,14 @@ class DiceRollCommands(commands.Cog):
         match = re.match(pattern, dice_notation)
 
         if not match:
-            return None
+            raise ValueError(f'Cannot parse dice string **{dice_notation}**')
 
         num_dice = int(match.group(1))
         die_sides = int(match.group(2))
 
         # Validate reasonable limits
         if num_dice > 100 or die_sides > 1000 or num_dice < 1 or die_sides < 2:
-            return None
+            raise ValueError('I don\'t know, bud, that just doesn\'t seem doable.')
 
         # Roll the dice
         rolls = [random.randint(1, die_sides) for _ in range(num_dice)]
