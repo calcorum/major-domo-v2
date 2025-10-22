@@ -3,19 +3,15 @@ Soak Message Listener
 
 Monitors all messages for soak mentions and responds with disappointment GIFs.
 """
-import re
-import os
 import logging
 import discord
 from discord.ext import commands
 
+from utils.listeners import should_process_message, COMMAND_FILTERS
 from .tracker import SoakTracker
 from .giphy_service import get_tier_for_seconds, get_disappointment_gif
 
 logger = logging.getLogger(f'{__name__}.SoakListener')
-
-# Regex pattern to detect soak variations (whole word only)
-SOAK_PATTERN = re.compile(r'\b(soak|soaking|soaked|soaker)\b', re.IGNORECASE)
 
 
 class SoakListener(commands.Cog):
@@ -34,21 +30,13 @@ class SoakListener(commands.Cog):
         Args:
             message: Discord message object
         """
-        # Ignore bot messages to prevent loops
-        if message.author.bot:
+        # Apply common message filters
+        if not should_process_message(message, *COMMAND_FILTERS):
             return
 
-        # Ignore messages that start with command prefix (legacy pattern)
-        if message.content.startswith('!'):
-            return
-
-        # Check guild ID matches configured guild (optional security)
-        guild_id = os.environ.get('GUILD_ID')
-        if guild_id and message.guild and message.guild.id != int(guild_id):
-            return
-
-        # Check if message contains soak
-        if not SOAK_PATTERN.search(message.content):
+        # Check if message contains ' soak' (listener-specific filter)
+        msg_text = message.content.lower()
+        if ' soak' not in msg_text:
             return
 
         logger.info(f"Soak detected in message from {message.author.name} (ID: {message.author.id})")

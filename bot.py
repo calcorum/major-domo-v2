@@ -120,6 +120,7 @@ class SBABot(commands.Bot):
         from commands.help import setup_help_commands
         from commands.profile import setup_profile_commands
         from commands.soak import setup_soak
+        from commands.spoiler import setup_spoiler
         from commands.injuries import setup_injuries
         from commands.gameplay import setup_gameplay
 
@@ -137,6 +138,7 @@ class SBABot(commands.Bot):
             ("help", setup_help_commands),
             ("profile", setup_profile_commands),
             ("soak", setup_soak),
+            ("spoiler", setup_spoiler),
             ("injuries", setup_injuries),
             ("gameplay", setup_gameplay),
         ]
