@@ -119,3 +119,55 @@ def format_key_plays(
         key_plays_text += f"{play_description}\n"
 
     return key_plays_text
+
+
+async def set_channel_visibility(
+    channel: discord.TextChannel,
+    visible: bool,
+    reason: Optional[str] = None
+) -> bool:
+    """
+    Set channel visibility for @everyone.
+
+    The bot's permissions are based on its role, not @everyone, so the bot
+    will retain access even when @everyone view permission is removed.
+
+    Args:
+        channel: Discord text channel to modify
+        visible: If True, grant @everyone view permission; if False, deny it
+        reason: Optional reason for audit log
+
+    Returns:
+        True if permissions updated successfully, False otherwise
+    """
+    try:
+        guild = channel.guild
+        everyone_role = guild.default_role
+
+        if visible:
+            # Grant @everyone permission to view channel
+            default_reason = "Channel made visible to all members"
+            await channel.set_permissions(
+                everyone_role,
+                view_channel=True,
+                reason=reason or default_reason
+            )
+            logger.info(f"Set #{channel.name} to VISIBLE for @everyone")
+        else:
+            # Remove @everyone view permission
+            default_reason = "Channel hidden from members"
+            await channel.set_permissions(
+                everyone_role,
+                view_channel=False,
+                reason=reason or default_reason
+            )
+            logger.info(f"Set #{channel.name} to HIDDEN for @everyone")
+
+        return True
+
+    except discord.Forbidden:
+        logger.error(f"Missing permissions to modify #{channel.name} permissions")
+        return False
+    except Exception as e:
+        logger.error(f"Error setting channel visibility for #{channel.name}: {e}")
+        return False
