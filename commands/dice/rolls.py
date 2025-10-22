@@ -1000,7 +1000,7 @@ class DiceRollCommands(commands.Cog):
 
         # Validate reasonable limits
         if num_dice > 100 or die_sides > 1000 or num_dice < 1 or die_sides < 2:
-            return None
+            raise ValueError('I don\'t know, bud, that just doesn\'t seem doable.')
 
         # Roll the dice
         rolls = [random.randint(1, die_sides) for _ in range(num_dice)]
