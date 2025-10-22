@@ -45,13 +45,14 @@ class ILMoveCommands(commands.Cog):
     )
     @app_commands.describe(
         player="Player name; begin typing for autocomplete",
-        destination="Where to move the player: Major League, Minor League, or Injured List"
+        destination="Where to move the player: Major League, Minor League, Injured List, or Free Agency"
     )
     @app_commands.autocomplete(player=player_autocomplete)
     @app_commands.choices(destination=[
         app_commands.Choice(name="Major League", value="ml"),
         app_commands.Choice(name="Minor League", value="mil"),
-        app_commands.Choice(name="Injured List", value="il")
+        app_commands.Choice(name="Injured List", value="il"),
+        app_commands.Choice(name="Free Agency", value="fa")
     ])
     @logged_command("/ilmove")
     async def ilmove(
@@ -124,7 +125,7 @@ class ILMoveCommands(commands.Cog):
         Args:
             builder: TransactionBuilder instance
             player_name: Name of player to move
-            destination_str: Destination string (ml, mil, il)
+            destination_str: Destination string (ml, mil, il, fa)
 
         Returns:
             Tuple of (success: bool, error_message: str)
@@ -162,6 +163,7 @@ class ILMoveCommands(commands.Cog):
                 "ml": RosterType.MAJOR_LEAGUE,
                 "mil": RosterType.MINOR_LEAGUE,
                 "il": RosterType.INJURED_LIST,
+                "fa": RosterType.FREE_AGENCY,
             }
 
             to_roster = destination_map.get(destination_str.lower())
@@ -202,13 +204,24 @@ class ILMoveCommands(commands.Cog):
             if from_roster is None:
                 return False, f"{player.name} is not on your roster"
 
+            # Determine destination team (Free Agency if releasing player)
+            if to_roster == RosterType.FREE_AGENCY:
+                config = get_config()
+                fa_team = await team_service.get_team(config.free_agent_team_id)
+                if not fa_team:
+                    self.logger.error(f"Could not load Free Agency team (ID: {config.free_agent_team_id})")
+                    return False, "Could not load Free Agency team. Please try again."
+                to_team = fa_team
+            else:
+                to_team = builder.team
+
             # Create move
             move = TransactionMove(
                 player=player,
                 from_roster=from_roster,
                 to_roster=to_roster,
                 from_team=builder.team,
-                to_team=builder.team
+                to_team=to_team
             )
 
             success, error_message = builder.add_move(move)

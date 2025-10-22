@@ -147,9 +147,9 @@ class DropAddCommands(commands.Cog):
                 # Player belongs to another team if:
                 # 1. They have a team assigned AND
                 # 2. That team is not Free Agency (abbrev != 'FA') AND
-                # 3. That team is not the user's team
+                # 3. That team is not in the same organization as the user's team
                 if (player.team.abbrev != 'FA' and
-                    player.team.id != builder.team.id):
+                    not builder.team.is_same_organization(player.team)):
                     self.logger.warning(f"Player {player.name} belongs to {player.team.abbrev}, cannot add to {builder.team.abbrev} transaction")
                     return False, f"{player.name} belongs to {player.team.abbrev} and cannot be added to your transaction"
             
