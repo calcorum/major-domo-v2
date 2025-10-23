@@ -9,6 +9,7 @@ from datetime import datetime
 
 from services.transaction_builder import TransactionBuilder, RosterValidationResult
 from views.embeds import EmbedColors, EmbedTemplate
+from utils.transaction_logging import post_transaction_to_log
 
 
 class TransactionEmbedView(discord.ui.View):
@@ -239,6 +240,10 @@ class SubmitConfirmationModal(discord.ui.Modal):
                 # Submit the transaction for NEXT week
                 transactions = await self.builder.submit_transaction(week=current_state.week + 1)
 
+                # Post to #transaction-log channel
+                bot = interaction.client
+                await post_transaction_to_log(bot, transactions, team=self.builder.team)
+
                 # Create success message
                 success_msg = f"✅ **Transaction Submitted Successfully!**\n\n"
                 success_msg += f"**Move ID:** `{transactions[0].moveid}`\n"
@@ -269,6 +274,10 @@ class SubmitConfirmationModal(discord.ui.Modal):
                         txn.newteam.id
                     )
                     player_updates.append(updated_player)
+
+                # Post to #transaction-log channel
+                bot = interaction.client
+                await post_transaction_to_log(bot, created_transactions, team=self.builder.team)
 
                 # Create success message
                 success_msg = f"✅ **IL Move Executed Successfully!**\n\n"
