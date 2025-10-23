@@ -86,6 +86,92 @@ class TestTeamModel:
         team = Team(id=3, abbrev='SD', sname='Padres', lname='San Diego Padres', season=12)
         assert str(team) == 'SD - San Diego Padres'
 
+    def test_team_roster_type_major_league(self):
+        """Test roster type detection for Major League teams."""
+        from models.team import RosterType
+
+        # 3 chars or less → Major League
+        team = Team(id=1, abbrev='NYY', sname='Yankees', lname='New York Yankees', season=12)
+        assert team.roster_type() == RosterType.MAJOR_LEAGUE
+
+        team = Team(id=2, abbrev='BOS', sname='Red Sox', lname='Boston Red Sox', season=12)
+        assert team.roster_type() == RosterType.MAJOR_LEAGUE
+
+        # Even "BHM" (ends in M) should be Major League
+        team = Team(id=3, abbrev='BHM', sname='Iron', lname='Birmingham Iron', season=12)
+        assert team.roster_type() == RosterType.MAJOR_LEAGUE
+
+    def test_team_roster_type_minor_league(self):
+        """Test roster type detection for Minor League teams."""
+        from models.team import RosterType
+
+        # Standard Minor League: [Team] + "MIL"
+        team = Team(id=4, abbrev='NYYMIL', sname='RailRiders', lname='Staten Island RailRiders', season=12)
+        assert team.roster_type() == RosterType.MINOR_LEAGUE
+
+        team = Team(id=5, abbrev='PORMIL', sname='Portland MiL', lname='Portland Minor League', season=12)
+        assert team.roster_type() == RosterType.MINOR_LEAGUE
+
+        # Case insensitive
+        team = Team(id=6, abbrev='LAAmil', sname='Bees', lname='Salt Lake Bees', season=12)
+        assert team.roster_type() == RosterType.MINOR_LEAGUE
+
+    def test_team_roster_type_injured_list(self):
+        """Test roster type detection for Injured List teams."""
+        from models.team import RosterType
+
+        # Standard Injured List: [Team] + "IL"
+        team = Team(id=7, abbrev='NYYIL', sname='Yankees IL', lname='New York Yankees IL', season=12)
+        assert team.roster_type() == RosterType.INJURED_LIST
+
+        team = Team(id=8, abbrev='PORIL', sname='Loggers IL', lname='Portland Loggers IL', season=12)
+        assert team.roster_type() == RosterType.INJURED_LIST
+
+        # Case insensitive
+        team = Team(id=9, abbrev='LAAil', sname='Angels IL', lname='Los Angeles Angels IL', season=12)
+        assert team.roster_type() == RosterType.INJURED_LIST
+
+    def test_team_roster_type_edge_case_bhmil(self):
+        """
+        Test critical edge case: "BHMIL" should be Injured List, not Minor League.
+
+        This is BHM (Birmingham, ends in M) + IL (Injured List).
+        NOT BH + MIL (Minor League).
+
+        Bug history: Originally failed because "BHMIL" ends with "MIL", so it was
+        incorrectly classified as Minor League.
+        """
+        from models.team import RosterType
+
+        # "BHMIL" = "BHM" + "IL" → sname contains "IL" → INJURED_LIST
+        team = Team(id=10, abbrev='BHMIL', sname='Iron IL', lname='Birmingham Iron IL', season=12)
+        assert team.roster_type() == RosterType.INJURED_LIST
+
+        # Compare with a real Minor League team that has "Island" in name
+        # "NYYMIL" = "NYY" + "MIL", even though sname has "Island" → MINOR_LEAGUE
+        team = Team(id=11, abbrev='NYYMIL', sname='Staten Island RailRiders', lname='Staten Island RailRiders', season=12)
+        assert team.roster_type() == RosterType.MINOR_LEAGUE
+
+        # Another IL edge case with sname containing "IL" at word boundary
+        team = Team(id=12, abbrev='WVMIL', sname='WV IL', lname='West Virginia IL', season=12)
+        assert team.roster_type() == RosterType.INJURED_LIST
+
+    def test_team_roster_type_sname_disambiguation(self):
+        """Test that sname is used correctly to disambiguate MIL vs IL."""
+        from models.team import RosterType
+
+        # MiL team - sname does NOT have "IL" as a word
+        team = Team(id=13, abbrev='WVMIL', sname='Miners', lname='West Virginia Miners', season=12)
+        assert team.roster_type() == RosterType.MINOR_LEAGUE
+
+        # IL team - sname has "IL" at word boundary
+        team = Team(id=14, abbrev='WVMIL', sname='Miners IL', lname='West Virginia Miners IL', season=12)
+        assert team.roster_type() == RosterType.INJURED_LIST
+
+        # MiL team - sname has "IL" but only in "Island" (substring, not word boundary)
+        team = Team(id=15, abbrev='CHIMIL', sname='Island Hoppers', lname='Chicago Island Hoppers', season=12)
+        assert team.roster_type() == RosterType.MINOR_LEAGUE
+
 
 class TestPlayerModel:
     """Test Player model functionality."""

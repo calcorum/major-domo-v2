@@ -71,27 +71,46 @@ class Team(SBABaseModel):
         return super().from_api_data(team_data)
     
     def roster_type(self) -> RosterType:
-        """Determine the roster type based on team abbreviation and name."""
+        """
+        Determine the roster type based on team abbreviation.
+
+        CRITICAL: Handles edge cases like "BHMIL" (BHM + IL) vs "NYYMIL" (NYY + MIL).
+        Uses sname to disambiguate when abbreviation ends in "MIL".
+
+        Returns:
+            RosterType based on team abbreviation pattern
+
+        Examples:
+            - "NYY" (3 chars) → MAJOR_LEAGUE
+            - "NYYMIL" with sname "RailRiders" → MINOR_LEAGUE
+            - "BHMIL" with sname "Iron IL" → INJURED_LIST (BHM + IL, not BH + MIL)
+            - "NYYIL" → INJURED_LIST
+        """
         if len(self.abbrev) <= 3:
             return RosterType.MAJOR_LEAGUE
 
-        # Use sname as the definitive source of truth for IL teams
-        # If "IL" is in sname and abbrev ends in "IL" → Injured List
-        if self.abbrev.upper().endswith('IL') and 'IL' in self.sname:
-            return RosterType.INJURED_LIST
+        abbrev_upper = self.abbrev.upper()
 
-        # If abbrev ends with "MiL" (exact case) and "IL" not in sname → Minor League
-        if self.abbrev.endswith('MiL') and 'IL' not in self.sname:
+        # Handle ambiguous "MIL" ending which could be:
+        # 1. [Team] + "MIL" (Minor League) - e.g., "NYYMIL"
+        # 2. [Team ending in M] + "IL" (Injured List) - e.g., "BHMIL" = "BHM" + "IL"
+        if abbrev_upper.endswith('MIL'):
+            # Use sname to disambiguate - IL teams have "IL" in their name
+            # But check for word boundaries to avoid matching "Island", "Illinois", etc.
+            if (self.sname.endswith('IL') or
+                self.sname.endswith(' IL') or
+                ' IL ' in self.sname):
+                # This is actually a [Team]IL roster (e.g., "BHMIL" = "BHM" + "IL")
+                return RosterType.INJURED_LIST
+            # Otherwise it's a genuine Minor League team (e.g., "NYYMIL" = "NYY" + "MIL")
             return RosterType.MINOR_LEAGUE
 
-        # Handle other patterns
-        abbrev_lower = self.abbrev.lower()
-        if abbrev_lower.endswith('mil'):
-            return RosterType.MINOR_LEAGUE
-        elif abbrev_lower.endswith('il'):
+        # Check for Injured List (2-char suffix "IL" that doesn't end in "MIL")
+        if abbrev_upper.endswith('IL'):
             return RosterType.INJURED_LIST
-        else:
-            return RosterType.MAJOR_LEAGUE
+
+        # Default to Major League for any other pattern
+        return RosterType.MAJOR_LEAGUE
 
     def _get_base_abbrev(self) -> str:
         """
