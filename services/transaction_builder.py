@@ -441,11 +441,12 @@ class TransactionBuilder:
         transactions = []
         move_id = f"Season-{self.season:03d}-Week-{week:02d}-{int(self.created_at.timestamp())}"
         
-        # Create FA team for drops
+        # Create FA team for drops using config value
+        config = get_config()
         fa_team = Team(
-            id=503,  # Standard FA team ID
+            id=config.free_agent_team_id,  # Correct FA team ID from config (498)
             abbrev="FA",
-            sname="Free Agents", 
+            sname="Free Agents",
             lname="Free Agency",
             season=self.season
         ) # type: ignore
