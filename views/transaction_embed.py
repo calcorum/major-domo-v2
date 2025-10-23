@@ -261,7 +261,11 @@ class SubmitConfirmationModal(discord.ui.Modal):
             elif self.submission_handler == "immediate":
                 # IMMEDIATE SUBMISSION (/ilmove behavior)
                 # Submit the transaction for THIS week
-                transactions = await self.builder.submit_transaction(week=current_state.week)
+                # Don't check existing transactions - they're already in DB and would cause double-counting
+                transactions = await self.builder.submit_transaction(
+                    week=current_state.week,
+                    check_existing_transactions=False
+                )
 
                 # POST transactions to database
                 created_transactions = await transaction_service.create_transaction_batch(transactions)

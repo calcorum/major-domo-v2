@@ -338,21 +338,29 @@ class TransactionBuilder:
                     # Note: IL players don't count toward roster limits, so no changes needed
 
         for move in self.moves:
+            # Log move being processed for diagnostics
+            logger.debug(f"🔍 VALIDATION: Processing move - {move.player.name} (ID={move.player.id})")
+            logger.debug(f"🔍 VALIDATION: from_roster={move.from_roster.value}, to_roster={move.to_roster.value}")
+
             # Calculate roster changes based on from/to locations
             if move.from_roster == RosterType.MAJOR_LEAGUE:
                 ml_changes -= 1
                 ml_swar_changes -= move.player.wara
+                logger.debug(f"🔍 VALIDATION: ML decrement - ml_changes now {ml_changes}")
             elif move.from_roster == RosterType.MINOR_LEAGUE:
                 mil_changes -= 1
                 mil_swar_changes -= move.player.wara
+                logger.debug(f"🔍 VALIDATION: MiL decrement - mil_changes now {mil_changes}")
             # Note: INJURED_LIST and FREE_AGENCY don't count toward ML roster limit
 
             if move.to_roster == RosterType.MAJOR_LEAGUE:
                 ml_changes += 1
                 ml_swar_changes += move.player.wara
+                logger.debug(f"🔍 VALIDATION: ML increment - ml_changes now {ml_changes}")
             elif move.to_roster == RosterType.MINOR_LEAGUE:
                 mil_changes += 1
                 mil_swar_changes += move.player.wara
+                logger.debug(f"🔍 VALIDATION: MiL increment - mil_changes now {mil_changes}")
             # Note: INJURED_LIST and FREE_AGENCY don't count toward ML roster limit
         
         # Calculate projected roster sizes and sWAR
@@ -360,10 +368,16 @@ class TransactionBuilder:
         current_ml_size = len(self._current_roster.active_players)
         current_mil_size = len(self._current_roster.minor_league_players)
 
+        logger.debug(f"🔍 VALIDATION: Current roster - ML:{current_ml_size}, MiL:{current_mil_size}")
+        logger.debug(f"🔍 VALIDATION: Changes calculated - ml_changes:{ml_changes}, mil_changes:{mil_changes}")
+
         projected_ml_size = current_ml_size + ml_changes
         projected_mil_size = current_mil_size + mil_changes
         projected_ml_swar = current_ml_swar + ml_swar_changes
         projected_mil_swar = current_mil_swar + mil_swar_changes
+
+        logger.debug(f"🔍 VALIDATION: Projected roster - ML:{projected_ml_size}, MiL:{projected_mil_size}")
+        logger.debug(f"🔍 VALIDATION: Projected sWAR - ML:{projected_ml_swar:.2f}, MiL:{projected_mil_swar:.2f}")
         
         # Get current week to determine roster limits
         try:
@@ -421,20 +435,28 @@ class TransactionBuilder:
             pre_existing_transaction_count=pre_existing_count
         )
     
-    async def submit_transaction(self, week: int) -> List[Transaction]:
+    async def submit_transaction(self, week: int, check_existing_transactions: bool = True) -> List[Transaction]:
         """
         Submit the transaction by creating individual Transaction models.
-        
+
         Args:
             week: Week the transaction is effective for
-            
+            check_existing_transactions: Whether to include pre-existing transactions in validation.
+                Set to True for /dropadd (scheduled moves - need to check against other scheduled moves).
+                Set to False for /ilmove (immediate moves - already in database, don't double-count).
+
         Returns:
             List of created Transaction objects
         """
         if not self.moves:
             raise ValueError("Cannot submit empty transaction")
-        
-        validation = await self.validate_transaction(next_week=week)
+
+        # For immediate moves (/ilmove), don't check pre-existing transactions
+        if check_existing_transactions:
+            validation = await self.validate_transaction(next_week=week)
+        else:
+            validation = await self.validate_transaction()
+
         if not validation.is_legal:
             raise ValueError(f"Cannot submit illegal transaction: {', '.join(validation.errors)}")
         

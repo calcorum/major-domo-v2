@@ -168,32 +168,60 @@ class DropAddCommands(commands.Cog):
             
             # Determine player's current roster status by checking actual roster data
             # Note: Minor League players have different team_id than Major League team
-            self.logger.debug(f"Player {player.name} team_id: {player.team_id}, Builder team_id: {builder.team.id}")
+            self.logger.debug(f"🔍 DIAGNOSTIC: Player {player.name} (ID={player.id}) team_id: {player.team_id}, Builder team_id: {builder.team.id}")
+            if player.team:
+                self.logger.debug(f"🔍 DIAGNOSTIC: Player team abbrev: {player.team.abbrev}")
 
             await builder.load_roster_data()
             if builder._current_roster:
+                # Log roster composition for diagnostics
+                ml_count = len(builder._current_roster.active_players)
+                mil_count = len(builder._current_roster.minor_league_players)
+                il_count = len(builder._current_roster.il_players)
+
+                self.logger.debug(f"🔍 DIAGNOSTIC: Roster loaded for {builder.team.abbrev}: "
+                               f"ML={ml_count}, MiL={mil_count}, IL={il_count}")
+
+                # Log ALL player IDs in each roster section
+                ml_ids = [p.id for p in builder._current_roster.active_players]
+                mil_ids = [p.id for p in builder._current_roster.minor_league_players]
+                il_ids = [p.id for p in builder._current_roster.il_players]
+
+                self.logger.debug(f"🔍 DIAGNOSTIC: ML player IDs: {ml_ids}")
+                self.logger.debug(f"🔍 DIAGNOSTIC: MiL player IDs: {mil_ids}")
+                self.logger.debug(f"🔍 DIAGNOSTIC: IL player IDs: {il_ids}")
+                self.logger.debug(f"🔍 DIAGNOSTIC: Searching for player ID: {player.id}")
+
                 # Check which roster section the player is on (regardless of team_id)
                 player_on_active = any(p.id == player.id for p in builder._current_roster.active_players)
                 player_on_minor = any(p.id == player.id for p in builder._current_roster.minor_league_players)
                 player_on_il = any(p.id == player.id for p in builder._current_roster.il_players)
 
+                self.logger.debug(f"🔍 DIAGNOSTIC: Player {player.name} found - ML:{player_on_active}, MiL:{player_on_minor}, IL:{player_on_il}")
+
                 if player_on_active:
                     from_roster = RosterType.MAJOR_LEAGUE
-                    self.logger.debug(f"Player {player.name} found on active roster (Major League)")
+                    self.logger.debug(f"✅ Player {player.name} found on active roster (Major League)")
                 elif player_on_minor:
                     from_roster = RosterType.MINOR_LEAGUE
-                    self.logger.debug(f"Player {player.name} found on minor league roster")
+                    self.logger.debug(f"✅ Player {player.name} found on minor league roster")
                 elif player_on_il:
                     from_roster = RosterType.INJURED_LIST
-                    self.logger.debug(f"Player {player.name} found on injured list")
+                    self.logger.debug(f"✅ Player {player.name} found on injured list")
                 else:
                     # Player not found on user's roster - they're from another team or free agency
                     from_roster = RosterType.FREE_AGENCY
-                    self.logger.debug(f"Player {player.name} not found on user's roster, treating as free agency")
+                    self.logger.warning(f"⚠️  Player {player.name} (ID={player.id}) not found on user's roster, treating as free agency")
+
+                    # Additional diagnostic: Check if player's team suggests they should be on roster
+                    if player.team and builder.team.is_same_organization(player.team):
+                        self.logger.error(f"❌ BUG DETECTED: Player {player.name} belongs to {player.team.abbrev} "
+                                        f"(same organization as {builder.team.abbrev}) but not found in roster lists!")
+                        self.logger.error(f"❌ Player team_id={player.team_id}, roster team_id={builder._current_roster.team_id}")
             else:
                 # Couldn't load roster data, assume free agency as safest fallback
                 from_roster = RosterType.FREE_AGENCY
-                self.logger.warning(f"Could not load roster data, assuming {player.name} is free agency")
+                self.logger.error(f"❌ Could not load roster data, assuming {player.name} is free agency")
             
             # Create move
             move = TransactionMove(
