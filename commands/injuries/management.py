@@ -645,7 +645,7 @@ class InjuryGroup(app_commands.Group):
                 return
 
             # Clear player's il_return field
-            await player_service.update_player(player.id, {'il_return': None})
+            await player_service.update_player(player.id, {'il_return': ''})
 
             # Success response
             success_embed = EmbedTemplate.success(

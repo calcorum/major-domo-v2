@@ -187,7 +187,8 @@ class InjuryService(BaseService[Injury]):
             True if successfully cleared, False otherwise
         """
         try:
-            updated_injury = await self.patch(injury_id, {'is_active': False})
+            # Note: API expects is_active as query parameter, not JSON body
+            updated_injury = await self.patch(injury_id, {'is_active': False}, use_query_params=True)
 
             if updated_injury:
                 logger.info(f"Cleared injury {injury_id}")

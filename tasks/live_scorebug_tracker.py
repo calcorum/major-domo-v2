@@ -10,6 +10,8 @@ from discord.ext import tasks, commands
 
 from models.team import Team
 from utils.logging import get_contextual_logger
+from utils.scorebug_helpers import create_scorebug_embed
+from utils.discord_helpers import set_channel_visibility
 from services.scorebug_service import ScorebugData, ScorebugService
 from services.team_service import team_service
 from commands.gameplay.scorecard_tracker import ScorecardTracker
@@ -92,8 +94,13 @@ class LiveScorebugTracker:
             all_scorecards = self.scorecard_tracker.get_all_scorecards()
 
             if not all_scorecards:
-                # No active scorebugs - clear the channel
+                # No active scorebugs - clear the channel and hide it
                 await self._clear_live_scores_channel(live_scores_channel)
+                await set_channel_visibility(
+                    live_scores_channel,
+                    visible=False,
+                    reason="No active games"
+                )
                 return
 
             # Read all scorebugs and create embeds
@@ -114,11 +121,12 @@ class LiveScorebugTracker:
                         if away_team is None or home_team is None:
                             raise ValueError(f'Error looking up teams in scorecard; IDs provided: {scorebug_data.away_team_id} & {scorebug_data.home_team_id}')
 
-                        # Create compact embed
-                        embed = await self._create_compact_scorebug_embed(
+                        # Create compact embed using shared utility
+                        embed = create_scorebug_embed(
                             scorebug_data,
                             away_team,
-                            home_team
+                            home_team,
+                            full_length=False  # Compact view for live channel
                         )
 
                         active_scorebugs.append(embed)
@@ -140,66 +148,20 @@ class LiveScorebugTracker:
 
             # Update live scores channel
             if active_scorebugs:
+                await set_channel_visibility(
+                    live_scores_channel,
+                    visible=True,
+                    reason="Active games in progress"
+                )
                 await self._post_scorebugs_to_channel(live_scores_channel, active_scorebugs)
             else:
-                # All games finished - clear the channel
+                # All games finished - clear the channel and hide it
                 await self._clear_live_scores_channel(live_scores_channel)
-
-    async def _create_compact_scorebug_embed(
-        self,
-        scorebug_data,
-        away_team: Team,
-        home_team: Team
-    ) -> discord.Embed:
-        """
-        Create a compact scorebug embed for the live channel.
-
-        Args:
-            scorebug_data: ScorebugData object
-            away_team: Away team object (optional)
-            home_team: Home team object (optional)
-
-        Returns:
-            Discord embed with compact scorebug
-        """
-        # Determine winning team for embed color
-        if scorebug_data.away_score > scorebug_data.home_score and away_team:
-            embed_color = away_team.get_color_int()
-        elif scorebug_data.home_score > scorebug_data.away_score and home_team:
-            embed_color = home_team.get_color_int()
-        else:
-            embed_color = EmbedColors.INFO
-
-        # Create compact embed
-        embed = discord.Embed(
-            title=scorebug_data.header,
-            color=embed_color
-        )
-
-        # Add score
-        away_abbrev = away_team.abbrev if away_team else "AWAY"
-        home_abbrev = home_team.abbrev if home_team else "HOME"
-
-        score_text = (
-            f"```\n"
-            f"{away_abbrev:<4} {scorebug_data.away_score:>2}\n"
-            f"{home_abbrev:<4} {scorebug_data.home_score:>2}\n"
-            f"```"
-        )
-
-        embed.add_field(
-            name="Score",
-            value=score_text,
-            inline=True
-        )
-
-        embed.add_field(
-            name="Status",
-            value=f"**{scorebug_data.which_half}**",
-            inline=True
-        )
-
-        return embed
+                await set_channel_visibility(
+                    live_scores_channel,
+                    visible=False,
+                    reason="No active games"
+                )
 
     async def _post_scorebugs_to_channel(
         self,

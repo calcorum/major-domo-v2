@@ -12,6 +12,7 @@ from discord import app_commands
 from config import get_config
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
+from utils.discord_helpers import set_channel_visibility
 from views.embeds import EmbedColors, EmbedTemplate
 
 
@@ -115,7 +116,8 @@ class AdminCommands(commands.Cog):
             value="**`/admin-status`** - Display bot status and information\n"
                   "**`/admin-reload <cog>`** - Reload a specific cog\n"
                   "**`/admin-sync`** - Sync application commands\n"
-                  "**`/admin-clear <count>`** - Clear messages from channel",
+                  "**`/admin-clear <count>`** - Clear messages from channel\n"
+                  "**`/admin-clear-scorecards`** - Clear live scorebug channel and hide it",
             inline=False
         )
         
@@ -497,6 +499,104 @@ class AdminCommands(commands.Cog):
         )
         
         await interaction.followup.send(embed=embed)
+
+    @app_commands.command(
+        name="admin-clear-scorecards",
+        description="Manually clear the live scorebug channel and hide it from members"
+    )
+    @logged_command("/admin-clear-scorecards")
+    async def admin_clear_scorecards(self, interaction: discord.Interaction):
+        """
+        Manually clear #live-sba-scores channel and set @everyone view permission to off.
+
+        This is useful for:
+        - Cleaning up stale scorebug displays
+        - Manually hiding the channel when games finish
+        - Testing channel visibility functionality
+        """
+        await interaction.response.defer()
+
+        # Get the live-sba-scores channel
+        config = get_config()
+        guild = self.bot.get_guild(config.guild_id)
+
+        if not guild:
+            await interaction.followup.send(
+                "❌ Could not find guild. Check configuration.",
+                ephemeral=True
+            )
+            return
+
+        live_scores_channel = discord.utils.get(guild.text_channels, name='live-sba-scores')
+
+        if not live_scores_channel:
+            await interaction.followup.send(
+                "❌ Could not find #live-sba-scores channel.",
+                ephemeral=True
+            )
+            return
+
+        try:
+            # Clear all messages from the channel
+            deleted_count = 0
+            async for message in live_scores_channel.history(limit=100):
+                try:
+                    await message.delete()
+                    deleted_count += 1
+                except discord.NotFound:
+                    pass  # Message already deleted
+
+            self.logger.info(f"Cleared {deleted_count} messages from #live-sba-scores")
+
+            # Hide channel from @everyone
+            visibility_success = await set_channel_visibility(
+                live_scores_channel,
+                visible=False,
+                reason="Admin manual clear via /admin-clear-scorecards"
+            )
+
+            if visibility_success:
+                visibility_status = "✅ Hidden from @everyone"
+            else:
+                visibility_status = "⚠️ Could not change visibility (check permissions)"
+
+            # Create success embed
+            embed = EmbedTemplate.success(
+                title="Live Scorebug Channel Cleared",
+                description="Successfully cleared the #live-sba-scores channel"
+            )
+
+            embed.add_field(
+                name="Clear Details",
+                value=f"**Channel:** {live_scores_channel.mention}\n"
+                      f"**Messages Deleted:** {deleted_count}\n"
+                      f"**Visibility:** {visibility_status}\n"
+                      f"**Time:** {discord.utils.utcnow().strftime('%H:%M:%S UTC')}",
+                inline=False
+            )
+
+            embed.add_field(
+                name="Next Steps",
+                value="• Channel is now hidden from @everyone\n"
+                      "• Bot retains full access to the channel\n"
+                      "• Channel will auto-show when games are published\n"
+                      "• Live scorebug tracker runs every 3 minutes",
+                inline=False
+            )
+
+            await interaction.followup.send(embed=embed)
+
+        except discord.Forbidden:
+            await interaction.followup.send(
+                "❌ Missing permissions to clear messages or modify channel permissions.",
+                ephemeral=True
+            )
+        except Exception as e:
+            self.logger.error(f"Error clearing scorecards: {e}", exc_info=True)
+            await interaction.followup.send(
+                f"❌ Failed to clear channel: {str(e)}",
+                ephemeral=True
+            )
 
 
 async def setup(bot: commands.Bot):

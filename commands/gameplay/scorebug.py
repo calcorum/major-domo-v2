@@ -7,10 +7,11 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 
-from services.scorebug_service import ScorebugService
+from services.scorebug_service import ScorebugData, ScorebugService
 from services.team_service import team_service
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
+from utils.scorebug_helpers import create_scorebug_embed
 from views.embeds import EmbedTemplate, EmbedColors
 from exceptions import SheetsException
 from .scorecard_tracker import ScorecardTracker
@@ -190,8 +191,8 @@ class ScorebugCommands(commands.Cog):
             if scorebug_data.home_team_id:
                 home_team = await team_service.get_team(scorebug_data.home_team_id)
 
-            # Create scorebug embed
-            embed = await self._create_scorebug_embed(
+            # Create scorebug embed using shared utility
+            embed = create_scorebug_embed(
                 scorebug_data,
                 away_team,
                 home_team,
@@ -223,134 +224,6 @@ class ScorebugCommands(commands.Cog):
                 )
             )
             await interaction.edit_original_response(content=None, embed=embed)
-
-    async def _create_scorebug_embed(
-        self,
-        scorebug_data,
-        away_team,
-        home_team,
-        full_length: bool
-    ) -> discord.Embed:
-        """
-        Create a rich embed from scorebug data.
-
-        Args:
-            scorebug_data: ScorebugData object
-            away_team: Away team object (optional)
-            home_team: Home team object (optional)
-            full_length: Include full details
-
-        Returns:
-            Discord embed with scorebug information
-        """
-        # Determine winning team for embed color
-        if scorebug_data.away_score > scorebug_data.home_score and away_team:
-            embed_color = away_team.get_color_int()
-            thumbnail_url = away_team.thumbnail if away_team.thumbnail else None
-        elif scorebug_data.home_score > scorebug_data.away_score and home_team:
-            embed_color = home_team.get_color_int()
-            thumbnail_url = home_team.thumbnail if home_team.thumbnail else None
-        else:
-            embed_color = EmbedColors.INFO
-            thumbnail_url = None
-
-        # Create embed with header as title
-        embed = discord.Embed(
-            title=scorebug_data.header,
-            color=embed_color
-        )
-
-        if thumbnail_url:
-            embed.set_thumbnail(url=thumbnail_url)
-
-        # Add score information
-        away_abbrev = away_team.abbrev if away_team else "AWAY"
-        home_abbrev = home_team.abbrev if home_team else "HOME"
-
-        score_text = (
-            f"```\n"
-            f"{away_abbrev:<6} {scorebug_data.away_score:>3}\n"
-            f"{home_abbrev:<6} {scorebug_data.home_score:>3}\n"
-            f"```"
-        )
-
-        embed.add_field(
-            name="Score",
-            value=score_text,
-            inline=True
-        )
-
-        # Add game state
-        if not scorebug_data.is_final:
-            embed.add_field(
-                name="Status",
-                value=f"**{scorebug_data.which_half}**",
-                inline=True
-            )
-
-        # Add runners on base if present
-        if scorebug_data.runners and any(scorebug_data.runners):
-            runners_text = self._format_runners(scorebug_data.runners)
-            if runners_text:
-                embed.add_field(
-                    name="Runners",
-                    value=runners_text,
-                    inline=False
-                )
-
-        # Add matchups if full length
-        if full_length and scorebug_data.matchups and any(scorebug_data.matchups):
-            matchups_text = self._format_matchups(scorebug_data.matchups)
-            if matchups_text:
-                embed.add_field(
-                    name="Matchups",
-                    value=matchups_text,
-                    inline=False
-                )
-
-        # Add summary if full length
-        if full_length and scorebug_data.summary and any(scorebug_data.summary):
-            summary_text = self._format_summary(scorebug_data.summary)
-            if summary_text:
-                embed.add_field(
-                    name="Summary",
-                    value=summary_text,
-                    inline=False
-                )
-
-        return embed
-
-    def _format_runners(self, runners) -> str:
-        """Format runners on base for display."""
-        # runners is a list of [runner_name, runner_position] pairs
-        runner_lines = []
-        for runner_data in runners:
-            if runner_data and len(runner_data) >= 2 and runner_data[0]:
-                runner_lines.append(f"**{runner_data[1]}:** {runner_data[0]}")
-
-        return "\n".join(runner_lines) if runner_lines else ""
-
-    def _format_matchups(self, matchups) -> str:
-        """Format current matchups for display."""
-        # matchups is a list of [batter, pitcher] pairs
-        matchup_lines = []
-        for matchup_data in matchups:
-            if matchup_data and len(matchup_data) >= 2 and matchup_data[0]:
-                matchup_lines.append(f"{matchup_data[0]} vs {matchup_data[1]}")
-
-        return "\n".join(matchup_lines) if matchup_lines else ""
-
-    def _format_summary(self, summary) -> str:
-        """Format game summary for display."""
-        # summary is a list of summary line pairs
-        summary_lines = []
-        for summary_data in summary:
-            if summary_data and len(summary_data) >= 1 and summary_data[0]:
-                # Join both columns if present
-                line = " - ".join([str(x) for x in summary_data if x])
-                summary_lines.append(line)
-
-        return "\n".join(summary_lines) if summary_lines else ""
 
 
 async def setup(bot: commands.Bot):

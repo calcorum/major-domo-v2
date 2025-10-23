@@ -245,12 +245,13 @@ class TestInjuryService:
         """Test clearing an injury."""
         with patch('api.client.get_config', return_value=mock_config):
             with aioresponses() as m:
-                # Mock the PATCH request (note: patch sends data in body, not URL)
+                # Mock the PATCH request - API expects is_active as query parameter
+                # Note: Python's str(False) converts to "False" (capital F)
                 cleared_data = sample_injury_data.copy()
                 cleared_data['is_active'] = False
 
                 m.patch(
-                    'https://api.example.com/v3/injuries/1',
+                    'https://api.example.com/v3/injuries/1?is_active=False',
                     payload=cleared_data
                 )
 
@@ -263,8 +264,9 @@ class TestInjuryService:
         """Test clearing injury when it fails."""
         with patch('api.client.get_config', return_value=mock_config):
             with aioresponses() as m:
+                # Note: Python's str(False) converts to "False" (capital F)
                 m.patch(
-                    'https://api.example.com/v3/injuries/1',
+                    'https://api.example.com/v3/injuries/1?is_active=False',
                     status=500
                 )
 
