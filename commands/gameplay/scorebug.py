@@ -156,7 +156,7 @@ class ScorebugCommands(commands.Cog):
         """
         Display the current scorebug from the scorecard published in this channel.
         """
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
 
         # Check if a scorecard is published in this channel
         sheet_url = self.scorecard_tracker.get_scorecard(interaction.channel_id) # type: ignore
