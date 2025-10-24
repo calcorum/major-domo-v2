@@ -43,6 +43,7 @@ tests/
 # Logs
 logs/
 *.log
+production_logs/
 
 # Environment files
 .env
