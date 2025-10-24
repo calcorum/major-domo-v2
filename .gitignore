@@ -219,3 +219,4 @@ __marimo__/
 # Project-specific
 data/
 production_logs/
+*.json
