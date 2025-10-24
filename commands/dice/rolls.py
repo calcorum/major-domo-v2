@@ -119,6 +119,9 @@ class DiceRollCommands(commands.Cog):
         dice_notation = "1d6;2d6;1d20"
         roll_results = self._parse_and_roll_multiple_dice(dice_notation)
 
+        injury_risk = (roll_results[0].total == 6) and (roll_results[1].total in [7, 8, 9, 10, 11, 12])
+        d6_total = roll_results[1].total
+
         embed_title = 'At bat roll'
         if roll_results[2].total == 1:
             embed_title = 'Wild pitch roll'
@@ -131,13 +134,21 @@ class DiceRollCommands(commands.Cog):
 
         # Create embed for the roll results
         embed = self._create_multi_roll_embed(
-            dice_notation, 
-            roll_results, 
-            interaction.user, 
+            dice_notation,
+            roll_results,
+            interaction.user,
             set_author=False,
             embed_color=embed_color
         )
         embed.title = f'{embed_title} for {interaction.user.display_name}'
+
+        if injury_risk and embed_title == 'At bat roll':
+            embed.add_field(
+                name=f'Check injury for pitcher injury rating {13 - d6_total}',
+                value='Oops! All injuries!',
+                inline=False
+            )
+
         await interaction.followup.send(embed=embed)
 
     @commands.command(name="ab", aliases=["atbat"])
