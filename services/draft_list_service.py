@@ -77,6 +77,9 @@ class DraftListService(BaseService[DraftList]):
 
         If rank is not provided, adds to end of list.
 
+        NOTE: The API uses bulk replacement - we get the full list, add the new entry,
+        and POST the entire updated list back.
+
         Args:
             season: Draft season
             team_id: Team ID
@@ -87,24 +90,61 @@ class DraftListService(BaseService[DraftList]):
             Created DraftList entry or None if creation failed
         """
         try:
-            # If rank not provided, get current list and add to end
+            # Get current list
+            current_list = await self.get_team_list(season, team_id)
+
+            # If rank not provided, add to end
             if rank is None:
-                current_list = await self.get_team_list(season, team_id)
                 rank = len(current_list) + 1
 
-            entry_data = {
+            # Create new entry data
+            new_entry_data = {
                 'season': season,
                 'team_id': team_id,
                 'player_id': player_id,
                 'rank': rank
             }
 
-            created_entry = await self.create(entry_data)
+            # Build complete list for bulk replacement
+            draft_list_entries = []
 
-            if created_entry:
-                logger.info(f"Added player {player_id} to team {team_id} draft list at rank {rank}")
-            else:
-                logger.error(f"Failed to add player {player_id} to draft list")
+            # Add existing entries, adjusting ranks if inserting in middle
+            for entry in current_list:
+                if entry.rank >= rank:
+                    # Shift down entries at or after insertion point
+                    draft_list_entries.append({
+                        'season': entry.season,
+                        'team_id': entry.team_id,
+                        'player_id': entry.player_id,
+                        'rank': entry.rank + 1
+                    })
+                else:
+                    # Keep existing rank for entries before insertion point
+                    draft_list_entries.append({
+                        'season': entry.season,
+                        'team_id': entry.team_id,
+                        'player_id': entry.player_id,
+                        'rank': entry.rank
+                    })
+
+            # Add new entry
+            draft_list_entries.append(new_entry_data)
+
+            # Sort by rank for consistency
+            draft_list_entries.sort(key=lambda x: x['rank'])
+
+            # POST entire list (bulk replacement)
+            client = await self.get_client()
+            payload = {
+                'count': len(draft_list_entries),
+                'draft_list': draft_list_entries
+            }
+
+            await client.post(self.endpoint, payload)
+
+            # Return the created entry as a DraftList object
+            created_entry = DraftList.from_api_data(new_entry_data)
+            logger.info(f"Added player {player_id} to team {team_id} draft list at rank {rank}")
 
             return created_entry
 
