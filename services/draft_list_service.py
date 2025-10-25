@@ -159,25 +159,16 @@ class DraftListService(BaseService[DraftList]):
         """
         Remove entry from draft list by ID.
 
+        NOTE: No DELETE endpoint exists. This method is deprecated - use remove_player_from_list() instead.
+
         Args:
             entry_id: Draft list entry database ID
 
         Returns:
             True if deletion succeeded
         """
-        try:
-            result = await self.delete(entry_id)
-
-            if result:
-                logger.info(f"Removed draft list entry {entry_id}")
-            else:
-                logger.error(f"Failed to remove draft list entry {entry_id}")
-
-            return result
-
-        except Exception as e:
-            logger.error(f"Error removing draft list entry {entry_id}: {e}")
-            return False
+        logger.warning("remove_from_list() called with entry_id - use remove_player_from_list() instead")
+        return False
 
     async def remove_player_from_list(
         self,
@@ -187,6 +178,8 @@ class DraftListService(BaseService[DraftList]):
     ) -> bool:
         """
         Remove specific player from team's draft list.
+
+        Uses bulk replacement pattern - gets full list, removes player, POSTs updated list.
 
         Args:
             season: Draft season
@@ -198,15 +191,38 @@ class DraftListService(BaseService[DraftList]):
         """
         try:
             # Get team's list
-            entries = await self.get_team_list(season, team_id)
+            current_list = await self.get_team_list(season, team_id)
 
-            # Find entry with this player
-            for entry in entries:
-                if entry.player_id == player_id:
-                    return await self.remove_from_list(entry.id)
+            # Check if player is in list
+            player_found = any(entry.player_id == player_id for entry in current_list)
+            if not player_found:
+                logger.warning(f"Player {player_id} not found in team {team_id} draft list")
+                return False
 
-            logger.warning(f"Player {player_id} not found in team {team_id} draft list")
-            return False
+            # Build new list without the player, adjusting ranks
+            draft_list_entries = []
+            new_rank = 1
+            for entry in current_list:
+                if entry.player_id != player_id:
+                    draft_list_entries.append({
+                        'season': entry.season,
+                        'team_id': entry.team_id,
+                        'player_id': entry.player_id,
+                        'rank': new_rank
+                    })
+                    new_rank += 1
+
+            # POST updated list (bulk replacement)
+            client = await self.get_client()
+            payload = {
+                'count': len(draft_list_entries),
+                'draft_list': draft_list_entries
+            }
+
+            await client.post(self.endpoint, payload)
+            logger.info(f"Removed player {player_id} from team {team_id} draft list")
+
+            return True
 
         except Exception as e:
             logger.error(f"Error removing player {player_id} from draft list: {e}")
@@ -220,31 +236,35 @@ class DraftListService(BaseService[DraftList]):
         """
         Clear entire draft list for team.
 
+        Uses bulk replacement pattern - POSTs empty list.
+
         Args:
             season: Draft season
             team_id: Team ID
 
         Returns:
-            True if all entries were deleted successfully
+            True if list was cleared successfully
         """
         try:
+            # Check if list is already empty
             entries = await self.get_team_list(season, team_id)
-
             if not entries:
                 logger.debug(f"No draft list entries to clear for team {team_id}")
                 return True
 
-            success = True
-            for entry in entries:
-                if not await self.remove_from_list(entry.id):
-                    success = False
+            entry_count = len(entries)
 
-            if success:
-                logger.info(f"Cleared {len(entries)} draft list entries for team {team_id}")
-            else:
-                logger.warning(f"Failed to clear some draft list entries for team {team_id}")
+            # POST empty list (bulk replacement)
+            client = await self.get_client()
+            payload = {
+                'count': 0,
+                'draft_list': []
+            }
 
-            return success
+            await client.post(self.endpoint, payload)
+            logger.info(f"Cleared {entry_count} draft list entries for team {team_id}")
+
+            return True
 
         except Exception as e:
             logger.error(f"Error clearing draft list for team {team_id}: {e}")
@@ -258,6 +278,8 @@ class DraftListService(BaseService[DraftList]):
     ) -> bool:
         """
         Reorder team's draft list.
+
+        Uses bulk replacement pattern - builds new list with updated ranks and POSTs it.
 
         Args:
             season: Draft season
@@ -274,26 +296,32 @@ class DraftListService(BaseService[DraftList]):
             # Build mapping of player_id -> entry
             entry_map = {e.player_id: e for e in entries}
 
-            # Update each entry with new rank
-            success = True
+            # Build new list in specified order
+            draft_list_entries = []
             for new_rank, player_id in enumerate(new_order, start=1):
                 if player_id not in entry_map:
                     logger.warning(f"Player {player_id} not in draft list, skipping")
                     continue
 
                 entry = entry_map[player_id]
-                if entry.rank != new_rank:
-                    updated = await self.patch(entry.id, {'rank': new_rank})
-                    if not updated:
-                        logger.error(f"Failed to update rank for entry {entry.id}")
-                        success = False
+                draft_list_entries.append({
+                    'season': entry.season,
+                    'team_id': entry.team_id,
+                    'player_id': entry.player_id,
+                    'rank': new_rank
+                })
 
-            if success:
-                logger.info(f"Reordered draft list for team {team_id}")
-            else:
-                logger.warning(f"Some errors occurred reordering draft list for team {team_id}")
+            # POST reordered list (bulk replacement)
+            client = await self.get_client()
+            payload = {
+                'count': len(draft_list_entries),
+                'draft_list': draft_list_entries
+            }
 
-            return success
+            await client.post(self.endpoint, payload)
+            logger.info(f"Reordered draft list for team {team_id}")
+
+            return True
 
         except Exception as e:
             logger.error(f"Error reordering draft list for team {team_id}: {e}")
@@ -307,6 +335,8 @@ class DraftListService(BaseService[DraftList]):
     ) -> bool:
         """
         Move player up one position in draft list (higher priority).
+
+        Uses bulk replacement pattern - swaps ranks and POSTs updated list.
 
         Args:
             season: Draft season
@@ -334,17 +364,45 @@ class DraftListService(BaseService[DraftList]):
                 logger.debug(f"Player {player_id} already at top of draft list")
                 return False
 
-            # Swap with entry above (rank - 1)
+            # Find entry above (rank - 1)
             above_entry = next((e for e in entries if e.rank == current_entry.rank - 1), None)
             if not above_entry:
                 logger.error(f"Could not find entry above rank {current_entry.rank}")
                 return False
 
-            # Swap ranks
-            await self.patch(current_entry.id, {'rank': current_entry.rank - 1})
-            await self.patch(above_entry.id, {'rank': above_entry.rank + 1})
+            # Build new list with swapped ranks
+            draft_list_entries = []
+            for entry in entries:
+                if entry.player_id == current_entry.player_id:
+                    # Move this player up
+                    new_rank = current_entry.rank - 1
+                elif entry.player_id == above_entry.player_id:
+                    # Move above player down
+                    new_rank = above_entry.rank + 1
+                else:
+                    # Keep existing rank
+                    new_rank = entry.rank
 
+                draft_list_entries.append({
+                    'season': entry.season,
+                    'team_id': entry.team_id,
+                    'player_id': entry.player_id,
+                    'rank': new_rank
+                })
+
+            # Sort by rank
+            draft_list_entries.sort(key=lambda x: x['rank'])
+
+            # POST updated list (bulk replacement)
+            client = await self.get_client()
+            payload = {
+                'count': len(draft_list_entries),
+                'draft_list': draft_list_entries
+            }
+
+            await client.post(self.endpoint, payload)
             logger.info(f"Moved player {player_id} up to rank {current_entry.rank - 1}")
+
             return True
 
         except Exception as e:
@@ -359,6 +417,8 @@ class DraftListService(BaseService[DraftList]):
     ) -> bool:
         """
         Move player down one position in draft list (lower priority).
+
+        Uses bulk replacement pattern - swaps ranks and POSTs updated list.
 
         Args:
             season: Draft season
@@ -386,17 +446,45 @@ class DraftListService(BaseService[DraftList]):
                 logger.debug(f"Player {player_id} already at bottom of draft list")
                 return False
 
-            # Swap with entry below (rank + 1)
+            # Find entry below (rank + 1)
             below_entry = next((e for e in entries if e.rank == current_entry.rank + 1), None)
             if not below_entry:
                 logger.error(f"Could not find entry below rank {current_entry.rank}")
                 return False
 
-            # Swap ranks
-            await self.patch(current_entry.id, {'rank': current_entry.rank + 1})
-            await self.patch(below_entry.id, {'rank': below_entry.rank - 1})
+            # Build new list with swapped ranks
+            draft_list_entries = []
+            for entry in entries:
+                if entry.player_id == current_entry.player_id:
+                    # Move this player down
+                    new_rank = current_entry.rank + 1
+                elif entry.player_id == below_entry.player_id:
+                    # Move below player up
+                    new_rank = below_entry.rank - 1
+                else:
+                    # Keep existing rank
+                    new_rank = entry.rank
 
+                draft_list_entries.append({
+                    'season': entry.season,
+                    'team_id': entry.team_id,
+                    'player_id': entry.player_id,
+                    'rank': new_rank
+                })
+
+            # Sort by rank
+            draft_list_entries.sort(key=lambda x: x['rank'])
+
+            # POST updated list (bulk replacement)
+            client = await self.get_client()
+            payload = {
+                'count': len(draft_list_entries),
+                'draft_list': draft_list_entries
+            }
+
+            await client.post(self.endpoint, payload)
             logger.info(f"Moved player {player_id} down to rank {current_entry.rank + 1}")
+
             return True
 
         except Exception as e:
