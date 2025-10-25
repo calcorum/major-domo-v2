@@ -162,9 +162,9 @@ class DraftMonitorTask:
             config = get_config()
 
             # Get ping channel
-            ping_channel = guild.get_channel(draft_data.ping_channel_id)
+            ping_channel = guild.get_channel(draft_data.ping_channel)
             if not ping_channel:
-                self.logger.error(f"Could not find ping channel {draft_data.ping_channel_id}")
+                self.logger.error(f"Could not find ping channel {draft_data.ping_channel}")
                 return
 
             # Get team's draft list
@@ -309,7 +309,7 @@ class DraftMonitorTask:
             if not guild:
                 return
 
-            ping_channel = guild.get_channel(draft_data.ping_channel_id)
+            ping_channel = guild.get_channel(draft_data.ping_channel)
             if not ping_channel:
                 return
 

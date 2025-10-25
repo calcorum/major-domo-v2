@@ -78,7 +78,8 @@ class DraftService(BaseService[DraftData]):
             Updated DraftData instance or None if update failed
         """
         try:
-            updated = await self.patch(draft_id, updates)
+            # Draft data API expects query parameters for PATCH requests
+            updated = await self.patch(draft_id, updates, use_query_params=True)
 
             if updated:
                 logger.info(f"Updated draft data: {updates}")
@@ -277,9 +278,9 @@ class DraftService(BaseService[DraftData]):
         try:
             updates = {}
             if ping_channel_id is not None:
-                updates['ping_channel_id'] = ping_channel_id
+                updates['ping_channel'] = ping_channel_id
             if result_channel_id is not None:
-                updates['result_channel_id'] = result_channel_id
+                updates['result_channel'] = result_channel_id
 
             if not updates:
                 logger.warning("No channel updates provided")
