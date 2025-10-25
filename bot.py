@@ -115,6 +115,7 @@ class SBABot(commands.Bot):
         from commands.admin import setup_admin
         from commands.transactions import setup_transactions
         from commands.dice import setup_dice
+        from commands.draft import setup_draft
         from commands.voice import setup_voice
         from commands.utilities import setup_utilities
         from commands.help import setup_help_commands
@@ -133,6 +134,7 @@ class SBABot(commands.Bot):
             ("admin", setup_admin),
             ("transactions", setup_transactions),
             ("dice", setup_dice),
+            ("draft", setup_draft),
             ("voice", setup_voice),
             ("utilities", setup_utilities),
             ("help", setup_help_commands),
