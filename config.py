@@ -47,6 +47,10 @@ class BotConfig(BaseSettings):
     # Draft Constants
     default_pick_minutes: int = 10
     draft_rounds: int = 32
+    draft_team_count: int = 16                  # Number of teams in draft
+    draft_linear_rounds: int = 10              # Rounds 1-10 are linear, 11+ are snake
+    swar_cap_limit: float = 32.00              # Maximum sWAR cap for team roster
+    cap_player_count: int = 26                 # Number of players that count toward cap
 
     # Special Team IDs
     free_agent_team_id: int = 498
@@ -93,6 +97,11 @@ class BotConfig(BaseSettings):
     def is_testing(self) -> bool:
         """Check if running in test mode."""
         return self.testing
+
+    @property
+    def draft_total_picks(self) -> int:
+        """Calculate total picks in draft (derived value)."""
+        return self.draft_rounds * self.draft_team_count
 
 
 # Global configuration instance - lazily initialized to avoid import-time errors

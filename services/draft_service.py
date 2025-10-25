@@ -169,12 +169,13 @@ class DraftService(BaseService[DraftData]):
 
             config = get_config()
             season = config.sba_current_season
+            total_picks = config.draft_total_picks
 
             # Start with next pick
             next_pick = current_pick + 1
 
             # Keep advancing until we find an unfilled pick or reach end
-            while next_pick <= 512:  # 32 rounds * 16 teams
+            while next_pick <= total_picks:
                 pick = await draft_pick_service.get_pick(season, next_pick)
 
                 if not pick:
@@ -191,7 +192,7 @@ class DraftService(BaseService[DraftData]):
                 next_pick += 1
 
             # Check if draft is complete
-            if next_pick > 512:
+            if next_pick > total_picks:
                 logger.info("Draft is complete - all picks filled")
                 # Disable timer
                 await self.set_timer(draft_id, active=False)

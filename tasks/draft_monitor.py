@@ -190,7 +190,7 @@ class DraftMonitorTask:
                 player = entry.player
 
                 # Check if player is still available
-                if player.team_id != 498:  # 498 = FA team ID
+                if player.team_id != config.free_agent_team_id:
                     self.logger.debug(f"Player {player.name} no longer available, skipping")
                     continue
 

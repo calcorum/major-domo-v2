@@ -15,6 +15,7 @@ from models.player import Player
 from models.draft_list import DraftList
 from views.embeds import EmbedTemplate, EmbedColors
 from utils.draft_helpers import format_pick_display, get_round_name
+from config import get_config
 
 
 async def create_on_the_clock_embed(
@@ -66,9 +67,10 @@ async def create_on_the_clock_embed(
 
     # Add team sWAR if provided
     if team_roster_swar is not None:
+        config = get_config()
         embed.add_field(
             name="Current sWAR",
-            value=f"{team_roster_swar:.2f} / 32.00",
+            value=f"{team_roster_swar:.2f} / {config.swar_cap_limit:.2f}",
             inline=True
         )
 
@@ -375,9 +377,10 @@ async def create_pick_success_embed(
             inline=True
         )
 
+    config = get_config()
     embed.add_field(
         name="Projected Team sWAR",
-        value=f"{projected_swar:.2f} / 32.00",
+        value=f"{projected_swar:.2f} / {config.swar_cap_limit:.2f}",
         inline=True
     )
 

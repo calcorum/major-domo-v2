@@ -6,6 +6,7 @@ Provides helper functions for draft order calculation and cap space validation.
 import math
 from typing import Tuple
 from utils.logging import get_contextual_logger
+from config import get_config
 
 logger = get_contextual_logger(__name__)
 
@@ -46,17 +47,21 @@ def calculate_pick_details(overall: int) -> Tuple[int, int]:
         >>> calculate_pick_details(177)
         (12, 16)  # Round 12, Pick 16 (snake reverses)
     """
-    round_num = math.ceil(overall / 16)
+    config = get_config()
+    team_count = config.draft_team_count
+    linear_rounds = config.draft_linear_rounds
 
-    if round_num <= 10:
+    round_num = math.ceil(overall / team_count)
+
+    if round_num <= linear_rounds:
         # Linear draft: position is same calculation every round
-        position = ((overall - 1) % 16) + 1
+        position = ((overall - 1) % team_count) + 1
     else:
         # Snake draft: reverse on even rounds
         if round_num % 2 == 1:  # Odd rounds (11, 13, 15...)
-            position = ((overall - 1) % 16) + 1
+            position = ((overall - 1) % team_count) + 1
         else:  # Even rounds (12, 14, 16...)
-            position = 16 - ((overall - 1) % 16)
+            position = team_count - ((overall - 1) % team_count)
 
     return round_num, position
 
@@ -87,16 +92,20 @@ def calculate_overall_from_round_position(round_num: int, position: int) -> int:
         >>> calculate_overall_from_round_position(12, 16)
         177
     """
-    if round_num <= 10:
+    config = get_config()
+    team_count = config.draft_team_count
+    linear_rounds = config.draft_linear_rounds
+
+    if round_num <= linear_rounds:
         # Linear draft
-        return (round_num - 1) * 16 + position
+        return (round_num - 1) * team_count + position
     else:
         # Snake draft
-        picks_before_round = (round_num - 1) * 16
+        picks_before_round = (round_num - 1) * team_count
         if round_num % 2 == 1:  # Odd snake rounds
             return picks_before_round + position
         else:  # Even snake rounds (reversed)
-            return picks_before_round + (17 - position)
+            return picks_before_round + (team_count + 1 - position)
 
 
 async def validate_cap_space(
@@ -127,6 +136,10 @@ async def validate_cap_space(
     Raises:
         ValueError: If roster structure is invalid
     """
+    config = get_config()
+    cap_limit = config.swar_cap_limit
+    cap_player_count = config.cap_player_count
+
     if not roster or not roster.get('active'):
         raise ValueError("Invalid roster structure - missing 'active' key")
 
@@ -140,7 +153,7 @@ async def validate_cap_space(
     # Maximum zeroes = 32 - roster size
     # Maximum counted = 26 - zeroes
     max_zeroes = 32 - projected_roster_size
-    max_counted = min(26, 26 - max_zeroes)  # Can't count more than 26
+    max_counted = min(cap_player_count, cap_player_count - max_zeroes)  # Can't count more than cap_player_count
 
     # Sort all players (including new) by sWAR descending
     all_players_wara = [p['wara'] for p in current_players] + [new_player_wara]
@@ -150,7 +163,7 @@ async def validate_cap_space(
     projected_total = sum(sorted_wara[:max_counted])
 
     # Allow tiny floating point tolerance
-    is_valid = projected_total <= 32.00001
+    is_valid = projected_total <= (cap_limit + 0.00001)
 
     logger.debug(
         f"Cap validation: roster_size={current_roster_size}, "
@@ -200,17 +213,21 @@ def get_next_pick_overall(current_overall: int) -> int:
     return current_overall + 1
 
 
-def is_draft_complete(current_overall: int, total_picks: int = 512) -> bool:
+def is_draft_complete(current_overall: int, total_picks: int = None) -> bool:
     """
     Check if draft is complete.
 
     Args:
         current_overall: Current overall pick number
-        total_picks: Total number of picks in draft (default: 512 for 32 rounds, 16 teams)
+        total_picks: Total number of picks in draft (None uses config value)
 
     Returns:
         True if draft is complete
     """
+    if total_picks is None:
+        config = get_config()
+        total_picks = config.draft_total_picks
+
     return current_overall > total_picks
 
 

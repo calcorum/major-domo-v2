@@ -42,8 +42,8 @@ async def fa_player_autocomplete(
             season=config.sba_current_season
         )
 
-        # Filter to FA team (team_id = 498)
-        fa_players = [p for p in players if p.team_id == 498]
+        # Filter to FA team
+        fa_players = [p for p in players if p.team_id == config.free_agent_team_id]
 
         return [
             discord.app_commands.Choice(
@@ -194,7 +194,7 @@ class DraftPicksCog(commands.Cog):
         player_obj = players[0]
 
         # Validate player is FA
-        if player_obj.team_id != 498:  # 498 = FA team ID
+        if player_obj.team_id != config.free_agent_team_id:
             embed = await create_pick_illegal_embed(
                 "Player Not Available",
                 f"{player_obj.name} is not a free agent."
@@ -217,7 +217,7 @@ class DraftPicksCog(commands.Cog):
         if not is_valid:
             embed = await create_pick_illegal_embed(
                 "Cap Space Exceeded",
-                f"Drafting {player_obj.name} would put you at {projected_total:.2f} sWAR (limit: 32.00)."
+                f"Drafting {player_obj.name} would put you at {projected_total:.2f} sWAR (limit: {config.swar_cap_limit:.2f})."
             )
             await interaction.followup.send(embed=embed)
             return
