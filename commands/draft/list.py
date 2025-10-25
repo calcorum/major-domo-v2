@@ -64,7 +64,7 @@ class DraftListCommands(commands.Cog):
     @logged_command("/draft-list")
     async def draft_list_view(self, interaction: discord.Interaction):
         """Display team's draft list."""
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
 
         config = get_config()
 
@@ -109,7 +109,7 @@ class DraftListCommands(commands.Cog):
         rank: Optional[int] = None
     ):
         """Add player to draft list."""
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
 
         config = get_config()
 
@@ -210,7 +210,7 @@ class DraftListCommands(commands.Cog):
         player: str
     ):
         """Remove player from draft list."""
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
 
         config = get_config()
 
@@ -267,7 +267,7 @@ class DraftListCommands(commands.Cog):
     @logged_command("/draft-list-clear")
     async def draft_list_clear(self, interaction: discord.Interaction):
         """Clear entire draft list."""
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
 
         config = get_config()
 
