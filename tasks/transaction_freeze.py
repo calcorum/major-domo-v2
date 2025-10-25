@@ -201,16 +201,16 @@ class TransactionFreezeTask:
             )
 
             # BEGIN FREEZE: Monday at 00:00, not already frozen
-            if now.weekday() == 0 and now.hour == 0 and not current.freeze:
+            if now.weekday() == 0 and now.hour == 0 and not current.freeze and self.weekly_warning_sent:
                 self.logger.info("Triggering freeze begin")
                 await self._begin_freeze(current)
-                self.weekly_warning_sent = False  # Reset error flag
+                self.weekly_warning_sent = False
 
             # END FREEZE: Saturday at 00:00, currently frozen
-            elif now.weekday() == 5 and now.hour == 0 and current.freeze:
+            elif now.weekday() == 5 and now.hour == 0 and current.freeze and not self.weekly_warning_sent:
                 self.logger.info("Triggering freeze end")
                 await self._end_freeze(current)
-                self.weekly_warning_sent = False  # Reset error flag
+                self.weekly_warning_sent = True
 
             else:
                 self.logger.debug("No freeze/thaw action needed at this time")
