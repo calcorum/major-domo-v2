@@ -134,8 +134,8 @@ class DraftPicksCog(commands.Cog):
 
         # Get user's team (CACHED via @cached_single_item)
         team = await team_service.get_team_by_owner(
-            config.sba_current_season,
-            interaction.user.id
+            interaction.user.id,
+            config.sba_current_season
         )
 
         if not team:
@@ -255,10 +255,10 @@ class DraftPicksCog(commands.Cog):
         await interaction.followup.send(embed=success_embed)
 
         # Post draft card to ping channel
-        if draft_data.ping_channel_id:
+        if draft_data.ping_channel:
             guild = interaction.guild
             if guild:
-                ping_channel = guild.get_channel(draft_data.ping_channel_id)
+                ping_channel = guild.get_channel(draft_data.ping_channel)
                 if ping_channel:
                     draft_card = await create_player_draft_card(player_obj, current_pick)
                     await ping_channel.send(embed=draft_card)
