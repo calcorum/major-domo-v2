@@ -12,18 +12,20 @@ from models.base import SBABaseModel
 
 class DraftData(SBABaseModel):
     """Draft configuration and state model."""
-    
+
     currentpick: int = Field(0, description="Current pick number in progress")
     timer: bool = Field(False, description="Whether draft timer is active")
     pick_deadline: Optional[datetime] = Field(None, description="Deadline for current pick")
-    result_channel_id: int = Field(..., description="Discord channel ID for draft results")
-    ping_channel_id: int = Field(..., description="Discord channel ID for draft pings")
+    result_channel_id: Optional[int] = Field(None, description="Discord channel ID for draft results")
+    ping_channel_id: Optional[int] = Field(None, description="Discord channel ID for draft pings")
     pick_minutes: int = Field(1, description="Minutes allowed per pick")
     
     @field_validator("result_channel_id", "ping_channel_id", mode="before")
     @classmethod
     def cast_channel_ids_to_int(cls, v):
         """Ensure channel IDs are integers."""
+        if v is None:
+            return None
         if isinstance(v, str):
             return int(v)
         return v

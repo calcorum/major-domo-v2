@@ -429,15 +429,17 @@ async def create_admin_draft_info_embed(
     )
 
     # Channels
+    ping_channel_value = f"<#{draft_data.ping_channel_id}>" if draft_data.ping_channel_id else "Not configured"
     embed.add_field(
         name="Ping Channel",
-        value=f"<#{draft_data.ping_channel_id}>",
+        value=ping_channel_value,
         inline=True
     )
 
+    result_channel_value = f"<#{draft_data.result_channel_id}>" if draft_data.result_channel_id else "Not configured"
     embed.add_field(
         name="Result Channel",
-        value=f"<#{draft_data.result_channel_id}>",
+        value=result_channel_value,
         inline=True
     )
 
