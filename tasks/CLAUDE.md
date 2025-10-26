@@ -231,6 +231,91 @@ When voice channels are cleaned up (deleted after being empty):
 - Prevents duplicate error messages
 - Continues operation despite individual scorecard failures
 
+### Draft Monitor (`draft_monitor.py`) (NEW - October 2025)
+**Purpose:** Automated draft timer monitoring, warnings, and auto-draft execution
+
+**Schedule:** Every 15 seconds (only when draft timer is active)
+
+**Operations:**
+- **Timer Monitoring:**
+  - Checks draft state every 15 seconds
+  - Self-terminates when `draft_data.timer = False`
+  - Restarts when timer re-enabled via `/draft-admin`
+
+- **Warning System:**
+  - Sends 60-second warning to ping channel
+  - Sends 30-second warning to ping channel
+  - Resets warning flags when pick advances
+
+- **Auto-Draft Execution:**
+  - Triggers when pick deadline passes
+  - Acquires global pick lock before auto-drafting
+  - Tries each player in team's draft list until one succeeds
+  - Validates cap space and player availability
+  - Advances to next pick after auto-draft
+
+#### Key Features
+- **Self-Terminating:** Stops automatically when timer disabled (resource efficient)
+- **Global Lock Integration:** Acquires same lock as `/draft` command
+- **Crash Recovery:** Respects 30-second stale lock timeout
+- **Safe Startup:** Uses `@before_loop` pattern with `await bot.wait_until_ready()`
+- **Service Layer:** All API calls through services (no direct client access)
+
+#### Configuration
+The monitor respects draft configuration:
+
+```python
+# From DraftData model
+timer: bool  # When False, monitor stops
+pick_deadline: datetime  # Warning/auto-draft trigger
+ping_channel_id: int  # Where warnings are sent
+pick_minutes: int  # Timer duration per pick
+```
+
+**Environment Variables:**
+- `GUILD_ID` - Discord server ID
+- `SBA_CURRENT_SEASON` - Current draft season
+
+#### Draft Lock Integration
+The monitor integrates with the global pick lock:
+
+```python
+# In DraftPicksCog
+self.pick_lock = asyncio.Lock()  # Shared lock
+self.lock_acquired_at: Optional[datetime] = None
+self.lock_acquired_by: Optional[int] = None
+
+# Monitor acquires same lock for auto-draft
+async with draft_picks_cog.pick_lock:
+    draft_picks_cog.lock_acquired_at = datetime.now()
+    draft_picks_cog.lock_acquired_by = None  # System auto-draft
+    await self.auto_draft_current_pick()
+```
+
+#### Auto-Draft Process
+1. Check if pick lock is available
+2. Acquire global lock
+3. Get team's draft list ordered by rank
+4. For each player in list:
+   - Validate player is still FA
+   - Validate cap space
+   - Attempt to draft player
+   - Break on success
+5. Advance to next pick
+6. Release lock
+
+#### Channel Requirements
+- **ping_channel** - Where warnings and auto-draft announcements post
+
+#### Error Handling
+- Comprehensive try/catch blocks with structured logging
+- Graceful degradation if channels not found
+- Continues operation despite individual pick failures
+- Task self-terminates on critical errors
+
+**Resource Efficiency:**
+This task is designed to run only during active drafts (~2 weeks per year). When `draft_data.timer = False`, the task calls `self.monitor_loop.cancel()` and stops consuming resources. Admin can restart via `/draft-admin timer on`.
+
 ### Transaction Freeze/Thaw (`transaction_freeze.py`)
 **Purpose:** Automated weekly system for freezing transactions and processing contested player acquisitions
 

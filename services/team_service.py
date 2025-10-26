@@ -10,6 +10,7 @@ from config import get_config
 from services.base_service import BaseService
 from models.team import Team, RosterType
 from exceptions import APIException
+from utils.decorators import cached_single_item
 
 logger = logging.getLogger(f'{__name__}.TeamService')
 
@@ -32,13 +33,19 @@ class TeamService(BaseService[Team]):
         super().__init__(Team, 'teams')
         logger.debug("TeamService initialized")
     
+    @cached_single_item(ttl=1800)  # 30-minute cache
     async def get_team(self, team_id: int) -> Optional[Team]:
         """
         Get team by ID with error handling.
-        
+
+        Cached for 30 minutes since team details rarely change.
+        Uses @cached_single_item because returns Optional[Team].
+
+        Cache key: team:id:{team_id}
+
         Args:
             team_id: Unique team identifier
-            
+
         Returns:
             Team instance or None if not found
         """
@@ -96,7 +103,31 @@ class TeamService(BaseService[Team]):
         except Exception as e:
             logger.error(f"Error getting teams for owner {owner_id}: {e}")
             return []
-    
+
+    @cached_single_item(ttl=1800)  # 30-minute cache
+    async def get_team_by_owner(self, owner_id: int, season: Optional[int] = None) -> Optional[Team]:
+        """
+        Get the primary (Major League) team owned by a Discord user.
+
+        This is a convenience method for GM validation - returns the first team
+        found for the owner (typically their ML team). For multiple teams or
+        roster type filtering, use get_teams_by_owner() instead.
+
+        Cached for 30 minutes since GM assignments rarely change.
+        Uses @cached_single_item because returns Optional[Team].
+
+        Cache key: team:owner:{season}:{owner_id}
+
+        Args:
+            owner_id: Discord user ID
+            season: Season number (defaults to current season)
+
+        Returns:
+            Team instance or None if not found
+        """
+        teams = await self.get_teams_by_owner(owner_id, season, roster_type='ml')
+        return teams[0] if teams else None
+
     async def get_team_by_abbrev(self, abbrev: str, season: Optional[int] = None) -> Optional[Team]:
         """
         Get team by abbreviation for a specific season.

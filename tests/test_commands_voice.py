@@ -17,6 +17,7 @@ from discord.ext import commands
 from commands.voice.channels import VoiceChannelCommands
 from commands.voice.cleanup_service import VoiceChannelCleanupService
 from commands.voice.tracker import VoiceChannelTracker
+from commands.gameplay.scorecard_tracker import ScorecardTracker
 from models.game import Game
 from models.team import Team
 
@@ -181,17 +182,26 @@ class TestVoiceChannelCleanupService:
     """Test voice channel cleanup service functionality."""
 
     @pytest.fixture
-    def cleanup_service(self):
-        """Create a cleanup service instance."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            data_file = Path(temp_dir) / "test_channels.json"
-            return VoiceChannelCleanupService(str(data_file))
-
-    @pytest.fixture
     def mock_bot(self):
         """Create a mock bot instance."""
         bot = AsyncMock(spec=commands.Bot)
         return bot
+
+    @pytest.fixture
+    def cleanup_service(self, mock_bot):
+        """Create a cleanup service instance."""
+        from utils.logging import get_contextual_logger
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            data_file = Path(temp_dir) / "test_channels.json"
+            service = VoiceChannelCleanupService.__new__(VoiceChannelCleanupService)
+            service.bot = mock_bot
+            service.logger = get_contextual_logger('test.VoiceChannelCleanupService')
+            service.tracker = VoiceChannelTracker(str(data_file))
+            service.scorecard_tracker = ScorecardTracker()
+            service.empty_threshold = 5
+            # Don't start the loop (no event loop in tests)
+            return service
 
     @pytest.mark.asyncio
     async def test_verify_tracked_channels(self, cleanup_service, mock_bot):
@@ -287,7 +297,7 @@ class TestVoiceChannelCleanupService:
         await cleanup_service.cleanup_channel(mock_bot, channel_data)
 
         # Should have deleted the channel
-        mock_channel.delete.assert_called_once_with(reason="Automatic cleanup - empty for 15+ minutes")
+        mock_channel.delete.assert_called_once_with(reason="Automatic cleanup - empty for 5+ minutes")
 
         # Should have removed from tracking
         assert "123" not in cleanup_service.tracker._data["voice_channels"]
@@ -335,7 +345,7 @@ class TestVoiceChannelCleanupService:
         await cleanup_service.cleanup_channel(mock_bot, channel_data)
 
         # Should have deleted the channel
-        mock_channel.delete.assert_called_once_with(reason="Automatic cleanup - empty for 15+ minutes")
+        mock_channel.delete.assert_called_once_with(reason="Automatic cleanup - empty for 5+ minutes")
 
         # Should have removed from voice channel tracking
         assert "123" not in cleanup_service.tracker._data["voice_channels"]

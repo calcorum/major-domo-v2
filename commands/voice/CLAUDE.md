@@ -60,12 +60,18 @@ This directory contains Discord slash commands for creating and managing voice c
 - **Role Integration**: Finds Discord roles matching team full names (`team.lname`)
 
 ### Automatic Cleanup System
-- **Monitoring Interval**: Configurable (default: 60 seconds)
-- **Empty Threshold**: Configurable (default: 5 minutes empty before deletion)
+- **Monitoring Interval**: 1 minute (using `@tasks.loop` pattern)
+- **Empty Threshold**: 5 minutes empty before deletion
 - **Restart Resilience**: JSON file persistence survives bot restarts
-- **Startup Verification**: Validates tracked channels still exist on bot startup
+- **Safe Startup**: Uses `@before_loop` to wait for bot readiness before starting
+- **Startup Verification**: Validates tracked channels still exist and cleans stale entries on bot startup
+- **Manual Deletion Handling**: Detects manually deleted channels and cleans up tracking
 - **Graceful Error Handling**: Continues operation even if individual operations fail
-- **Scorecard Cleanup**: Automatically unpublishes scorecards when associated voice channels are deleted
+- **Scorecard Cleanup**: Automatically unpublishes scorecards in all cleanup scenarios:
+  - Normal cleanup (channel empty for 5+ minutes)
+  - Manual deletion (user deletes channel)
+  - Startup verification (stale entries on bot restart)
+  - Wrong channel type (corrupted tracking data)
 
 ## Architecture
 
@@ -114,9 +120,11 @@ overwrites = {
 ### Cleanup Service Integration
 ```python
 # Bot initialization (bot.py)
-from commands.voice.cleanup_service import VoiceChannelCleanupService
-self.voice_cleanup_service = VoiceChannelCleanupService()
-asyncio.create_task(self.voice_cleanup_service.start_monitoring(self))
+from commands.voice.cleanup_service import setup_voice_cleanup
+self.voice_cleanup_service = setup_voice_cleanup(self)
+
+# The service uses @tasks.loop pattern with @before_loop
+# It automatically waits for bot readiness before starting
 
 # Channel tracking
 if hasattr(self.bot, 'voice_cleanup_service'):
@@ -124,24 +132,44 @@ if hasattr(self.bot, 'voice_cleanup_service'):
     cleanup_service.tracker.add_channel(channel, channel_type, interaction.user.id)
 ```
 
-### Scorecard Cleanup Integration
-When a voice channel is cleaned up (deleted after being empty for the configured threshold), the cleanup service automatically unpublishes any scorecard associated with that voice channel's text channel. This prevents the live scorebug tracker from continuing to update scores for games that no longer have active voice channels.
+**Task Lifecycle**:
+- **Initialization**: `VoiceChannelCleanupService(bot)` creates instance
+- **Startup Wait**: `@before_loop` ensures bot is ready before first cycle
+- **Verification**: First cycle runs `verify_tracked_channels()` to clean stale entries
+- **Monitoring**: Runs every 1 minute checking all tracked channels
+- **Shutdown**: `cog_unload()` cancels the cleanup loop gracefully
 
-**Cleanup Flow**:
-1. Voice channel becomes empty and exceeds empty threshold
-2. Cleanup service deletes the voice channel
-3. Service checks if voice channel has associated `text_channel_id`
-4. If found, unpublishes scorecard from that text channel
-5. Live scorebug tracker stops updating that scorecard
+### Scorecard Cleanup Integration
+The cleanup service automatically unpublishes any scorecard associated with a voice channel when that channel is removed from tracking. This prevents the live scorebug tracker from continuing to update scores for games that no longer have active voice channels.
+
+**Cleanup Scenarios**:
+
+1. **Normal Cleanup** (channel empty for 5+ minutes):
+   - Cleanup service deletes the voice channel
+   - Unpublishes associated scorecard
+   - Logs: `"📋 Unpublished scorecard from text channel [id] (voice channel cleanup)"`
+
+2. **Manual Deletion** (user deletes channel):
+   - Next cleanup cycle detects missing channel
+   - Removes from tracking and unpublishes scorecard
+   - Logs: `"📋 Unpublished scorecard from text channel [id] (manually deleted voice channel)"`
+
+3. **Startup Verification** (stale entries on bot restart):
+   - Bot startup detects channels that no longer exist
+   - Cleans up tracking and unpublishes scorecards
+   - Logs: `"📋 Unpublished scorecard from text channel [id] (stale voice channel)"`
+
+4. **Wrong Channel Type** (corrupted tracking data):
+   - Tracked channel exists but is not a voice channel
+   - Removes from tracking and unpublishes scorecard
+   - Logs: `"📋 Unpublished scorecard from text channel [id] (wrong channel type)"`
 
 **Integration Points**:
 - `cleanup_service.py` imports `ScorecardTracker` from `commands.gameplay.scorecard_tracker`
-- Scorecard unpublishing happens in three scenarios:
-  - Normal cleanup (channel deleted after being empty)
-  - Stale channel cleanup (channel already deleted externally)
-  - Startup verification (channel no longer exists when bot starts)
+- All cleanup paths check for `text_channel_id` and unpublish if found
+- Recovery time: Maximum 1 minute delay for manual deletions
 
-**Logging**:
+**Example Logging**:
 ```
 ✅ Cleaned up empty voice channel: Gameplay Phoenix (ID: 123456789)
 📋 Unpublished scorecard from text channel 987654321 (voice channel cleanup)
@@ -171,9 +199,10 @@ When a voice channel is cleaned up (deleted after being empty for the configured
 ## Configuration
 
 ### Cleanup Service Settings
-- **`cleanup_interval`**: How often to check channels (default: 60 seconds)
-- **`empty_threshold`**: Minutes empty before deletion (default: 5 minutes)
+- **Monitoring Loop**: `@tasks.loop(minutes=1)` - runs every 1 minute
+- **`empty_threshold`**: 5 minutes empty before deletion
 - **`data_file`**: JSON persistence file path (default: "data/voice_channels.json")
+- **Task Pattern**: Uses discord.py `@tasks.loop` with `@before_loop` for safe startup
 
 ### Channel Categories
 - Channels are created in the "Voice Channels" category if it exists

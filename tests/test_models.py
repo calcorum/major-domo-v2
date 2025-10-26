@@ -373,33 +373,33 @@ class TestDraftDataModel:
     def test_draft_data_creation(self):
         """Test draft data creation."""
         draft_data = DraftData(
-            result_channel_id=123456789,
-            ping_channel_id=987654321,
+            result_channel=123456789,
+            ping_channel=987654321,
             pick_minutes=10
         )
-        
-        assert draft_data.result_channel_id == 123456789
-        assert draft_data.ping_channel_id == 987654321
+
+        assert draft_data.result_channel == 123456789
+        assert draft_data.ping_channel == 987654321
         assert draft_data.pick_minutes == 10
-    
+
     def test_draft_data_properties(self):
         """Test draft data properties."""
         # Inactive draft
         draft_data = DraftData(
-            result_channel_id=123,
-            ping_channel_id=456,
+            result_channel=123,
+            ping_channel=456,
             timer=False
         )
-        
+
         assert draft_data.is_draft_active is False
-        
+
         # Active draft
         active_draft = DraftData(
-            result_channel_id=123,
-            ping_channel_id=456,
+            result_channel=123,
+            ping_channel=456,
             timer=True
         )
-        
+
         assert active_draft.is_draft_active is True
 
 

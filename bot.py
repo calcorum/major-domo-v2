@@ -115,6 +115,7 @@ class SBABot(commands.Bot):
         from commands.admin import setup_admin
         from commands.transactions import setup_transactions
         from commands.dice import setup_dice
+        from commands.draft import setup_draft
         from commands.voice import setup_voice
         from commands.utilities import setup_utilities
         from commands.help import setup_help_commands
@@ -133,6 +134,7 @@ class SBABot(commands.Bot):
             ("admin", setup_admin),
             ("transactions", setup_transactions),
             ("dice", setup_dice),
+            ("draft", setup_draft),
             ("voice", setup_voice),
             ("utilities", setup_utilities),
             ("help", setup_help_commands),
@@ -183,12 +185,8 @@ class SBABot(commands.Bot):
             self.logger.info("✅ Transaction freeze/thaw task started")
 
             # Initialize voice channel cleanup service
-            from commands.voice.cleanup_service import VoiceChannelCleanupService
-            self.voice_cleanup_service = VoiceChannelCleanupService()
-
-            # Start voice channel monitoring (includes startup verification)
-            import asyncio
-            asyncio.create_task(self.voice_cleanup_service.start_monitoring(self))
+            from commands.voice.cleanup_service import setup_voice_cleanup
+            self.voice_cleanup_service = setup_voice_cleanup(self)
             self.logger.info("✅ Voice channel cleanup service started")
 
             # Initialize live scorebug tracker
@@ -345,7 +343,7 @@ class SBABot(commands.Bot):
 
         if hasattr(self, 'voice_cleanup_service'):
             try:
-                self.voice_cleanup_service.stop_monitoring()
+                self.voice_cleanup_service.cog_unload()
                 self.logger.info("Voice channel cleanup service stopped")
             except Exception as e:
                 self.logger.error(f"Error stopping voice cleanup service: {e}")
