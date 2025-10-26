@@ -276,7 +276,7 @@ class DraftListService(BaseService[DraftList]):
         """
         Clear entire draft list for team.
 
-        Uses bulk replacement pattern - POSTs empty list.
+        Uses DELETE /draftlist/team/{team_id} endpoint.
 
         Args:
             season: Draft season
@@ -294,14 +294,10 @@ class DraftListService(BaseService[DraftList]):
 
             entry_count = len(entries)
 
-            # POST empty list (bulk replacement)
+            # Use DELETE endpoint: /draftlist/team/{team_id}
             client = await self.get_client()
-            payload = {
-                'count': 0,
-                'draft_list': []
-            }
+            await client.delete(f"{self.endpoint}/team/{team_id}")
 
-            await client.post(self.endpoint, payload)
             logger.info(f"Cleared {entry_count} draft list entries for team {team_id}")
 
             return True
