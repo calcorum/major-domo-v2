@@ -173,14 +173,14 @@ class DraftListCommands(commands.Cog):
                 return
 
         # Add to list
-        entry = await draft_list_service.add_to_list(
+        updated_list = await draft_list_service.add_to_list(
             config.sba_current_season,
             team.id,
             player_obj.id,
             rank
         )
 
-        if not entry:
+        if not updated_list:
             embed = EmbedTemplate.error(
                 "Add Failed",
                 f"Failed to add {player_obj.name} to draft queue."
@@ -188,11 +188,15 @@ class DraftListCommands(commands.Cog):
             await interaction.followup.send(embed=embed, ephemeral=True)
             return
 
-        # Success message
-        rank_str = f"#{entry.rank}" if entry.rank else "at end"
-        description = f"Added **{player_obj.name}** to your draft queue at position **{rank_str}**."
+        # Find the added entry to get its rank
+        added_entry = next((e for e in updated_list if e.player_id == player_obj.id), None)
+        rank_str = f"#{added_entry.rank}" if added_entry else "at end"
 
-        embed = EmbedTemplate.success("Player Added", description)
+        # Success message with full draft list
+        success_msg = f"✅ Added **{player_obj.name}** at position **{rank_str}**"
+        embed = await create_draft_list_embed(team, updated_list)
+        embed.description = f"{success_msg}\n\n{embed.description}"
+
         await interaction.followup.send(embed=embed)
 
     @discord.app_commands.command(

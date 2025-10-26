@@ -13,22 +13,28 @@ from models.player import Player
 
 class DraftList(SBABaseModel):
     """Draft preference list entry for a team."""
-    
+
     season: int = Field(..., description="Draft season")
-    team_id: int = Field(..., description="Team ID that owns this list entry")
     rank: int = Field(..., description="Ranking of player on team's draft board")
-    player_id: int = Field(..., description="Player ID on the draft board")
-    
-    # Related objects (populated when needed)
-    team: Optional[Team] = Field(None, description="Team object (populated when needed)")
-    player: Optional[Player] = Field(None, description="Player object (populated when needed)")
-    
+
+    # API returns nested objects (not just IDs)
+    team: Team = Field(..., description="Team object")
+    player: Player = Field(..., description="Player object")
+
+    @property
+    def team_id(self) -> int:
+        """Extract team ID from nested team object."""
+        return self.team.id
+
+    @property
+    def player_id(self) -> int:
+        """Extract player ID from nested player object."""
+        return self.player.id
+
     @property
     def is_top_ranked(self) -> bool:
         """Check if this is the team's top-ranked available player."""
         return self.rank == 1
-    
+
     def __str__(self):
-        team_str = self.team.abbrev if self.team else f"Team {self.team_id}"
-        player_str = self.player.name if self.player else f"Player {self.player_id}"
-        return f"{team_str} Draft Board #{self.rank}: {player_str}"
+        return f"{self.team.abbrev} Draft Board #{self.rank}: {self.player.name}"

@@ -20,6 +20,9 @@ class DraftListService(BaseService[DraftList]):
     IMPORTANT: This service does NOT use caching decorators because draft lists
     change as users add/remove players from their auto-draft queues.
 
+    API QUIRK: GET endpoint returns items under 'picks' key, not 'draftlist'.
+    POST endpoint expects items under 'draft_list' key.
+
     Features:
     - Get team's draft list (ranked by priority)
     - Add player to draft list
@@ -32,6 +35,35 @@ class DraftListService(BaseService[DraftList]):
         """Initialize draft list service."""
         super().__init__(DraftList, 'draftlist')
         logger.debug("DraftListService initialized")
+
+    def _extract_items_and_count_from_response(self, data):
+        """
+        Override to handle API quirk: GET returns 'picks' instead of 'draftlist'.
+
+        Args:
+            data: API response data
+
+        Returns:
+            Tuple of (items list, total count)
+        """
+        from typing import Any, Dict, List, Tuple
+
+        if isinstance(data, list):
+            return data, len(data)
+
+        if not isinstance(data, dict):
+            logger.warning(f"Unexpected response format: {type(data)}")
+            return [], 0
+
+        # Get count
+        count = data.get('count', 0)
+
+        # API returns items under 'picks' key (not 'draftlist')
+        if 'picks' in data and isinstance(data['picks'], list):
+            return data['picks'], count or len(data['picks'])
+
+        # Fallback to standard extraction
+        return super()._extract_items_and_count_from_response(data)
 
     async def get_team_list(
         self,
@@ -71,7 +103,7 @@ class DraftListService(BaseService[DraftList]):
         team_id: int,
         player_id: int,
         rank: Optional[int] = None
-    ) -> Optional[DraftList]:
+    ) -> Optional[List[DraftList]]:
         """
         Add player to team's draft list.
 
@@ -87,7 +119,7 @@ class DraftListService(BaseService[DraftList]):
             rank: Priority rank (1 = highest), None = add to end
 
         Returns:
-            Created DraftList entry or None if creation failed
+            Full updated draft list or None if operation failed
         """
         try:
             # Get current list
@@ -140,13 +172,21 @@ class DraftListService(BaseService[DraftList]):
                 'draft_list': draft_list_entries
             }
 
-            await client.post(self.endpoint, payload)
+            logger.debug(f"Posting draft list for team {team_id}: {len(draft_list_entries)} entries")
+            response = await client.post(self.endpoint, payload)
+            logger.debug(f"POST response: {response}")
 
-            # Return the created entry as a DraftList object
-            created_entry = DraftList.from_api_data(new_entry_data)
+            # Verify by fetching the list back (API returns full objects)
+            verification = await self.get_team_list(season, team_id)
+            logger.debug(f"Verification: found {len(verification)} entries after POST")
+
+            # Verify the player was added
+            if not any(entry.player_id == player_id for entry in verification):
+                logger.error(f"Player {player_id} not found in list after POST - operation may have failed")
+                return None
+
             logger.info(f"Added player {player_id} to team {team_id} draft list at rank {rank}")
-
-            return created_entry
+            return verification  # Return full updated list
 
         except Exception as e:
             logger.error(f"Error adding player {player_id} to draft list: {e}")
