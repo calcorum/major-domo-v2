@@ -12,6 +12,7 @@ from typing import List, Optional, Callable, Any
 from utils.logging import set_discord_context, get_contextual_logger
 
 cache_logger = logging.getLogger(f'{__name__}.CacheDecorators')
+period_check_logger = logging.getLogger(f'{__name__}.PeriodCheckDecorators')
 
 
 def logged_command(
@@ -93,6 +94,89 @@ def logged_command(
         wrapper.__signature__ = inspect.signature(func)  # type: ignore
         return wrapper
     return decorator
+
+
+def requires_draft_period(func):
+    """
+    Decorator to restrict commands to draft period (week <= 0).
+
+    This decorator checks if the league is in the draft period (offseason)
+    before allowing the command to execute. If the league is in-season,
+    it returns an error message to the user.
+
+    Example:
+        @discord.app_commands.command(name="draft")
+        @requires_draft_period
+        @logged_command("/draft")
+        async def draft_pick(self, interaction, player: str):
+            # Command only runs during draft period (week <= 0)
+            pass
+
+    Side Effects:
+        - Checks league current state via league_service
+        - Returns error embed if check fails
+        - Logs restriction events
+
+    Requirements:
+        - Must be applied to async methods with (self, interaction, ...) signature
+        - Should be placed before @logged_command decorator
+        - league_service must be available via import
+    """
+    @wraps(func)
+    async def wrapper(self, interaction, *args, **kwargs):
+        # Import here to avoid circular imports
+        from services.league_service import league_service
+        from views.embeds import EmbedTemplate
+
+        try:
+            # Check current league state
+            current = await league_service.get_current_state()
+
+            if not current:
+                period_check_logger.error("Could not retrieve league state for draft period check")
+                embed = EmbedTemplate.error(
+                    "System Error",
+                    "Could not verify draft period status. Please try again later."
+                )
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                return
+
+            # Check if in draft period (week <= 0)
+            if current.week > 0:
+                period_check_logger.info(
+                    f"Draft command blocked - current week: {current.week}",
+                    extra={
+                        "user_id": interaction.user.id,
+                        "command": func.__name__,
+                        "current_week": current.week
+                    }
+                )
+                embed = EmbedTemplate.error(
+                    "Not Available",
+                    "Draft commands are only available in the offseason."
+                )
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                return
+
+            # Week <= 0, allow command to proceed
+            period_check_logger.debug(
+                f"Draft period check passed - week {current.week}",
+                extra={"user_id": interaction.user.id, "command": func.__name__}
+            )
+            return await func(self, interaction, *args, **kwargs)
+
+        except Exception as e:
+            period_check_logger.error(
+                f"Error in draft period check: {e}",
+                exc_info=True,
+                extra={"user_id": interaction.user.id, "command": func.__name__}
+            )
+            # Re-raise to let error handling in logged_command handle it
+            raise
+
+    # Preserve signature for Discord.py command registration
+    wrapper.__signature__ = inspect.signature(func)  # type: ignore
+    return wrapper
 
 
 def cached_api_call(ttl: Optional[int] = None, cache_key_suffix: str = ""):

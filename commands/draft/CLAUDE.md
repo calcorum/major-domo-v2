@@ -4,11 +4,40 @@
 
 This directory contains Discord slash commands for draft system operations.
 
+## 🚨 Important: Draft Period Restriction
+
+**Interactive draft commands are restricted to the offseason (week ≤ 0).**
+
+### Restricted Commands
+The following commands can **only be used during the offseason** (when league week ≤ 0):
+- `/draft` - Make draft picks
+- `/draft-list` - View auto-draft queue
+- `/draft-list-add` - Add player to queue
+- `/draft-list-remove` - Remove player from queue
+- `/draft-list-clear` - Clear entire queue
+
+**Implementation:** The `@requires_draft_period` decorator automatically checks the current league week and returns an error message if the league is in-season.
+
+### Unrestricted Commands
+These commands remain **available year-round**:
+- `/draft-board` - View draft picks by round
+- `/draft-status` - View current draft state
+- `/draft-on-clock` - View detailed on-the-clock information
+- All `/draft-admin` commands (administrator only)
+
+### User Experience
+When a user tries to run a restricted command during the season, they see:
+```
+❌ Not Available
+Draft commands are only available in the offseason.
+```
+
 ## Files
 
 ### `picks.py`
 - **Command**: `/draft`
 - **Description**: Make a draft pick with FA player autocomplete
+- **Restriction**: Offseason only (week ≤ 0) via `@requires_draft_period` decorator
 - **Parameters**:
   - `player` (required): Player name to draft (autocomplete shows FA players with position and sWAR)
 - **Service Dependencies**:
@@ -19,6 +48,7 @@ This directory contains Discord slash commands for draft system operations.
   - `team_service.get_team_roster()`
   - `player_service.get_players_by_name()`
   - `player_service.update_player_team()`
+  - `league_service.get_current_state()` (for period check)
 
 ## Key Features
 

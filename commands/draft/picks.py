@@ -16,7 +16,7 @@ from services.draft_pick_service import draft_pick_service
 from services.player_service import player_service
 from services.team_service import team_service
 from utils.logging import get_contextual_logger
-from utils.decorators import logged_command
+from utils.decorators import logged_command, requires_draft_period
 from utils.draft_helpers import validate_cap_space, format_pick_display
 from views.draft_views import (
     create_player_draft_card,
@@ -77,6 +77,7 @@ class DraftPicksCog(commands.Cog):
         player="Player name to draft (autocomplete shows available FA players)"
     )
     @discord.app_commands.autocomplete(player=fa_player_autocomplete)
+    @requires_draft_period
     @logged_command("/draft")
     async def draft_pick(
         self,
