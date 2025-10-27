@@ -246,41 +246,52 @@ class TestSubmitConfirmationModal:
         # Mock the TextInput values
         modal.confirmation = MagicMock()
         modal.confirmation.value = 'CONFIRM'
-        
+
         mock_transaction = MagicMock()
         mock_transaction.moveid = 'Season-012-Week-11-123456789'
         mock_transaction.week = 11
-        
-        with patch('services.league_service.LeagueService') as mock_league_service_class:
-            mock_league_service = MagicMock()
-            mock_league_service_class.return_value = mock_league_service
-            
+        mock_transaction.frozen = False  # Will be set to True
+
+        with patch('services.league_service.league_service') as mock_league_service:
             mock_current_state = MagicMock()
             mock_current_state.week = 10
             mock_league_service.get_current_state = AsyncMock(return_value=mock_current_state)
-            
-            modal.builder.submit_transaction.return_value = [mock_transaction]
-            
-            with patch('services.transaction_builder.clear_transaction_builder') as mock_clear:
-                await modal.on_submit(mock_interaction)
-                
-                # Should defer response
-                mock_interaction.response.defer.assert_called_once_with(ephemeral=True)
-                
-                # Should get current state
-                mock_league_service.get_current_state.assert_called_once()
-                
-                # Should submit transaction for next week
-                modal.builder.submit_transaction.assert_called_once_with(week=11)
-                
-                # Should clear builder
-                mock_clear.assert_called_once_with(123456789)
-                
-                # Should send success message
-                mock_interaction.followup.send.assert_called_once()
-                call_args = mock_interaction.followup.send.call_args
-                assert "Transaction Submitted Successfully" in call_args[0][0]
-                assert mock_transaction.moveid in call_args[0][0]
+
+            modal.builder.submit_transaction = AsyncMock(return_value=[mock_transaction])
+
+            with patch('services.transaction_service.transaction_service') as mock_transaction_service:
+                # Mock the create_transaction_batch call
+                mock_transaction_service.create_transaction_batch = AsyncMock(return_value=[mock_transaction])
+
+                with patch('utils.transaction_logging.post_transaction_to_log') as mock_post_log:
+                    mock_post_log.return_value = AsyncMock()
+
+                    with patch('services.transaction_builder.clear_transaction_builder') as mock_clear:
+                        await modal.on_submit(mock_interaction)
+
+                        # Should defer response
+                        mock_interaction.response.defer.assert_called_once_with(ephemeral=True)
+
+                        # Should get current state
+                        mock_league_service.get_current_state.assert_called_once()
+
+                        # Should submit transaction for next week
+                        modal.builder.submit_transaction.assert_called_once_with(week=11)
+
+                        # Should mark transaction as frozen
+                        assert mock_transaction.frozen is True
+
+                        # Should POST to database
+                        mock_transaction_service.create_transaction_batch.assert_called_once()
+
+                        # Should clear builder
+                        mock_clear.assert_called_once_with(123456789)
+
+                        # Should send success message
+                        mock_interaction.followup.send.assert_called_once()
+                        call_args = mock_interaction.followup.send.call_args
+                        assert "Transaction Submitted Successfully" in call_args[0][0]
+                        assert mock_transaction.moveid in call_args[0][0]
     
     @pytest.mark.asyncio
     async def test_modal_submit_no_current_state(self, mock_builder, mock_interaction):
@@ -289,14 +300,12 @@ class TestSubmitConfirmationModal:
         # Mock the TextInput values
         modal.confirmation = MagicMock()
         modal.confirmation.value = 'CONFIRM'
-        
-        with patch('services.league_service.LeagueService') as mock_league_service_class:
-            mock_league_service = MagicMock()
-            mock_league_service_class.return_value = mock_league_service
+
+        with patch('services.league_service.league_service') as mock_league_service:
             mock_league_service.get_current_state = AsyncMock(return_value=None)
-            
+
             await modal.on_submit(mock_interaction)
-            
+
             mock_interaction.followup.send.assert_called_once()
             call_args = mock_interaction.followup.send.call_args
             assert "Could not get current league state" in call_args[0][0]
