@@ -8,7 +8,8 @@ This package contains utility functions, helpers, and shared components used thr
 1. [**Structured Logging**](#-structured-logging) - Contextual logging with Discord integration
 2. [**Redis Caching**](#-redis-caching) - Optional performance caching system
 3. [**Command Decorators**](#-command-decorators) - Boilerplate reduction decorators
-4. [**Future Utilities**](#-future-utilities) - Planned utility modules
+4. [**Dice Utilities**](#-dice-utilities) - Reusable dice rolling functions
+5. [**Future Utilities**](#-future-utilities) - Planned utility modules
 
 ---
 
@@ -935,7 +936,215 @@ class RosterCommands(commands.Cog):
 
 ---
 
-**Last Updated:** January 2025 - Added Autocomplete Functions and Fixed Team Filtering
+## 🎲 Dice Utilities
+
+**Location:** `utils/dice_utils.py`
+**Purpose:** Provides reusable dice rolling functionality for commands that need dice mechanics.
+
+### **Overview**
+
+The dice utilities module provides a clean, reusable implementation of dice rolling functionality that can be imported by any command file. This was refactored from `commands/dice/rolls.py` to promote code reuse and maintainability.
+
+### **Quick Start**
+
+```python
+from utils.dice_utils import DiceRoll, parse_and_roll_multiple_dice, parse_and_roll_single_dice
+
+# Roll multiple dice
+results = parse_and_roll_multiple_dice("1d6;2d6;1d20")
+for result in results:
+    print(f"{result.dice_notation}: {result.total}")
+
+# Roll a single die
+result = parse_and_roll_single_dice("2d6")
+print(f"Rolled {result.total} on {result.dice_notation}")
+print(f"Individual rolls: {result.rolls}")
+```
+
+### **Data Structures**
+
+#### **`DiceRoll` Dataclass**
+
+Represents the result of a dice roll with complete information:
+
+```python
+@dataclass
+class DiceRoll:
+    dice_notation: str    # Original notation (e.g., "2d6")
+    num_dice: int        # Number of dice rolled
+    die_sides: int       # Number of sides per die
+    rolls: list[int]     # Individual roll results
+    total: int           # Sum of all rolls
+```
+
+**Example:**
+```python
+result = parse_and_roll_single_dice("2d6")
+# DiceRoll(
+#     dice_notation='2d6',
+#     num_dice=2,
+#     die_sides=6,
+#     rolls=[4, 5],
+#     total=9
+# )
+```
+
+### **Functions**
+
+#### **`parse_and_roll_multiple_dice(dice_notation: str) -> list[DiceRoll]`**
+
+Parse and roll multiple dice notations separated by semicolons.
+
+**Parameters:**
+- `dice_notation` (str): Dice notation string, supports multiple rolls separated by semicolon (e.g., "2d6", "1d20;2d6;1d6")
+
+**Returns:**
+- `list[DiceRoll]`: List of DiceRoll results, or empty list if any part is invalid
+
+**Examples:**
+```python
+# Single roll
+results = parse_and_roll_multiple_dice("2d6")
+# Returns: [DiceRoll(dice_notation='2d6', ...)]
+
+# Multiple rolls
+results = parse_and_roll_multiple_dice("1d6;2d6;1d20")
+# Returns: [
+#     DiceRoll(dice_notation='1d6', ...),
+#     DiceRoll(dice_notation='2d6', ...),
+#     DiceRoll(dice_notation='1d20', ...)
+# ]
+
+# Invalid input
+results = parse_and_roll_multiple_dice("invalid")
+# Returns: []
+```
+
+**Error Handling:**
+- Returns empty list `[]` for invalid dice notation
+- Catches `ValueError` exceptions from individual rolls
+- Safe to use in user-facing commands
+
+#### **`parse_and_roll_single_dice(dice_notation: str) -> DiceRoll`**
+
+Parse and roll a single dice notation string.
+
+**Parameters:**
+- `dice_notation` (str): Single dice notation string (e.g., "2d6", "1d20")
+
+**Returns:**
+- `DiceRoll`: Roll result with complete information
+
+**Raises:**
+- `ValueError`: If dice notation is invalid or values are out of reasonable limits
+
+**Examples:**
+```python
+# Valid rolls
+result = parse_and_roll_single_dice("2d6")
+result = parse_and_roll_single_dice("1d20")
+result = parse_and_roll_single_dice("3d8")
+
+# Invalid notation (raises ValueError)
+result = parse_and_roll_single_dice("invalid")  # ValueError: Cannot parse dice string
+
+# Out of bounds (raises ValueError)
+result = parse_and_roll_single_dice("101d6")   # Too many dice
+result = parse_and_roll_single_dice("1d1001")  # Die too large
+```
+
+**Validation Rules:**
+- **Format**: Must match pattern `XdY` (e.g., "2d6", "1d20")
+- **Number of dice**: 1-100 (inclusive)
+- **Die sides**: 2-1000 (inclusive)
+- **Case insensitive**: "2d6" and "2D6" both work
+- **Whitespace tolerant**: "  2d6  " and "2 d 6" both work
+
+### **Usage in Commands**
+
+The dice utilities are used throughout the dice commands package:
+
+```python
+from utils.dice_utils import parse_and_roll_multiple_dice
+
+class DiceRollCommands(commands.Cog):
+    @discord.app_commands.command(name="d20", description="Roll a single d20")
+    @logged_command("/d20")
+    async def d20_dice(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+
+        # Use the utility function
+        dice_notation = "1d20"
+        roll_results = parse_and_roll_multiple_dice(dice_notation)
+
+        # Create embed and send
+        embed = self._create_multi_roll_embed(dice_notation, roll_results, interaction.user)
+        await interaction.followup.send(embed=embed)
+```
+
+### **Design Benefits**
+
+1. **Reusability**: Can be imported by any command file that needs dice functionality
+2. **Maintainability**: Centralized dice logic in one place
+3. **Testability**: Functions can be tested independently of command cogs
+4. **Consistency**: All dice commands use the same underlying logic
+5. **Error Handling**: Graceful error handling with empty list returns
+
+### **Implementation Details**
+
+**Random Number Generation:**
+- Uses Python's `random.randint(1, die_sides)` for each die
+- Each roll is independent and equally likely
+
+**Parsing:**
+- Regular expression pattern: `^(\d+)d(\d+)$`
+- Case-insensitive matching
+- Whitespace stripped before parsing
+
+**Error Recovery:**
+- `parse_and_roll_multiple_dice` catches exceptions and returns empty list
+- Safe for user input validation in commands
+- Detailed error messages in exceptions for debugging
+
+### **Testing**
+
+Comprehensive test coverage in `tests/test_commands_dice.py`:
+
+```python
+# Test valid notation
+results = parse_and_roll_multiple_dice("2d6")
+assert len(results) == 1
+assert results[0].num_dice == 2
+assert results[0].die_sides == 6
+
+# Test invalid notation
+results = parse_and_roll_multiple_dice("invalid")
+assert results == []
+
+# Test multiple rolls
+results = parse_and_roll_multiple_dice("1d6;2d8;1d20")
+assert len(results) == 3
+```
+
+### **Commands Using Dice Utilities**
+
+Current commands that use the dice utilities:
+- `/roll` - General purpose dice rolling
+- `/d20` - Quick d20 roll
+- `/ab` - Baseball at-bat dice (1d6;2d6;1d20)
+- `/fielding` - Super Advanced fielding rolls
+- `/scout` - Weighted scouting rolls
+- `/jump` - Baserunner jump rolls
+
+### **Migration Notes**
+
+**October 2025**: Dice rolling functions were refactored from `commands/dice/rolls.py` into `utils/dice_utils.py` to promote code reuse and allow other command files to easily import dice functionality.
+
+**Breaking Changes:** None - all existing commands updated to use the new module.
+
+---
+
+**Last Updated:** October 2025 - Added Dice Utilities Documentation
 **Next Update:** When additional utility modules are added
 
 For questions or improvements to the logging system, check the implementation in `utils/logging.py` or refer to the JSON log outputs in `logs/discord_bot_v2.json`.
