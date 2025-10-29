@@ -32,6 +32,10 @@ class BotConfig(BaseSettings):
     sba_color: str = "a6ce39"
     weeks_per_season: int = 18
     games_per_week: int = 4
+    playoff_weeks_per_season: int = 3
+    playoff_round_one_games: int = 5
+    playoff_round_two_games: int = 7
+    playoff_round_three_games: int = 7
     modern_stats_start_season: int = 8
     offseason_flag: bool = False  # When True, relaxes roster limits and disables weekly freeze/thaw
 

@@ -4,9 +4,7 @@ Dice Rolling Commands
 Implements slash commands for dice rolling functionality required for gameplay.
 """
 import random
-import re
 from typing import Optional
-from dataclasses import dataclass
 
 import discord
 from discord.ext import commands
@@ -18,6 +16,7 @@ from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
 from utils.team_utils import get_user_major_league_team
 from utils.text_utils import split_text_for_fields
+from utils.dice_utils import DiceRoll, parse_and_roll_multiple_dice, parse_and_roll_single_dice
 from views.embeds import EmbedColors, EmbedTemplate
 from .chart_data import (
     INFIELD_X_CHART,
@@ -35,16 +34,6 @@ from .chart_data import (
     CATCHER_ERRORS,
     PITCHER_ERRORS,
 )
-
-
-@dataclass
-class DiceRoll:
-    """Represents the result of a dice roll."""
-    dice_notation: str
-    num_dice: int
-    die_sides: int
-    rolls: list[int]
-    total: int
 
 class DiceRollCommands(commands.Cog):
     """Dice rolling command handlers for gameplay."""
@@ -70,7 +59,7 @@ class DiceRollCommands(commands.Cog):
         await interaction.response.defer()
 
         # Parse and validate dice notation (supports multiple rolls)
-        roll_results = self._parse_and_roll_multiple_dice(dice)
+        roll_results = parse_and_roll_multiple_dice(dice)
         if not roll_results:
             await interaction.followup.send(
                 "❌ Invalid dice notation. Use format like: 2d6, 1d20, or 1d6;2d6;1d20",
@@ -93,7 +82,7 @@ class DiceRollCommands(commands.Cog):
             return
 
         # Parse and validate dice notation (supports multiple rolls)
-        roll_results = self._parse_and_roll_multiple_dice(dice)
+        roll_results = parse_and_roll_multiple_dice(dice)
         if not roll_results:
             self.logger.warning("Invalid dice notation provided", dice_input=dice)
             await ctx.send("❌ Invalid dice notation. Use format like: 2d6, 1d20, or 1d6;2d6;1d20")
@@ -104,6 +93,32 @@ class DiceRollCommands(commands.Cog):
         # Create embed for the roll results
         embed = self._create_multi_roll_embed(dice, roll_results, ctx.author)
         await ctx.send(embed=embed)
+
+    @discord.app_commands.command(
+        name="d20",
+        description="Roll a single d20"
+    )
+    @logged_command("/d20")
+    async def d20_dice(self, interaction: discord.Interaction):
+        """Roll a single d20."""
+        await interaction.response.defer()
+        embed_color = await self._get_channel_embed_color(interaction)
+
+        # Roll 1d20
+        dice_notation = "1d20"
+        roll_results = parse_and_roll_multiple_dice(dice_notation)
+
+        # Create embed for the roll results
+        embed = self._create_multi_roll_embed(
+            dice_notation,
+            roll_results,
+            interaction.user,
+            set_author=False,
+            embed_color=embed_color
+        )
+        embed.title = f'd20 roll for {interaction.user.display_name}'
+
+        await interaction.followup.send(embed=embed)
 
     @discord.app_commands.command(
         name="ab",
@@ -117,7 +132,7 @@ class DiceRollCommands(commands.Cog):
 
         # Use the standard baseball dice combination
         dice_notation = "1d6;2d6;1d20"
-        roll_results = self._parse_and_roll_multiple_dice(dice_notation)
+        roll_results = parse_and_roll_multiple_dice(dice_notation)
 
         injury_risk = (roll_results[0].total == 6) and (roll_results[1].total in [7, 8, 9, 10, 11, 12])
         d6_total = roll_results[1].total
@@ -126,11 +141,11 @@ class DiceRollCommands(commands.Cog):
         if roll_results[2].total == 1:
             embed_title = 'Wild pitch roll'
             dice_notation = '1d20'
-            roll_results = [self._parse_and_roll_single_dice(dice_notation)]
+            roll_results = [parse_and_roll_single_dice(dice_notation)]
         elif roll_results[2].total == 2:
             embed_title = 'PB roll'
             dice_notation = '1d20'
-            roll_results = [self._parse_and_roll_single_dice(dice_notation)]
+            roll_results = [parse_and_roll_single_dice(dice_notation)]
 
         # Create embed for the roll results
         embed = self._create_multi_roll_embed(
@@ -162,7 +177,7 @@ class DiceRollCommands(commands.Cog):
 
         # Use the standard baseball dice combination
         dice_notation = "1d6;2d6;1d20"
-        roll_results = self._parse_and_roll_multiple_dice(dice_notation)
+        roll_results = parse_and_roll_multiple_dice(dice_notation)
 
         self.logger.info("At Bat dice rolled successfully", roll_count=len(roll_results))
 
@@ -235,7 +250,7 @@ class DiceRollCommands(commands.Cog):
 
         # Roll the dice - 1d20 and 3d6
         dice_notation = "1d20;3d6;1d100"
-        roll_results = self._parse_and_roll_multiple_dice(dice_notation)
+        roll_results = parse_and_roll_multiple_dice(dice_notation)
 
         # Create fielding embed
         embed = self._create_fielding_embed(pos_value, roll_results, interaction.user, embed_color)
@@ -256,9 +271,9 @@ class DiceRollCommands(commands.Cog):
             await ctx.send("❌ Invalid position. Use: C, 1B, 2B, 3B, SS, LF, CF, RF")
             return
 
-        # Roll the dice - 1d20 and 3d6
-        dice_notation = "1d20;3d6"
-        roll_results = self._parse_and_roll_multiple_dice(dice_notation)
+        # Roll the dice - 1d20 and 3d6 and 1d100
+        dice_notation = "1d20;3d6;1d100"
+        roll_results = parse_and_roll_multiple_dice(dice_notation)
 
         self.logger.info("SA Fielding dice rolled successfully", position=parsed_position, d20=roll_results[0].total, d6_total=roll_results[1].total)
 
@@ -280,7 +295,7 @@ class DiceRollCommands(commands.Cog):
         check_roll = random.randint(1, 20)
 
         # Roll 2d6 for jump rating
-        jump_result = self._parse_and_roll_single_dice("2d6")
+        jump_result = parse_and_roll_single_dice("2d6")
 
         # Roll another 1d20 for pickoff/balk resolution
         resolution_roll = random.randint(1, 20)
@@ -309,7 +324,7 @@ class DiceRollCommands(commands.Cog):
         check_roll = random.randint(1, 20)
 
         # Roll 2d6 for jump rating
-        jump_result = self._parse_and_roll_single_dice("2d6")
+        jump_result = parse_and_roll_single_dice("2d6")
 
         # Roll another 1d20 for pickoff/balk resolution
         resolution_roll = random.randint(1, 20)
@@ -642,50 +657,6 @@ class DiceRollCommands(commands.Cog):
             f'**TR3**: {OUTFIELD_X_CHART["tr3"]["rp"]}\n'
         )
 
-    def _parse_and_roll_multiple_dice(self, dice_notation: str) -> list[DiceRoll]:
-        """Parse dice notation (supports multiple rolls) and return roll results."""
-        # Split by semicolon for multiple rolls
-        dice_parts = [part.strip() for part in dice_notation.split(';')]
-        results = []
-
-        for dice_part in dice_parts:
-            result = self._parse_and_roll_single_dice(dice_part)
-            if result is None:
-                return []  # Return empty list if any part is invalid
-            results.append(result)
-
-        return results
-
-    def _parse_and_roll_single_dice(self, dice_notation: str) -> DiceRoll:
-        """Parse single dice notation and return roll results."""
-        # Clean the input
-        dice_notation = dice_notation.strip().lower().replace(' ', '')
-
-        # Pattern: XdY
-        pattern = r'^(\d+)d(\d+)$'
-        match = re.match(pattern, dice_notation)
-
-        if not match:
-            raise ValueError(f'Cannot parse dice string **{dice_notation}**')
-
-        num_dice = int(match.group(1))
-        die_sides = int(match.group(2))
-
-        # Validate reasonable limits
-        if num_dice > 100 or die_sides > 1000 or num_dice < 1 or die_sides < 2:
-            raise ValueError('I don\'t know, bud, that just doesn\'t seem doable.')
-
-        # Roll the dice
-        rolls = [random.randint(1, die_sides) for _ in range(num_dice)]
-        total = sum(rolls)
-
-        return DiceRoll(
-            dice_notation=dice_notation,
-            num_dice=num_dice,
-            die_sides=die_sides,
-            rolls=rolls,
-            total=total
-        )
 
     def _roll_weighted_scout_dice(self, card_type: str) -> list[DiceRoll]:
         """
@@ -712,10 +683,10 @@ class DiceRollCommands(commands.Cog):
         )
 
         # Second roll (2d6) - normal
-        second_result = self._parse_and_roll_single_dice("2d6")
+        second_result = parse_and_roll_single_dice("2d6")
 
         # Third roll (1d20) - normal
-        third_result = self._parse_and_roll_single_dice("1d20")
+        third_result = parse_and_roll_single_dice("1d20")
 
         return [first_d6_result, second_result, third_result]
 

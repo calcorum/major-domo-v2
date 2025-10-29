@@ -8,7 +8,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import discord
 from discord.ext import commands
 
-from commands.dice.rolls import DiceRollCommands, DiceRoll
+from commands.dice.rolls import DiceRollCommands
+from utils.dice_utils import DiceRoll, parse_and_roll_multiple_dice, parse_and_roll_single_dice
 
 
 class TestDiceRollCommands:
@@ -32,6 +33,7 @@ class TestDiceRollCommands:
 
         # Mock the user
         user = MagicMock(spec=discord.User)
+        user.name = "TestUser"
         user.display_name = "TestUser"
         user.display_avatar.url = "https://example.com/avatar.png"
         interaction.user = user
@@ -62,7 +64,7 @@ class TestDiceRollCommands:
     def test_parse_valid_dice_notation(self, dice_cog):
         """Test parsing valid dice notation."""
         # Test basic notation
-        results = dice_cog._parse_and_roll_multiple_dice("2d6")
+        results = parse_and_roll_multiple_dice("2d6")
         assert len(results) == 1
         result = results[0]
         assert result.num_dice == 2
@@ -72,7 +74,7 @@ class TestDiceRollCommands:
         assert result.total == sum(result.rolls)
 
         # Test single die
-        results = dice_cog._parse_and_roll_multiple_dice("1d20")
+        results = parse_and_roll_multiple_dice("1d20")
         assert len(results) == 1
         result = results[0]
         assert result.num_dice == 1
@@ -83,22 +85,22 @@ class TestDiceRollCommands:
     def test_parse_invalid_dice_notation(self, dice_cog):
         """Test parsing invalid dice notation."""
         # Invalid formats
-        assert dice_cog._parse_and_roll_multiple_dice("invalid") == []
-        assert dice_cog._parse_and_roll_multiple_dice("2d") == []
-        assert dice_cog._parse_and_roll_multiple_dice("d6") == []
-        assert dice_cog._parse_and_roll_multiple_dice("2d6+5") == []  # No modifiers in simple version
-        assert dice_cog._parse_and_roll_multiple_dice("") == []
+        assert parse_and_roll_multiple_dice("invalid") == []
+        assert parse_and_roll_multiple_dice("2d") == []
+        assert parse_and_roll_multiple_dice("d6") == []
+        assert parse_and_roll_multiple_dice("2d6+5") == []  # No modifiers in simple version
+        assert parse_and_roll_multiple_dice("") == []
 
         # Out of bounds values
-        assert dice_cog._parse_and_roll_multiple_dice("0d6") == []  # num_dice < 1
-        assert dice_cog._parse_and_roll_multiple_dice("2d1") == []  # die_sides < 2
-        assert dice_cog._parse_and_roll_multiple_dice("101d6") == []  # num_dice > 100
-        assert dice_cog._parse_and_roll_multiple_dice("1d1001") == []  # die_sides > 1000
+        assert parse_and_roll_multiple_dice("0d6") == []  # num_dice < 1
+        assert parse_and_roll_multiple_dice("2d1") == []  # die_sides < 2
+        assert parse_and_roll_multiple_dice("101d6") == []  # num_dice > 100
+        assert parse_and_roll_multiple_dice("1d1001") == []  # die_sides > 1000
 
     def test_parse_multiple_dice(self, dice_cog):
         """Test parsing multiple dice rolls."""
         # Test multiple rolls
-        results = dice_cog._parse_and_roll_multiple_dice("1d6;2d8;1d20")
+        results = parse_and_roll_multiple_dice("1d6;2d8;1d20")
         assert len(results) == 3
 
         assert results[0].dice_notation == '1d6'
@@ -115,8 +117,8 @@ class TestDiceRollCommands:
 
     def test_parse_case_insensitive(self, dice_cog):
         """Test that dice notation parsing is case insensitive."""
-        result_lower = dice_cog._parse_and_roll_multiple_dice("2d6")
-        result_upper = dice_cog._parse_and_roll_multiple_dice("2D6")
+        result_lower = parse_and_roll_multiple_dice("2d6")
+        result_upper = parse_and_roll_multiple_dice("2D6")
 
         assert len(result_lower) == 1
         assert len(result_upper) == 1
@@ -125,12 +127,12 @@ class TestDiceRollCommands:
 
     def test_parse_whitespace_handling(self, dice_cog):
         """Test that whitespace is handled properly."""
-        results = dice_cog._parse_and_roll_multiple_dice("  2d6  ")
+        results = parse_and_roll_multiple_dice("  2d6  ")
         assert len(results) == 1
         assert results[0].num_dice == 2
         assert results[0].die_sides == 6
 
-        results = dice_cog._parse_and_roll_multiple_dice("2 d 6")
+        results = parse_and_roll_multiple_dice("2 d 6")
         assert len(results) == 1
         assert results[0].num_dice == 2
         assert results[0].die_sides == 6
@@ -232,7 +234,7 @@ class TestDiceRollCommands:
         """Test that dice rolls produce different results."""
         results = []
         for _ in range(20):  # Roll 20 times
-            result = dice_cog._parse_and_roll_multiple_dice("1d20")
+            result = parse_and_roll_multiple_dice("1d20")
             results.append(result[0].rolls[0])
 
         # Should have some variation in results (very unlikely all 20 rolls are the same)
@@ -242,20 +244,20 @@ class TestDiceRollCommands:
     def test_dice_boundaries(self, dice_cog):
         """Test dice rolling at boundaries."""
         # Test maximum allowed dice
-        results = dice_cog._parse_and_roll_multiple_dice("100d2")
+        results = parse_and_roll_multiple_dice("100d2")
         assert len(results) == 1
         result = results[0]
         assert len(result.rolls) == 100
         assert all(roll in [1, 2] for roll in result.rolls)
 
         # Test maximum die size
-        results = dice_cog._parse_and_roll_multiple_dice("1d1000")
+        results = parse_and_roll_multiple_dice("1d1000")
         assert len(results) == 1
         result = results[0]
         assert 1 <= result.rolls[0] <= 1000
 
         # Test minimum valid values
-        results = dice_cog._parse_and_roll_multiple_dice("1d2")
+        results = parse_and_roll_multiple_dice("1d2")
         assert len(results) == 1
         result = results[0]
         assert result.rolls[0] in [1, 2]
@@ -329,6 +331,26 @@ class TestDiceRollCommands:
         assert command.aliases == ["r", "dice"]
 
     @pytest.mark.asyncio
+    async def test_d20_command_slash(self, dice_cog, mock_interaction):
+        """Test d20 slash command."""
+        await dice_cog.d20_dice.callback(dice_cog, mock_interaction)
+
+        # Verify response was deferred
+        mock_interaction.response.defer.assert_called_once()
+
+        # Verify followup was sent with embed
+        mock_interaction.followup.send.assert_called_once()
+        call_args = mock_interaction.followup.send.call_args
+        assert 'embed' in call_args.kwargs
+
+        # Verify embed has the correct format
+        embed = call_args.kwargs['embed']
+        assert isinstance(embed, discord.Embed)
+        assert embed.title == "d20 roll for TestUser"
+        assert len(embed.fields) == 1
+        assert "Details:[1d20" in embed.fields[0].value
+
+    @pytest.mark.asyncio
     async def test_ab_command_slash(self, dice_cog, mock_interaction):
         """Test ab slash command."""
         await dice_cog.ab_dice.callback(dice_cog, mock_interaction)
@@ -379,7 +401,7 @@ class TestDiceRollCommands:
     def test_ab_command_dice_combination(self, dice_cog):
         """Test that ab command uses the correct dice combination."""
         dice_notation = "1d6;2d6;1d20"
-        results = dice_cog._parse_and_roll_multiple_dice(dice_notation)
+        results = parse_and_roll_multiple_dice(dice_notation)
 
         # Should have 3 dice groups
         assert len(results) == 3
@@ -538,7 +560,7 @@ class TestDiceRollCommands:
     def test_fielding_dice_combination(self, dice_cog):
         """Test that fielding uses correct dice combination (1d20;3d6)."""
         dice_notation = "1d20;3d6"
-        results = dice_cog._parse_and_roll_multiple_dice(dice_notation)
+        results = parse_and_roll_multiple_dice(dice_notation)
 
         # Should have 2 dice groups
         assert len(results) == 2
@@ -620,7 +642,7 @@ class TestDiceRollCommands:
         # Verify embed has the correct format
         embed = call_args.kwargs['embed']
         assert isinstance(embed, discord.Embed)
-        assert embed.title == "Scouting roll for TestUser (Batter)"
+        assert embed.title == "Scouting roll for TestUser"
         assert len(embed.fields) == 1
         assert "Details:[1d6;2d6;1d20" in embed.fields[0].value
 
@@ -645,6 +667,6 @@ class TestDiceRollCommands:
         # Verify embed has the correct format
         embed = call_args.kwargs['embed']
         assert isinstance(embed, discord.Embed)
-        assert embed.title == "Scouting roll for TestUser (Pitcher)"
+        assert embed.title == "Scouting roll for TestUser"
         assert len(embed.fields) == 1
         assert "Details:[1d6;2d6;1d20" in embed.fields[0].value

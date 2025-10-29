@@ -175,10 +175,11 @@ def create_team_progress_bar(
     Returns:
         Formatted bar with dark blocks (▓) weighted toward winning team.
         Arrow extends from the side with the advantage.
+        Percentage displayed on winning team's side (or both sides if even).
         Examples:
             Home winning: "POR ░▓▓▓▓▓▓▓▓▓► WV  95.0%"
-            Away winning: "POR ◄▓▓▓▓▓▓▓░░░ WV  30.0%"
-            Even game:    "POR =▓▓▓▓▓▓▓▓▓▓= WV  50.0%"
+            Away winning: "70.0% POR ◄▓▓▓▓▓▓▓░░░ WV"
+            Even game:    "50.0% POR =▓▓▓▓▓▓▓▓▓▓= WV  50.0%"
     """
     # Calculate blocks for each team (home team's percentage)
     home_blocks = int((win_percentage / 100) * length)
@@ -189,19 +190,20 @@ def create_team_progress_bar(
         away_char = '░'  # Light blocks for losing team
         home_char = '▓'  # Dark blocks for winning team
         bar = away_char * away_blocks + home_char * home_blocks
-        # Arrow extends from right side
+        # Arrow extends from right side, percentage on right
         return f'{away_abbrev} {bar}► {home_abbrev}  {win_percentage:.1f}%'
     elif win_percentage < 50:
         # Away team (left side) is winning
         away_char = '▓'  # Dark blocks for winning team
         home_char = '░'  # Light blocks for losing team
         bar = away_char * away_blocks + home_char * home_blocks
-        # Arrow extends from left side
-        return f'{away_abbrev} ◄{bar} {home_abbrev}  {win_percentage:.1f}%'
+        # Arrow extends from left side, percentage on left (showing away team's win %)
+        away_win_pct = 100 - win_percentage
+        return f'{away_win_pct:.1f}% {away_abbrev} ◄{bar} {home_abbrev}'
     else:
         # Even game (50/50)
         away_char = '▓'
         home_char = '▓'
         bar = away_char * away_blocks + home_char * home_blocks
-        # Arrows on both sides for balanced display
-        return f'{away_abbrev} ={bar}= {home_abbrev}  {win_percentage:.1f}%'
+        # Arrows on both sides for balanced display, percentage on both sides
+        return f'{win_percentage:.1f}% {away_abbrev} ={bar}= {home_abbrev}  {win_percentage:.1f}%'
