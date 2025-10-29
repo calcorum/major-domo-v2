@@ -539,48 +539,64 @@ class BatterInjuryModal(BaseModal):
         """Handle batter injury input and log injury."""
         from services.player_service import player_service
         from services.injury_service import injury_service
+        from config import get_config
         import math
+
+        config = get_config()
+        max_week = config.weeks_per_season + config.playoff_weeks_per_season
 
         # Validate current week
         try:
             week = int(self.current_week.value)
-            if week < 1 or week > 18:
-                raise ValueError("Week must be between 1 and 18")
+            if week < 1 or week > max_week:
+                raise ValueError(f"Week must be between 1 and {max_week}")
         except ValueError:
             embed = EmbedTemplate.error(
                 title="Invalid Week",
-                description="Current week must be a number between 1 and 18."
+                description=f"Current week must be a number between 1 and {max_week} (including playoffs)."
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
+        # Determine max games based on week (regular season vs playoff rounds)
+        if week <= config.weeks_per_season:
+            max_game = config.games_per_week
+        elif week == config.weeks_per_season + 1:
+            max_game = config.playoff_round_one_games
+        elif week == config.weeks_per_season + 2:
+            max_game = config.playoff_round_two_games
+        elif week == config.weeks_per_season + 3:
+            max_game = config.playoff_round_three_games
+        else:
+            max_game = config.games_per_week  # Fallback
+
         # Validate current game
         try:
             game = int(self.current_game.value)
-            if game < 1 or game > 4:
-                raise ValueError("Game must be between 1 and 4")
+            if game < 1 or game > max_game:
+                raise ValueError(f"Game must be between 1 and {max_game}")
         except ValueError:
             embed = EmbedTemplate.error(
                 title="Invalid Game",
-                description="Current game must be a number between 1 and 4."
+                description=f"Current game must be a number between 1 and {max_game}."
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
         # Calculate injury dates
-        out_weeks = math.floor(self.injury_games / 4)
-        out_games = self.injury_games % 4
+        out_weeks = math.floor(self.injury_games / config.games_per_week)
+        out_games = self.injury_games % config.games_per_week
 
         return_week = week + out_weeks
         return_game = game + 1 + out_games
 
-        if return_game > 4:
+        if return_game > config.games_per_week:
             return_week += 1
-            return_game -= 4
+            return_game -= config.games_per_week
 
         # Adjust start date if injury starts after game 4
-        start_week = week if game != 4 else week + 1
-        start_game = game + 1 if game != 4 else 1
+        start_week = week if game != config.games_per_week else week + 1
+        start_game = game + 1 if game != config.games_per_week else 1
 
         return_date = f'w{return_week:02d}g{return_game}'
 
@@ -707,30 +723,46 @@ class PitcherRestModal(BaseModal):
         from services.player_service import player_service
         from services.injury_service import injury_service
         from models.injury import Injury
+        from config import get_config
         import math
+
+        config = get_config()
+        max_week = config.weeks_per_season + config.playoff_weeks_per_season
 
         # Validate current week
         try:
             week = int(self.current_week.value)
-            if week < 1 or week > 18:
-                raise ValueError("Week must be between 1 and 18")
+            if week < 1 or week > max_week:
+                raise ValueError(f"Week must be between 1 and {max_week}")
         except ValueError:
             embed = EmbedTemplate.error(
                 title="Invalid Week",
-                description="Current week must be a number between 1 and 18."
+                description=f"Current week must be a number between 1 and {max_week} (including playoffs)."
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
+        # Determine max games based on week (regular season vs playoff rounds)
+        if week <= config.weeks_per_season:
+            max_game = config.games_per_week
+        elif week == config.weeks_per_season + 1:
+            max_game = config.playoff_round_one_games
+        elif week == config.weeks_per_season + 2:
+            max_game = config.playoff_round_two_games
+        elif week == config.weeks_per_season + 3:
+            max_game = config.playoff_round_three_games
+        else:
+            max_game = config.games_per_week  # Fallback
+
         # Validate current game
         try:
             game = int(self.current_game.value)
-            if game < 1 or game > 4:
-                raise ValueError("Game must be between 1 and 4")
+            if game < 1 or game > max_game:
+                raise ValueError(f"Game must be between 1 and {max_game}")
         except ValueError:
             embed = EmbedTemplate.error(
                 title="Invalid Game",
-                description="Current game must be a number between 1 and 4."
+                description=f"Current game must be a number between 1 and {max_game}."
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
