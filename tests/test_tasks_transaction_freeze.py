@@ -815,9 +815,9 @@ class TestProcessFrozenTransactions:
 
                     await task._process_frozen_transactions(frozen_state)
 
-                    # Verify transaction was unfrozen
+                    # Verify transaction was unfrozen (uses moveid, not id)
                     mock_tx_service.unfreeze_transaction.assert_called_once_with(
-                        sample_transaction.id
+                        sample_transaction.moveid
                     )
 
                     # Verify transaction was posted to log
@@ -852,14 +852,14 @@ class TestProcessFrozenTransactions:
 
                     await task._process_frozen_transactions(frozen_state)
 
-                    # Verify losing transaction was cancelled
-                    mock_tx_service.cancel_transaction.assert_called_once_with(str(tx2.id))
+                    # Verify losing transaction was cancelled (uses moveid, not id)
+                    mock_tx_service.cancel_transaction.assert_called_once_with(tx2.moveid)
 
                     # Verify GM was notified
                     task._notify_gm_of_cancellation.assert_called_once()
 
-                    # Verify winning transaction was unfrozen
-                    mock_tx_service.unfreeze_transaction.assert_called_once_with(tx1.id)
+                    # Verify winning transaction was unfrozen (uses moveid, not id)
+                    mock_tx_service.unfreeze_transaction.assert_called_once_with(tx1.moveid)
 
     @pytest.mark.asyncio
     async def test_process_frozen_no_transactions(self, mock_bot, frozen_state):
@@ -912,9 +912,10 @@ class TestNotificationsAndEmbeds:
         with patch.object(TransactionFreezeTask, 'weekly_loop'):
             task = TransactionFreezeTask(mock_bot)
 
-            # Mock guild and channel
+            # Mock guild and channel (get_guild is sync, returns MagicMock not AsyncMock)
             mock_guild = MagicMock()
-            mock_channel = AsyncMock()
+            mock_channel = MagicMock()
+            mock_channel.send = AsyncMock()  # send is async
             mock_guild.text_channels = [mock_channel]
             mock_channel.name = 'transaction-log'
 
@@ -924,7 +925,8 @@ class TestNotificationsAndEmbeds:
                 mock_config.return_value = config
 
                 with patch('tasks.transaction_freeze.discord.utils.get', return_value=mock_channel):
-                    task.bot.get_guild.return_value = mock_guild
+                    # get_guild should return sync, not async
+                    task.bot.get_guild = MagicMock(return_value=mock_guild)
 
                     await task._send_freeze_announcement(10, is_beginning=True)
 
@@ -944,7 +946,8 @@ class TestNotificationsAndEmbeds:
             task = TransactionFreezeTask(mock_bot)
 
             mock_guild = MagicMock()
-            mock_channel = AsyncMock()
+            mock_channel = MagicMock()
+            mock_channel.send = AsyncMock()  # send is async
             mock_guild.text_channels = [mock_channel]
             mock_channel.name = 'transaction-log'
 
@@ -954,7 +957,8 @@ class TestNotificationsAndEmbeds:
                 mock_config.return_value = config
 
                 with patch('tasks.transaction_freeze.discord.utils.get', return_value=mock_channel):
-                    task.bot.get_guild.return_value = mock_guild
+                    # get_guild should return sync, not async
+                    task.bot.get_guild = MagicMock(return_value=mock_guild)
 
                     await task._send_freeze_announcement(10, is_beginning=False)
 
@@ -978,10 +982,12 @@ class TestNotificationsAndEmbeds:
         with patch.object(TransactionFreezeTask, 'weekly_loop'):
             task = TransactionFreezeTask(mock_bot)
 
-            # Mock guild members
+            # Mock guild members (get_member is sync, but send is async)
             mock_guild = MagicMock()
-            mock_gm1 = AsyncMock()
-            mock_gm2 = AsyncMock()
+            mock_gm1 = MagicMock()
+            mock_gm1.send = AsyncMock()
+            mock_gm2 = MagicMock()
+            mock_gm2.send = AsyncMock()
 
             mock_guild.get_member.side_effect = lambda id: {
                 111111: mock_gm1,
@@ -993,7 +999,8 @@ class TestNotificationsAndEmbeds:
                 config.guild_id = 12345
                 mock_config.return_value = config
 
-                task.bot.get_guild.return_value = mock_guild
+                # get_guild should return sync, not async
+                task.bot.get_guild = MagicMock(return_value=mock_guild)
 
                 await task._notify_gm_of_cancellation(sample_transaction, sample_team_wv)
 
@@ -1013,26 +1020,27 @@ class TestOffseasonMode:
     @pytest.mark.asyncio
     async def test_weekly_loop_skips_during_offseason(self, mock_bot, current_state):
         """Test that weekly loop skips operations when offseason_flag is True."""
-        with patch.object(TransactionFreezeTask, 'weekly_loop'):
-            task = TransactionFreezeTask(mock_bot)
+        # Don't patch weekly_loop - let it initialize naturally then cancel it
+        task = TransactionFreezeTask(mock_bot)
+        task.weekly_loop.cancel()  # Stop the actual loop
 
-            with patch('tasks.transaction_freeze.get_config') as mock_config:
-                config = MagicMock()
-                config.offseason_flag = True  # Offseason enabled
-                mock_config.return_value = config
+        with patch('tasks.transaction_freeze.get_config') as mock_config:
+            config = MagicMock()
+            config.offseason_flag = True  # Offseason enabled
+            mock_config.return_value = config
 
-                with patch('tasks.transaction_freeze.league_service') as mock_league:
-                    mock_league.get_current_state = AsyncMock(return_value=current_state)
+            with patch('tasks.transaction_freeze.league_service') as mock_league:
+                mock_league.get_current_state = AsyncMock(return_value=current_state)
 
-                    task._begin_freeze = AsyncMock()
-                    task._end_freeze = AsyncMock()
+                task._begin_freeze = AsyncMock()
+                task._end_freeze = AsyncMock()
 
-                    # Manually call the loop logic
-                    await task.weekly_loop()
+                # Call the loop callback directly
+                await task.weekly_loop.coro(task)
 
-                    # Verify no freeze/thaw operations occurred
-                    task._begin_freeze.assert_not_called()
-                    task._end_freeze.assert_not_called()
+                # Verify no freeze/thaw operations occurred
+                task._begin_freeze.assert_not_called()
+                task._end_freeze.assert_not_called()
 
 
 class TestErrorHandlingAndRecovery:
@@ -1041,54 +1049,57 @@ class TestErrorHandlingAndRecovery:
     @pytest.mark.asyncio
     async def test_weekly_loop_error_sends_owner_notification(self, mock_bot):
         """Test that weekly loop errors send owner notifications."""
-        with patch.object(TransactionFreezeTask, 'weekly_loop'):
-            task = TransactionFreezeTask(mock_bot)
+        # Don't patch weekly_loop - let it initialize naturally then cancel it
+        task = TransactionFreezeTask(mock_bot)
+        task.weekly_loop.cancel()  # Stop the actual loop
 
-            with patch('tasks.transaction_freeze.get_config') as mock_config:
-                config = MagicMock()
-                config.offseason_flag = False
-                mock_config.return_value = config
+        with patch('tasks.transaction_freeze.get_config') as mock_config:
+            config = MagicMock()
+            config.offseason_flag = False
+            mock_config.return_value = config
 
-                with patch('tasks.transaction_freeze.league_service') as mock_league:
-                    # Simulate error getting current state
-                    mock_league.get_current_state = AsyncMock(
-                        side_effect=Exception("Database connection failed")
-                    )
+            with patch('tasks.transaction_freeze.league_service') as mock_league:
+                # Simulate error getting current state
+                mock_league.get_current_state = AsyncMock(
+                    side_effect=Exception("Database connection failed")
+                )
 
-                    task._send_owner_notification = AsyncMock()
+                task._send_owner_notification = AsyncMock()
 
-                    # Manually call the loop logic
-                    await task.weekly_loop()
+                # Call the loop callback directly
+                await task.weekly_loop.coro(task)
 
-                    # Verify owner was notified
-                    task._send_owner_notification.assert_called_once()
+                # Verify owner was notified
+                task._send_owner_notification.assert_called_once()
 
-                    # Verify warning flag was set
-                    assert task.weekly_warning_sent is True
+                # Verify warning flag was set
+                assert task.weekly_warning_sent is True
 
     @pytest.mark.asyncio
     async def test_owner_notification_prevents_duplicates(self, mock_bot):
         """Test that duplicate owner notifications are prevented."""
-        with patch.object(TransactionFreezeTask, 'weekly_loop'):
-            task = TransactionFreezeTask(mock_bot)
-            task.weekly_warning_sent = True  # Already sent
+        # Don't patch weekly_loop - let it initialize naturally then cancel it
+        task = TransactionFreezeTask(mock_bot)
+        task.weekly_loop.cancel()  # Stop the actual loop
+        task.weekly_warning_sent = True  # Already sent
 
-            with patch('tasks.transaction_freeze.get_config') as mock_config:
-                config = MagicMock()
-                config.offseason_flag = False
-                mock_config.return_value = config
+        with patch('tasks.transaction_freeze.get_config') as mock_config:
+            config = MagicMock()
+            config.offseason_flag = False
+            mock_config.return_value = config
 
-                with patch('tasks.transaction_freeze.league_service') as mock_league:
-                    mock_league.get_current_state = AsyncMock(
-                        side_effect=Exception("Another error")
-                    )
+            with patch('tasks.transaction_freeze.league_service') as mock_league:
+                mock_league.get_current_state = AsyncMock(
+                    side_effect=Exception("Another error")
+                )
 
-                    task._send_owner_notification = AsyncMock()
+                task._send_owner_notification = AsyncMock()
 
-                    await task.weekly_loop()
+                # Call the loop callback directly
+                await task.weekly_loop.coro(task)
 
-                    # Verify owner was NOT notified again
-                    task._send_owner_notification.assert_not_called()
+                # Verify owner was NOT notified again
+                task._send_owner_notification.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_send_owner_notification(self, mock_bot):
@@ -1112,61 +1123,66 @@ class TestWeeklyScheduleTiming:
     @pytest.mark.asyncio
     async def test_freeze_triggers_monday_midnight(self, mock_bot, current_state):
         """Test that freeze triggers on Monday at 00:00."""
-        with patch.object(TransactionFreezeTask, 'weekly_loop'):
-            task = TransactionFreezeTask(mock_bot)
+        # Don't patch weekly_loop - let it initialize naturally then cancel it
+        task = TransactionFreezeTask(mock_bot)
+        task.weekly_loop.cancel()  # Stop the actual loop
+        task.weekly_warning_sent = True  # Set to True (as if Saturday thaw completed)
 
-            # Mock datetime to be Monday (weekday=0) at 00:00
-            mock_now = MagicMock()
-            mock_now.weekday.return_value = 0  # Monday
-            mock_now.hour = 0
+        # Mock datetime to be Monday (weekday=0) at 00:00
+        mock_now = MagicMock()
+        mock_now.weekday.return_value = 0  # Monday
+        mock_now.hour = 0
 
-            with patch('tasks.transaction_freeze.datetime') as mock_datetime:
-                mock_datetime.now.return_value = mock_now
+        with patch('tasks.transaction_freeze.datetime') as mock_datetime:
+            mock_datetime.now.return_value = mock_now
 
-                with patch('tasks.transaction_freeze.get_config') as mock_config:
-                    config = MagicMock()
-                    config.offseason_flag = False
-                    mock_config.return_value = config
+            with patch('tasks.transaction_freeze.get_config') as mock_config:
+                config = MagicMock()
+                config.offseason_flag = False
+                mock_config.return_value = config
 
-                    with patch('tasks.transaction_freeze.league_service') as mock_league:
-                        mock_league.get_current_state = AsyncMock(return_value=current_state)
+                with patch('tasks.transaction_freeze.league_service') as mock_league:
+                    mock_league.get_current_state = AsyncMock(return_value=current_state)
 
-                        task._begin_freeze = AsyncMock()
-                        task._end_freeze = AsyncMock()
+                    task._begin_freeze = AsyncMock()
+                    task._end_freeze = AsyncMock()
 
-                        await task.weekly_loop()
+                    # Call the loop callback directly
+                    await task.weekly_loop.coro(task)
 
-                        # Verify freeze began
-                        task._begin_freeze.assert_called_once_with(current_state)
-                        task._end_freeze.assert_not_called()
+                    # Verify freeze began
+                    task._begin_freeze.assert_called_once_with(current_state)
+                    task._end_freeze.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_thaw_triggers_saturday_midnight(self, mock_bot, frozen_state):
         """Test that thaw triggers on Saturday at 00:00."""
-        with patch.object(TransactionFreezeTask, 'weekly_loop'):
-            task = TransactionFreezeTask(mock_bot)
+        # Don't patch weekly_loop - let it initialize naturally then cancel it
+        task = TransactionFreezeTask(mock_bot)
+        task.weekly_loop.cancel()  # Stop the actual loop
 
-            # Mock datetime to be Saturday (weekday=5) at 00:00
-            mock_now = MagicMock()
-            mock_now.weekday.return_value = 5  # Saturday
-            mock_now.hour = 0
+        # Mock datetime to be Saturday (weekday=5) at 00:00
+        mock_now = MagicMock()
+        mock_now.weekday.return_value = 5  # Saturday
+        mock_now.hour = 0
 
-            with patch('tasks.transaction_freeze.datetime') as mock_datetime:
-                mock_datetime.now.return_value = mock_now
+        with patch('tasks.transaction_freeze.datetime') as mock_datetime:
+            mock_datetime.now.return_value = mock_now
 
-                with patch('tasks.transaction_freeze.get_config') as mock_config:
-                    config = MagicMock()
-                    config.offseason_flag = False
-                    mock_config.return_value = config
+            with patch('tasks.transaction_freeze.get_config') as mock_config:
+                config = MagicMock()
+                config.offseason_flag = False
+                mock_config.return_value = config
 
-                    with patch('tasks.transaction_freeze.league_service') as mock_league:
-                        mock_league.get_current_state = AsyncMock(return_value=frozen_state)
+                with patch('tasks.transaction_freeze.league_service') as mock_league:
+                    mock_league.get_current_state = AsyncMock(return_value=frozen_state)
 
-                        task._begin_freeze = AsyncMock()
-                        task._end_freeze = AsyncMock()
+                    task._begin_freeze = AsyncMock()
+                    task._end_freeze = AsyncMock()
 
-                        await task.weekly_loop()
+                    # Call the loop callback directly
+                    await task.weekly_loop.coro(task)
 
-                        # Verify freeze ended
-                        task._end_freeze.assert_called_once_with(frozen_state)
-                        task._begin_freeze.assert_not_called()
+                    # Verify freeze ended
+                    task._end_freeze.assert_called_once_with(frozen_state)
+                    task._begin_freeze.assert_not_called()

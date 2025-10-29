@@ -240,15 +240,22 @@ class SubmitConfirmationModal(discord.ui.Modal):
                 # Submit the transaction for NEXT week
                 transactions = await self.builder.submit_transaction(week=current_state.week + 1)
 
+                # Mark transactions as frozen for weekly processing
+                for txn in transactions:
+                    txn.frozen = True
+
+                # POST transactions to database
+                created_transactions = await transaction_service.create_transaction_batch(transactions)
+
                 # Post to #transaction-log channel
                 bot = interaction.client
-                await post_transaction_to_log(bot, transactions, team=self.builder.team)
+                await post_transaction_to_log(bot, created_transactions, team=self.builder.team)
 
                 # Create success message
                 success_msg = f"✅ **Transaction Submitted Successfully!**\n\n"
-                success_msg += f"**Move ID:** `{transactions[0].moveid}`\n"
-                success_msg += f"**Moves:** {len(transactions)}\n"
-                success_msg += f"**Effective Week:** {transactions[0].week}\n\n"
+                success_msg += f"**Move ID:** `{created_transactions[0].moveid}`\n"
+                success_msg += f"**Moves:** {len(created_transactions)}\n"
+                success_msg += f"**Effective Week:** {created_transactions[0].week}\n\n"
 
                 success_msg += "**Transaction Details:**\n"
                 for move in self.builder.moves:

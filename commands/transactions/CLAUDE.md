@@ -305,6 +305,13 @@ Run tests with:
   - Immediate database POST and player team updates
   - Same interactive UI with "immediate" submission handler
   - Supports multiple moves in single transaction
+- ✅ **CRITICAL FIX: Scheduled Transaction Database Persistence** (October 2025)
+  - **Bug**: `/dropadd` transactions were posted to Discord but NEVER saved to database
+  - **Impact**: Week 19 transactions were completely lost - posted to Discord but freeze task found 0 transactions
+  - **Root Cause**: `submit_transaction()` only created Transaction objects in memory without database POST
+  - **Fix**: Added `create_transaction_batch()` call with `frozen=True` flag in scheduled submission handler
+  - **Result**: Transactions now properly persist to database for weekly freeze processing
+  - **Files Changed**: `views/transaction_embed.py:243-248`, `tests/test_views_transaction_embed.py:255-285`
 
 ### Previous Enhancements
 - ✅ **Multi-Team Trade System**: Complete `/trade` command group for 2+ team trades

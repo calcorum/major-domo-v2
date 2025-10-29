@@ -321,6 +321,8 @@ This task is designed to run only during active drafts (~2 weeks per year). When
 
 **Schedule:** Every minute (checks for specific times to trigger actions)
 
+**📋 Implementation Documentation:** See `TRANSACTION_EXECUTION_AUTOMATION.md` for detailed automation plan
+
 **Operations:**
 - **Freeze Begin (Monday 00:00):**
   - Increments league week
@@ -345,6 +347,43 @@ This task is designed to run only during active drafts (~2 weeks per year). When
 - **GM Notifications:** Direct messages to managers about cancelled moves
 - **Comprehensive Logging:** Detailed logs for all freeze/thaw operations
 - **Error Recovery:** Owner notifications on failures
+
+#### ✅ Automated Player Roster Updates (Implemented October 2025)
+**Feature Status:** Player roster updates now execute automatically during Monday freeze period.
+
+**Implementation Details:**
+- **Helper Method:** `_execute_player_update(player_id, new_team_id, player_name)` (lines 447-511)
+  - Executes `PATCH /players/{player_id}?team_id={new_team_id}` via API client
+  - Returns boolean success/failure status
+  - Comprehensive logging with player/team context
+  - Proper exception handling and re-raising
+
+- **Integration Point:** `_run_transactions()` method (lines 348-379)
+  - **Timing:** Executes on Monday 00:00 when freeze begins and week increments
+  - Processes ALL transactions for the new week:
+    - Regular transactions (submitted before freeze)
+    - Previously frozen transactions that won contests
+  - Rate limiting: 100ms delay between player updates
+  - Success/failure tracking with detailed logs
+
+- **Saturday Thaw Unchanged:** `_process_frozen_transactions()` only updates database records (cancelled/unfrozen status) - NO player PATCHes on Saturday
+
+**Transaction Execution Timeline:**
+1. **Monday 00:00** - Freeze begins, week increments, **player PATCHes execute**
+2. **Monday-Saturday** - Teams submit frozen transactions (no execution)
+3. **Saturday 00:00** - Resolve contests, update DB records only
+4. **Next Monday 00:00** - Winning frozen transactions execute as part of new week
+
+**Performance:**
+- Rate limiting: 100ms between requests (prevents API overload)
+- Typical execution: 31 transactions = ~3.1 seconds
+- Graceful failure handling: Continues processing on individual errors
+
+**Documentation:** See `TRANSACTION_EXECUTION_AUTOMATION.md` for:
+- Complete implementation details and code examples
+- Error handling strategies and retry logic
+- Testing approaches and deployment checklist
+- Week 19 manual execution example (31 transactions, 100% success rate)
 
 #### Configuration
 The freeze task respects configuration settings:

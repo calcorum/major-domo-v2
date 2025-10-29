@@ -4,6 +4,7 @@ Transaction Freeze/Thaw Task for Discord Bot v2.0
 Automated weekly system for freezing and processing transactions.
 Runs on a schedule to increment weeks and process contested transactions.
 """
+import asyncio
 import random
 from datetime import datetime, UTC
 from typing import Dict, List, Tuple, Set
@@ -344,8 +345,38 @@ class TransactionFreezeTask:
             transactions = response.get('transactions', [])
             self.logger.info(f"Processing {len(transactions)} regular transactions for week {current.week}")
 
-            # Note: The actual player updates would happen via the API here
-            # For now, we just log them - the API handles the actual roster updates
+            # Execute player roster updates for all transactions
+            success_count = 0
+            failure_count = 0
+
+            for transaction in transactions:
+                try:
+                    # Update player's team via PATCH /players/{player_id}?team_id={new_team_id}
+                    await self._execute_player_update(
+                        player_id=transaction['player']['id'],
+                        new_team_id=transaction['newteam']['id'],
+                        player_name=transaction['player']['name']
+                    )
+                    success_count += 1
+
+                    # Rate limiting: 100ms delay between requests to avoid API overload
+                    await asyncio.sleep(0.1)
+
+                except Exception as e:
+                    self.logger.error(
+                        f"Failed to execute transaction for {transaction['player']['name']}",
+                        player_id=transaction['player']['id'],
+                        new_team_id=transaction['newteam']['id'],
+                        error=str(e)
+                    )
+                    failure_count += 1
+
+            self.logger.info(
+                f"Transaction execution complete for week {current.week}",
+                success=success_count,
+                failures=failure_count,
+                total=len(transactions)
+            )
 
         except Exception as e:
             self.logger.error(f"Error running transactions: {e}", exc_info=True)
@@ -441,6 +472,72 @@ class TransactionFreezeTask:
 
         except Exception as e:
             self.logger.error(f"Error during freeze processing: {e}", exc_info=True)
+            raise
+
+    async def _execute_player_update(
+        self,
+        player_id: int,
+        new_team_id: int,
+        player_name: str
+    ) -> bool:
+        """
+        Execute a player roster update via API PATCH.
+
+        Args:
+            player_id: Player database ID
+            new_team_id: New team ID to assign
+            player_name: Player name for logging
+
+        Returns:
+            True if update successful, False otherwise
+
+        Raises:
+            Exception: If API call fails
+        """
+        try:
+            self.logger.info(
+                f"Updating player roster",
+                player_id=player_id,
+                player_name=player_name,
+                new_team_id=new_team_id
+            )
+
+            # Get API client from transaction service
+            client = await transaction_service.get_client()
+
+            # Execute PATCH request to update player's team
+            response = await client.patch(
+                f'players/{player_id}',
+                params=[('team_id', str(new_team_id))]
+            )
+
+            # Verify response (200 or 204 indicates success)
+            if response is not None:
+                self.logger.info(
+                    f"Successfully updated player roster",
+                    player_id=player_id,
+                    player_name=player_name,
+                    new_team_id=new_team_id
+                )
+                return True
+            else:
+                self.logger.warning(
+                    f"Player update returned no response",
+                    player_id=player_id,
+                    player_name=player_name,
+                    new_team_id=new_team_id
+                )
+                return False
+
+        except Exception as e:
+            self.logger.error(
+                f"Failed to update player roster",
+                player_id=player_id,
+                player_name=player_name,
+                new_team_id=new_team_id,
+                error=str(e),
+                exc_info=True
+            )
             raise
 
     async def _send_freeze_announcement(self, week: int, is_beginning: bool):
