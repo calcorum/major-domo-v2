@@ -62,13 +62,21 @@ class CustomCommandsCommands(commands.Cog):
         #     description=response_content,
         #     color=EmbedColors.PRIMARY
         # )
-        
+
         # # Add creator info in footer
         # embed.set_footer(
         #     text=f"Created by {command.creator.username} • Used {command.use_count} times"
         # )
-        
-        await interaction.followup.send(content=response_content)
+
+        # Send with mentions enabled (users and roles, but not @everyone/@here)
+        await interaction.followup.send(
+            content=response_content,
+            allowed_mentions=discord.AllowedMentions(
+                users=True,     # Allow user mentions (<@123456789>)
+                roles=True,     # Allow role mentions (<@&987654321>)
+                everyone=False  # Block @everyone/@here (already validated)
+            )
+        )
     
     @execute_custom_command.autocomplete('name')
     async def execute_custom_command_autocomplete(
