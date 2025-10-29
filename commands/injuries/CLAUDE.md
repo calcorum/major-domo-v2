@@ -83,27 +83,45 @@ Record a new injury for a player on your team.
 
 **Parameters:**
 - `player_name` (required): Name of the player to injure
-- `this_week` (required): Current week number
-- `this_game` (required): Current game number (1-4)
+- `this_week` (required): Current week number (1-21, including playoffs)
+- `this_game` (required): Current game number (varies by week - see below)
 - `injury_games` (required): Total number of games player will be out
 
-**Validation:**
+**Week and Game Validation:**
+- **Regular Season (Weeks 1-18)**: Game number must be 1-4
+- **Playoff Round 1 (Week 19)**: Game number must be 1-5 (best of 5 series)
+- **Playoff Round 2 (Week 20)**: Game number must be 1-7 (best of 7 series)
+- **Playoff Round 3 (Week 21)**: Game number must be 1-7 (best of 7 series)
+
+**Additional Validation:**
 - Player must exist in current season
 - Player cannot already have an active injury
-- Game number must be between 1 and 4
 - Injury duration must be at least 1 game
 
 **Automatic Calculations:**
 The command automatically calculates:
-1. Injury start date (adjusts for game 4 edge case)
+1. Injury start date (adjusts for final game of series edge case)
 2. Return date based on injury duration
-3. Week rollover when games exceed 4 per week
+3. Week rollover when games exceed the max for that week (4 regular season, 5-7 playoffs)
 
-**Example:**
+**Examples:**
+
+Regular Season:
 ```
 /injury set-new Mike Trout 5 2 4
 ```
 This records an injury occurring in week 5, game 2, with player out for 4 games (returns week 6, game 2).
+
+Playoffs:
+```
+/injury set-new Shohei Ohtani 19 3 2
+```
+This records an injury in playoff round 1 (week 19), game 3, with player out for 2 games (returns week 19, game 5).
+
+```
+/injury set-new Aaron Judge 20 5 8
+```
+This records an injury in playoff round 2 (week 20), game 5, with player out for 8 games (spans multiple weeks).
 
 **Response:**
 - Confirmation embed with injury details
@@ -479,6 +497,34 @@ The legacy injury commands were located in:
 - `discord-app/cogs/players.py` - `set_injury_slash()` and `clear_injury_slash()`
 - `discord-app/cogs/players.py` - `injury_roll_slash()` with manual rating/games input
 
+## Configuration
+
+The injury system uses configuration constants from `config.py` to validate week and game numbers:
+
+### Season Structure
+```python
+weeks_per_season: int = 18           # Regular season weeks
+games_per_week: int = 4              # Games per week in regular season
+playoff_weeks_per_season: int = 3    # Playoff weeks (19-21)
+playoff_round_one_games: int = 5     # Week 19: Best of 5
+playoff_round_two_games: int = 7     # Week 20: Best of 7
+playoff_round_three_games: int = 7   # Week 21: Best of 7
+```
+
+These constants are used in:
+- **`views/modals.py`**: `InjuryRollModal` and `ClearInjuryModal` for week/game validation
+- **Validation Logic**: Ensures proper game number ranges based on week (regular season vs playoff rounds)
+
+### Week/Game Limits
+The injury system automatically enforces proper limits based on the week:
+
+| Week Range | Season Phase | Max Games | Series Type |
+|------------|--------------|-----------|-------------|
+| 1-18       | Regular      | 4         | N/A         |
+| 19         | Playoff R1   | 5         | Best of 5   |
+| 20         | Playoff R2   | 7         | Best of 7   |
+| 21         | Playoff R3   | 7         | Best of 7   |
+
 ### Key Improvements
 
 1. **Cleaner Command Structure:** Using GroupCog for organized subcommands (`/injury roll`, `/injury set-new`, `/injury clear`)
@@ -492,6 +538,7 @@ The legacy injury commands were located in:
 9. **Testability:** Comprehensive unit tests (26 tests) with mocked API calls
 10. **Modern UI:** Consistent embed-based responses with color coding
 11. **Official Tables:** Complete Strat-o-Matic injury tables built into the command
+12. **Playoff Support:** Full support for injury rolls during playoff weeks with series-specific game limits (October 2025)
 
 ### Migration Details
 
@@ -514,6 +561,9 @@ Players must have their `injury_rating` field updated to the new format for the 
 
 ---
 
-**Last Updated:** January 2025
+**Last Updated:** October 2025
 **Version:** 2.0
 **Status:** Active
+
+**Recent Updates:**
+- **October 2025**: Added playoff support with series-specific game validation (weeks 19-21)
