@@ -13,6 +13,7 @@ from discord import app_commands
 from config import get_config
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
+from utils.permissions import league_admin_only
 from views.embeds import EmbedColors, EmbedTemplate
 from services.league_service import league_service
 from services.transaction_service import transaction_service
@@ -40,6 +41,7 @@ class LeagueManagementCommands(commands.Cog):
         name="admin-freeze-begin",
         description="[ADMIN] Manually trigger freeze begin (increment week, set freeze)"
     )
+    @league_admin_only()
     @logged_command("/admin-freeze-begin")
     async def admin_freeze_begin(self, interaction: discord.Interaction):
         """Manually trigger the freeze begin process."""
@@ -121,6 +123,7 @@ class LeagueManagementCommands(commands.Cog):
         name="admin-freeze-end",
         description="[ADMIN] Manually trigger freeze end (process transactions, unfreeze)"
     )
+    @league_admin_only()
     @logged_command("/admin-freeze-end")
     async def admin_freeze_end(self, interaction: discord.Interaction):
         """Manually trigger the freeze end process."""
@@ -246,6 +249,7 @@ class LeagueManagementCommands(commands.Cog):
     @app_commands.describe(
         week="Week number to set (1-24)"
     )
+    @league_admin_only()
     @logged_command("/admin-set-week")
     async def admin_set_week(self, interaction: discord.Interaction, week: int):
         """Manually set the current league week."""
@@ -326,6 +330,7 @@ class LeagueManagementCommands(commands.Cog):
         app_commands.Choice(name="Freeze (True)", value=1),
         app_commands.Choice(name="Unfreeze (False)", value=0)
     ])
+    @league_admin_only()
     @logged_command("/admin-set-freeze")
     async def admin_set_freeze(self, interaction: discord.Interaction, freeze: int):
         """Manually toggle the freeze status."""
@@ -417,6 +422,7 @@ class LeagueManagementCommands(commands.Cog):
         week="Week to process transactions for (defaults to current week)",
         dry_run="Preview results without making changes (default: False)"
     )
+    @league_admin_only()
     @logged_command("/admin-process-transactions")
     async def admin_process_transactions(
         self,

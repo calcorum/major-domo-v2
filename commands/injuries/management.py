@@ -29,6 +29,7 @@ from utils import team_utils
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
 from utils.autocomplete import player_autocomplete
+from utils.permissions import league_only
 from views.base import ConfirmationView
 from views.embeds import EmbedTemplate
 from views.modals import PitcherRestModal, BatterInjuryModal
@@ -61,6 +62,7 @@ class InjuryGroup(app_commands.Group):
     @app_commands.command(name="roll", description="Roll for injury based on player's injury rating")
     @app_commands.describe(player_name="Player name")
     @app_commands.autocomplete(player_name=player_autocomplete)
+    @league_only()
     @logged_command("/injury roll")
     async def injury_roll(self, interaction: discord.Interaction, player_name: str):
         """Roll for injury using 3d6 dice and injury tables."""
@@ -343,6 +345,7 @@ class InjuryGroup(app_commands.Group):
         this_game="Current game number (1-4)",
         injury_games="Number of games player will be out"
     )
+    @league_only()
     @logged_command("/injury set-new")
     async def injury_set_new(
         self,
@@ -547,6 +550,7 @@ class InjuryGroup(app_commands.Group):
     @app_commands.command(name="clear", description="Clear a player's injury (requires SBA Players role)")
     @app_commands.describe(player_name="Player name to clear injury")
     @app_commands.autocomplete(player_name=player_autocomplete)
+    @league_only()
     @logged_command("/injury clear")
     async def injury_clear(self, interaction: discord.Interaction, player_name: str):
         """Clear a player's active injury."""

@@ -13,6 +13,7 @@ from config import get_config
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
 from utils.autocomplete import player_autocomplete
+from utils.permissions import league_only
 from utils.team_utils import validate_user_has_team
 
 from services.transaction_builder import (
@@ -49,6 +50,7 @@ class DropAddCommands(commands.Cog):
         app_commands.Choice(name="Minor League", value="mil"),
         app_commands.Choice(name="Free Agency", value="fa")
     ])
+    @league_only()
     @logged_command("/dropadd")
     async def dropadd(
         self,
@@ -246,6 +248,7 @@ class DropAddCommands(commands.Cog):
         name="cleartransaction",
         description="Clear your current transaction builder"
     )
+    @league_only()
     @logged_command("/cleartransaction")
     async def clear_transaction(self, interaction: discord.Interaction):
         """Clear the user's current transaction builder."""

@@ -13,6 +13,7 @@ from config import get_config
 from services.schedule_service import schedule_service
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
+from utils.permissions import requires_team
 from views.embeds import EmbedColors, EmbedTemplate
 
 
@@ -32,6 +33,7 @@ class ScheduleCommands(commands.Cog):
         week="Week number to show (optional)",
         team="Team abbreviation to filter by (optional)"
     )
+    @requires_team()
     @logged_command("/schedule")
     async def schedule(
         self,

@@ -13,6 +13,7 @@ from discord import app_commands
 from config import get_config
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
+from utils.permissions import requires_team
 from utils.team_utils import get_user_major_league_team
 from views.embeds import EmbedColors, EmbedTemplate
 from views.base import PaginationView
@@ -112,6 +113,7 @@ class TransactionCommands(commands.Cog):
     @app_commands.describe(
         show_cancelled="Include cancelled transactions in the display (default: False)"
     )
+    @requires_team()
     @logged_command("/mymoves")
     async def my_moves(
         self, 
@@ -186,6 +188,7 @@ class TransactionCommands(commands.Cog):
     @app_commands.describe(
         team="Team abbreviation to check (defaults to your team)"
     )
+    @requires_team()
     @logged_command("/legal")
     async def legal(
         self,

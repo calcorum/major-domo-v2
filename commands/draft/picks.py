@@ -18,6 +18,7 @@ from services.team_service import team_service
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command, requires_draft_period
 from utils.draft_helpers import validate_cap_space, format_pick_display
+from utils.permissions import requires_team
 from views.draft_views import (
     create_player_draft_card,
     create_pick_illegal_embed,
@@ -78,6 +79,7 @@ class DraftPicksCog(commands.Cog):
     )
     @discord.app_commands.autocomplete(player=fa_player_autocomplete)
     @requires_draft_period
+    @requires_team()
     @logged_command("/draft")
     async def draft_pick(
         self,

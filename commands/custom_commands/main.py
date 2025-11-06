@@ -17,6 +17,7 @@ from services.custom_commands_service import (
 from models.custom_command import CustomCommandSearchFilters
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
+from utils.permissions import requires_team
 from views.embeds import EmbedTemplate, EmbedColors
 from views.custom_commands import (
     CustomCommandCreateModal,
@@ -101,6 +102,7 @@ class CustomCommandsCommands(commands.Cog):
             return []
     
     @app_commands.command(name="cc-create", description="Create a new custom command")
+    @requires_team()
     @logged_command("/cc-create")
     async def create_custom_command(self, interaction: discord.Interaction):
         """Create a new custom command using an interactive modal."""
@@ -172,6 +174,7 @@ class CustomCommandsCommands(commands.Cog):
     
     @app_commands.command(name="cc-edit", description="Edit one of your custom commands")
     @app_commands.describe(name="Name of the command to edit")
+    @requires_team()
     @logged_command("/cc-edit")
     async def edit_custom_command(self, interaction: discord.Interaction, name: str):
         """Edit an existing custom command."""
@@ -266,6 +269,7 @@ class CustomCommandsCommands(commands.Cog):
     
     @app_commands.command(name="cc-delete", description="Delete one of your custom commands")
     @app_commands.describe(name="Name of the command to delete")
+    @requires_team()
     @logged_command("/cc-delete")
     async def delete_custom_command(self, interaction: discord.Interaction, name: str):
         """Delete a custom command with confirmation."""
@@ -342,6 +346,7 @@ class CustomCommandsCommands(commands.Cog):
             return []
     
     @app_commands.command(name="cc-mine", description="View and manage your custom commands")
+    @requires_team()
     @logged_command("/cc-mine")
     async def my_custom_commands(self, interaction: discord.Interaction):
         """Show user's custom commands with management interface."""

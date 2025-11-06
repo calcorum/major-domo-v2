@@ -13,6 +13,7 @@ from config import get_config
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
 from utils.discord_helpers import set_channel_visibility
+from utils.permissions import league_admin_only
 from views.embeds import EmbedColors, EmbedTemplate
 
 
@@ -45,6 +46,7 @@ class AdminCommands(commands.Cog):
         name="admin-status",
         description="Display bot status and system information"
     )
+    @league_admin_only()
     @logged_command("/admin-status")
     async def admin_status(self, interaction: discord.Interaction):
         """Display comprehensive bot status information."""
@@ -99,6 +101,7 @@ class AdminCommands(commands.Cog):
         name="admin-help",
         description="Display available admin commands and their usage"
     )
+    @league_admin_only()
     @logged_command("/admin-help")
     async def admin_help(self, interaction: discord.Interaction):
         """Display comprehensive admin help information."""
@@ -157,6 +160,7 @@ class AdminCommands(commands.Cog):
     @app_commands.describe(
         cog="Name of the cog to reload (e.g., 'commands.players.info')"
     )
+    @league_admin_only()
     @logged_command("/admin-reload")
     async def admin_reload(self, interaction: discord.Interaction, cog: str):
         """Reload a specific cog for hot-swapping code changes."""
@@ -209,6 +213,7 @@ class AdminCommands(commands.Cog):
         local="Sync to this guild only (fast, for development)",
         clear_local="Clear locally synced commands (does not sync after clearing)"
     )
+    @league_admin_only()
     @logged_command("/admin-sync")
     async def admin_sync(
         self,
@@ -292,7 +297,7 @@ class AdminCommands(commands.Cog):
         await interaction.followup.send(embed=embed)
 
     @commands.command(name="admin-sync")
-    @commands.has_permissions(administrator=True)
+    @league_admin_only()
     async def admin_sync_prefix(self, ctx: commands.Context):
         """
         Prefix command version of admin-sync for bootstrap scenarios.
@@ -346,6 +351,7 @@ class AdminCommands(commands.Cog):
     @app_commands.describe(
         count="Number of messages to delete (1-100)"
     )
+    @league_admin_only()
     @logged_command("/admin-clear")
     async def admin_clear(self, interaction: discord.Interaction, count: int):
         """Clear a specified number of messages from the channel."""
@@ -412,6 +418,7 @@ class AdminCommands(commands.Cog):
         message="Announcement message to send",
         mention_everyone="Whether to mention @everyone (default: False)"
     )
+    @league_admin_only()
     @logged_command("/admin-announce")
     async def admin_announce(
         self, 
@@ -455,6 +462,7 @@ class AdminCommands(commands.Cog):
         app_commands.Choice(name="On", value="on"),
         app_commands.Choice(name="Off", value="off")
     ])
+    @league_admin_only()
     @logged_command("/admin-maintenance")
     async def admin_maintenance(self, interaction: discord.Interaction, mode: str):
         """Toggle maintenance mode to prevent normal command usage."""
@@ -504,6 +512,7 @@ class AdminCommands(commands.Cog):
         name="admin-clear-scorecards",
         description="Manually clear the live scorebug channel and hide it from members"
     )
+    @league_admin_only()
     @logged_command("/admin-clear-scorecards")
     async def admin_clear_scorecards(self, interaction: discord.Interaction):
         """

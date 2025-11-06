@@ -13,6 +13,7 @@ from discord import app_commands
 
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
+from utils.permissions import league_admin_only
 from views.embeds import EmbedColors, EmbedTemplate
 
 
@@ -42,6 +43,7 @@ class UserManagementCommands(commands.Cog):
         duration="Duration in minutes (1-10080, max 7 days)",
         reason="Reason for the timeout"
     )
+    @league_admin_only()
     @logged_command("/admin-timeout")
     async def admin_timeout(
         self,
@@ -117,6 +119,7 @@ class UserManagementCommands(commands.Cog):
         user="User to remove timeout from",
         reason="Reason for removing the timeout"
     )
+    @league_admin_only()
     @logged_command("/admin-untimeout")
     async def admin_untimeout(
         self,
@@ -179,6 +182,7 @@ class UserManagementCommands(commands.Cog):
         user="User to kick",
         reason="Reason for the kick"
     )
+    @league_admin_only()
     @logged_command("/admin-kick")
     async def admin_kick(
         self,
@@ -255,6 +259,7 @@ class UserManagementCommands(commands.Cog):
         reason="Reason for the ban",
         delete_messages="Whether to delete user's messages (default: False)"
     )
+    @league_admin_only()
     @logged_command("/admin-ban")
     async def admin_ban(
         self,
@@ -340,6 +345,7 @@ class UserManagementCommands(commands.Cog):
         user_id="User ID to unban",
         reason="Reason for the unban"
     )
+    @league_admin_only()
     @logged_command("/admin-unban")
     async def admin_unban(
         self,
@@ -425,6 +431,7 @@ class UserManagementCommands(commands.Cog):
     @app_commands.describe(
         user="User to get information about"
     )
+    @league_admin_only()
     @logged_command("/admin-userinfo")
     async def admin_userinfo(
         self,

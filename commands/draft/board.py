@@ -12,6 +12,7 @@ from config import get_config
 from services.draft_pick_service import draft_pick_service
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
+from utils.permissions import requires_team
 from views.draft_views import create_draft_board_embed
 from views.embeds import EmbedTemplate
 
@@ -30,6 +31,7 @@ class DraftBoardCommands(commands.Cog):
     @discord.app_commands.describe(
         round_number="Round number to view (1-32)"
     )
+    @requires_team()
     @logged_command("/draft-board")
     async def draft_board(
         self,
