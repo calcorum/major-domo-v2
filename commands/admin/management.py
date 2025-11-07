@@ -18,6 +18,7 @@ from utils.permissions import league_admin_only
 from views.embeds import EmbedColors, EmbedTemplate
 from services.league_service import league_service
 from services.transaction_service import transaction_service
+from services.player_service import player_service
 
 
 class AdminCommands(commands.Cog):
@@ -658,19 +659,16 @@ class AdminCommands(commands.Cog):
                 requested_by=str(interaction.user)
             )
 
-            # Get all non-frozen, non-cancelled transactions for the target week
-            client = await transaction_service.get_client()
-            params = [
+            # Get all non-frozen, non-cancelled transactions for the target week using service layer
+            transactions = await transaction_service.get_all_items(params=[
                 ('season', str(target_season)),
                 ('week_start', str(target_week)),
                 ('week_end', str(target_week)),
                 ('frozen', 'false'),
                 ('cancelled', 'false')
-            ]
+            ])
 
-            response = await client.get('transactions', params=params)
-
-            if not response or response.get('count', 0) == 0:
+            if not transactions:
                 embed = EmbedTemplate.info(
                     title="No Transactions to Process",
                     description=f"No non-frozen, non-cancelled transactions found for Week {target_week}"
@@ -688,8 +686,7 @@ class AdminCommands(commands.Cog):
                 await interaction.followup.send(embed=embed)
                 return
 
-            # Extract transactions from response
-            transactions = response.get('transactions', [])
+            # Count total transactions
             total_count = len(transactions)
 
             self.logger.info(f"Found {total_count} transactions to process for week {target_week}")
@@ -714,15 +711,11 @@ class AdminCommands(commands.Cog):
 
             for idx, transaction in enumerate(transactions, start=1):
                 try:
-                    player_id = transaction['player']['id']
-                    new_team_id = transaction['newteam']['id']
-                    player_name = transaction['player']['name']
-
-                    # Execute player roster update via API PATCH
+                    # Execute player roster update via service layer
                     await self._execute_player_update(
-                        player_id=player_id,
-                        new_team_id=new_team_id,
-                        player_name=player_name
+                        player_id=transaction.player.id,
+                        new_team_id=transaction.newteam.id,
+                        player_name=transaction.player.name
                     )
 
                     success_count += 1
@@ -745,9 +738,9 @@ class AdminCommands(commands.Cog):
                 except Exception as e:
                     failure_count += 1
                     error_info = {
-                        'player': transaction.get('player', {}).get('name', 'Unknown'),
-                        'player_id': transaction.get('player', {}).get('id', 'N/A'),
-                        'new_team': transaction.get('newteam', {}).get('abbrev', 'Unknown'),
+                        'player': transaction.player.name,
+                        'player_id': transaction.player.id,
+                        'new_team': transaction.newteam.abbrev,
                         'error': str(e)
                     }
                     errors.append(error_info)
@@ -840,7 +833,7 @@ class AdminCommands(commands.Cog):
         player_name: str
     ) -> bool:
         """
-        Execute a player roster update via API PATCH.
+        Execute a player roster update via service layer.
 
         Args:
             player_id: Player database ID
@@ -861,17 +854,14 @@ class AdminCommands(commands.Cog):
                 new_team_id=new_team_id
             )
 
-            # Get API client from transaction service
-            client = await transaction_service.get_client()
-
-            # Execute PATCH request to update player's team
-            response = await client.patch(
-                f'players/{player_id}',
-                params=[('team_id', str(new_team_id))]
+            # Execute player team update via service layer
+            updated_player = await player_service.update_player_team(
+                player_id=player_id,
+                new_team_id=new_team_id
             )
 
-            # Verify response (200 or 204 indicates success)
-            if response is not None:
+            # Verify update was successful
+            if updated_player:
                 self.logger.info(
                     f"Successfully updated player roster",
                     player_id=player_id,
