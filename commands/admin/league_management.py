@@ -415,7 +415,7 @@ class LeagueManagementCommands(commands.Cog):
         await interaction.followup.send(embed=embed)
 
     @app_commands.command(
-        name="admin-process-transactions",
+        name="admin-process-freeze",
         description="[ADMIN] Manually process frozen transactions without changing freeze status"
     )
     @app_commands.describe(
@@ -423,7 +423,7 @@ class LeagueManagementCommands(commands.Cog):
         dry_run="Preview results without making changes (default: False)"
     )
     @league_admin_only()
-    @logged_command("/admin-process-transactions")
+    @logged_command("/admin-process-freeze")
     async def admin_process_transactions(
         self,
         interaction: discord.Interaction,

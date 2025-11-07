@@ -614,7 +614,7 @@ class AdminCommands(commands.Cog):
 
     @app_commands.command(
         name="admin-process-transactions",
-        description="Manually process all transactions for the current week (or specified week)"
+        description="[ADMIN] Manually process all transactions for the current week (or specified week)"
     )
     @app_commands.describe(
         week="Week number to process (optional, defaults to current week)"
