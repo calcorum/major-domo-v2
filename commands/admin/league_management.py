@@ -29,7 +29,7 @@ class LeagueManagementCommands(commands.Cog):
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         """Check if user has admin permissions."""
-        if not interaction.user.guild_permissions.administrator:
+        if not interaction.user.guild_permissions.administrator:  #type:ignore
             await interaction.response.send_message(
                 "❌ You need administrator permissions to use admin commands.",
                 ephemeral=True
