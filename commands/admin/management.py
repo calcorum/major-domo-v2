@@ -730,7 +730,7 @@ class AdminCommands(commands.Cog):
                                   f"❌ Failed: {failure_count}",
                             inline=False
                         )
-                        await status_message.edit(embed=processing_embed)
+                        await status_message.edit(embed=processing_embed) # type: ignore
 
                     # Rate limiting: 100ms delay between requests
                     await asyncio.sleep(0.1)
@@ -749,7 +749,7 @@ class AdminCommands(commands.Cog):
                         f"Failed to execute transaction for {error_info['player']}",
                         player_id=error_info['player_id'],
                         new_team=error_info['new_team'],
-                        error=str(e)
+                        error=e
                     )
 
             # Create completion embed
@@ -807,7 +807,7 @@ class AdminCommands(commands.Cog):
             )
 
             # Update the status message with final results
-            await status_message.edit(embed=completion_embed)
+            await status_message.edit(embed=completion_embed) # type: ignore
 
             self.logger.info(
                 f"Transaction processing complete for week {target_week}",
@@ -884,7 +884,7 @@ class AdminCommands(commands.Cog):
                 player_id=player_id,
                 player_name=player_name,
                 new_team_id=new_team_id,
-                error=str(e),
+                error=e,
                 exc_info=True
             )
             raise
