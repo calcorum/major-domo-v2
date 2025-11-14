@@ -308,11 +308,13 @@ class AdminCommands(commands.Cog):
         Prefix command version of admin-sync for bootstrap scenarios.
 
         Use this when slash commands aren't synced yet and you can't access /admin-sync.
+        Syncs to the current guild only (for multi-bot scenarios).
         """
         self.logger.info(f"Prefix command !admin-sync invoked by {ctx.author} in {ctx.guild}")
 
         try:
-            synced_commands = await self.bot.tree.sync()
+            # Sync to current guild only (not globally) for multi-bot scenarios
+            synced_commands = await self.bot.tree.sync(guild=ctx.guild)
 
             embed = EmbedTemplate.create_base_embed(
                 title="✅ Commands Synced Successfully",
@@ -332,12 +334,13 @@ class AdminCommands(commands.Cog):
             embed.add_field(
                 name="Sync Details",
                 value=f"**Total Commands:** {len(synced_commands)}\n"
+                      f"**Sync Type:** Local Guild\n"
                       f"**Guild ID:** {ctx.guild.id}\n"
                       f"**Time:** {discord.utils.utcnow().strftime('%H:%M:%S UTC')}",
                 inline=False
             )
 
-            embed.set_footer(text="💡 Use /admin-sync (slash command) for future syncs")
+            embed.set_footer(text="💡 Use /admin-sync local:True for guild-only sync")
 
         except Exception as e:
             self.logger.error(f"Prefix command sync failed: {e}", exc_info=True)
