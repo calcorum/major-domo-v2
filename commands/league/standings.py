@@ -13,6 +13,7 @@ from models.team import Team
 from services.standings_service import standings_service
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
+from utils.permissions import requires_team
 from views.embeds import EmbedColors, EmbedTemplate
 
 
@@ -31,6 +32,7 @@ class StandingsCommands(commands.Cog):
         season="Season to show standings for (defaults to current season)",
         division="Show specific division only (optional)"
     )
+    @requires_team()
     @logged_command("/standings")
     async def standings(
         self,
@@ -57,6 +59,7 @@ class StandingsCommands(commands.Cog):
     @discord.app_commands.describe(
         season="Season to show playoff picture for (defaults to current season)"
     )
+    @requires_team()
     @logged_command("/playoff-picture")
     async def playoff_picture(
         self,

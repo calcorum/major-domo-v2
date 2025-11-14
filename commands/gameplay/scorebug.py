@@ -11,6 +11,7 @@ from services.scorebug_service import ScorebugData, ScorebugService
 from services.team_service import team_service
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
+from utils.permissions import league_only
 from utils.scorebug_helpers import create_scorebug_embed
 from views.embeds import EmbedTemplate, EmbedColors
 from exceptions import SheetsException
@@ -34,6 +35,7 @@ class ScorebugCommands(commands.Cog):
     @app_commands.describe(
         url="Full URL to the Google Sheets scorecard or just the sheet key"
     )
+    @league_only()
     @logged_command("/publish-scorecard")
     async def publish_scorecard(
         self,
@@ -147,6 +149,7 @@ class ScorebugCommands(commands.Cog):
     @app_commands.describe(
         full_length="Include full game details (defaults to True)"
     )
+    @league_only()
     @logged_command("/scorebug")
     async def scorebug(
         self,

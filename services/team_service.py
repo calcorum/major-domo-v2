@@ -74,35 +74,34 @@ class TeamService(BaseService[Team]):
 
         Returns:
             List of Team instances owned by the user, optionally filtered by type
+
+        Raises:
+            Exception: If there's an error communicating with the API
+                       Allows caller to distinguish between "no teams" vs "error occurred"
         """
-        try:
-            season = season or get_config().sba_current_season
-            params = [
-                ('owner_id', str(owner_id)),
-                ('season', str(season))
-            ]
-            
-            teams = await self.get_all_items(params=params)
+        season = season or get_config().sba_current_season
+        params = [
+            ('owner_id', str(owner_id)),
+            ('season', str(season))
+        ]
 
-            # Filter by roster type if specified
-            if roster_type and teams:
-                try:
-                    target_type = RosterType(roster_type)
-                    teams = [team for team in teams if team.roster_type() == target_type]
-                    logger.debug(f"Filtered to {len(teams)} {roster_type} teams for owner {owner_id}")
-                except ValueError:
-                    logger.warning(f"Invalid roster_type '{roster_type}' - returning all teams")
+        teams = await self.get_all_items(params=params)
 
-            if teams:
-                logger.debug(f"Found {len(teams)} teams for owner {owner_id} in season {season}")
-                return teams
-            
-            logger.debug(f"No teams found for owner {owner_id} in season {season}")
-            return []
-            
-        except Exception as e:
-            logger.error(f"Error getting teams for owner {owner_id}: {e}")
-            return []
+        # Filter by roster type if specified
+        if roster_type and teams:
+            try:
+                target_type = RosterType(roster_type)
+                teams = [team for team in teams if team.roster_type() == target_type]
+                logger.debug(f"Filtered to {len(teams)} {roster_type} teams for owner {owner_id}")
+            except ValueError:
+                logger.warning(f"Invalid roster_type '{roster_type}' - returning all teams")
+
+        if teams:
+            logger.debug(f"Found {len(teams)} teams for owner {owner_id} in season {season}")
+            return teams
+
+        logger.debug(f"No teams found for owner {owner_id} in season {season}")
+        return []
 
     @cached_single_item(ttl=1800)  # 30-minute cache
     async def get_team_by_owner(self, owner_id: int, season: Optional[int] = None) -> Optional[Team]:

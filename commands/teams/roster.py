@@ -14,6 +14,7 @@ from models.team import Team
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
 from exceptions import BotException
+from utils.permissions import requires_team
 from views.embeds import EmbedTemplate, EmbedColors
 
 
@@ -34,6 +35,7 @@ class TeamRosterCommands(commands.Cog):
         discord.app_commands.Choice(name="Current Week", value="current"),
         discord.app_commands.Choice(name="Next Week", value="next")
     ])
+    @requires_team()
     @logged_command("/roster")
     async def team_roster(self, interaction: discord.Interaction, abbrev: str, 
                          roster_type: str = "current"):

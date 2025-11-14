@@ -16,6 +16,7 @@ from services.schedule_service import ScheduleService
 from services.league_service import league_service
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
+from utils.permissions import league_only
 from views.embeds import EmbedTemplate
 from models.team import RosterType
 
@@ -129,6 +130,7 @@ class VoiceChannelCommands(commands.Cog):
         return channel
 
     @voice_group.command(name="public", description="Create a public voice channel")
+    @league_only()
     @logged_command("/voice-channel public")
     async def create_public_channel(self, interaction: discord.Interaction):
         """Create a public voice channel for gameplay."""
@@ -188,6 +190,7 @@ class VoiceChannelCommands(commands.Cog):
             await interaction.followup.send(embed=embed, ephemeral=True)
 
     @voice_group.command(name="private", description="Create a private team vs team voice channel")
+    @league_only()
     @logged_command("/voice-channel private")
     async def create_private_channel(self, interaction: discord.Interaction):
         """Create a private voice channel for team matchup."""
@@ -347,6 +350,7 @@ class VoiceChannelCommands(commands.Cog):
             await interaction.followup.send(embed=embed, ephemeral=True)
 
     # Deprecated prefix commands with migration messages
+    @league_only()
     @commands.command(name="vc", aliases=["voice", "gameplay"])
     async def deprecated_public_voice(self, ctx: commands.Context):
         """Deprecated command - redirect to new slash command."""
@@ -361,6 +365,7 @@ class VoiceChannelCommands(commands.Cog):
         embed.set_footer(text="💡 Tip: Type /voice-channel and see the available options!")
         await ctx.send(embed=embed)
 
+    @league_only()
     @commands.command(name="private")
     async def deprecated_private_voice(self, ctx: commands.Context):
         """Deprecated command - redirect to new slash command."""

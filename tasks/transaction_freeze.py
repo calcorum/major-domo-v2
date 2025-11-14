@@ -157,7 +157,14 @@ class TransactionFreezeTask:
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.logger = get_contextual_logger(f'{__name__}.TransactionFreezeTask')
-        self.weekly_warning_sent = False  # Prevent duplicate error notifications
+
+        # Track last execution to prevent duplicate operations
+        self.last_freeze_week: int | None = None
+        self.last_thaw_week: int | None = None
+
+        # Track error notifications separately
+        self.error_notification_sent = False
+
         self.logger.info("Transaction freeze/thaw task initialized")
 
         # Start the weekly loop
@@ -202,16 +209,27 @@ class TransactionFreezeTask:
             )
 
             # BEGIN FREEZE: Monday at 00:00, not already frozen
-            if now.weekday() == 0 and now.hour == 0 and not current.freeze and self.weekly_warning_sent:
-                self.logger.info("Triggering freeze begin")
-                await self._begin_freeze(current)
-                self.weekly_warning_sent = False
+            if now.weekday() == 0 and now.hour == 0 and not current.freeze:
+                # Only run if we haven't already frozen this week
+                # Track the week we're freezing FROM (before increment)
+                if self.last_freeze_week != current.week:
+                    self.logger.info("Triggering freeze begin", current_week=current.week)
+                    await self._begin_freeze(current)
+                    self.last_freeze_week = current.week  # Track the week we froze (before increment)
+                    self.error_notification_sent = False  # Reset error flag for new cycle
+                else:
+                    self.logger.debug("Freeze already executed for week", week=current.week)
 
             # END FREEZE: Saturday at 00:00, currently frozen
-            elif now.weekday() == 5 and now.hour == 0 and current.freeze and not self.weekly_warning_sent:
-                self.logger.info("Triggering freeze end")
-                await self._end_freeze(current)
-                self.weekly_warning_sent = True
+            elif now.weekday() == 5 and now.hour == 0 and current.freeze:
+                # Only run if we haven't already thawed this week
+                if self.last_thaw_week != current.week:
+                    self.logger.info("Triggering freeze end", current_week=current.week)
+                    await self._end_freeze(current)
+                    self.last_thaw_week = current.week
+                    self.error_notification_sent = False  # Reset error flag for new cycle
+                else:
+                    self.logger.debug("Thaw already executed for week", week=current.week)
 
             else:
                 self.logger.debug("No freeze/thaw action needed at this time")
@@ -228,9 +246,9 @@ class TransactionFreezeTask:
             )
 
             try:
-                if not self.weekly_warning_sent:
+                if not self.error_notification_sent:
                     await self._send_owner_notification(error_message)
-                    self.weekly_warning_sent = True
+                    self.error_notification_sent = True
             except Exception as notify_error:
                 self.logger.error(f"Failed to send error notification: {notify_error}")
 

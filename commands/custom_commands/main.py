@@ -17,6 +17,7 @@ from services.custom_commands_service import (
 from models.custom_command import CustomCommandSearchFilters
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
+from utils.permissions import requires_team
 from views.embeds import EmbedTemplate, EmbedColors
 from views.custom_commands import (
     CustomCommandCreateModal,
@@ -101,77 +102,20 @@ class CustomCommandsCommands(commands.Cog):
             return []
     
     @app_commands.command(name="cc-create", description="Create a new custom command")
+    @requires_team()
     @logged_command("/cc-create")
     async def create_custom_command(self, interaction: discord.Interaction):
         """Create a new custom command using an interactive modal."""
         # Show the creation modal
         modal = CustomCommandCreateModal()
         await interaction.response.send_modal(modal)
-        
-        # Wait for modal completion
-        await modal.wait()
-        
-        if not modal.is_submitted:
-            return
-        
-        try:
-            # Create the command
-            command = await custom_commands_service.create_command(
-                name=modal.result['name'], # type: ignore
-                content=modal.result['content'], # pyright: ignore[reportOptionalSubscript]
-                creator_discord_id=interaction.user.id,
-                creator_username=interaction.user.name,
-                creator_display_name=interaction.user.display_name,
-                tags=modal.result.get('tags')
-            )
-            
-            # Success embed
-            embed = EmbedTemplate.success(
-                title="Custom Command Created!",
-                description=f"Your command `/cc {command.name}` has been created successfully."
-            )
-            
-            embed.add_field(
-                name="How to use it",
-                value=f"Type `/cc {command.name}` to execute your command.",
-                inline=False
-            )
-            
-            embed.add_field(
-                name="Management",
-                value="Use `/cc-mine` to view and manage all your commands.",
-                inline=False
-            )
-            
-            # Try to get the original interaction for editing
-            try:
-                # Get the interaction that triggered the modal
-                original_response = await interaction.original_response()
-                await interaction.edit_original_response(embed=embed, view=None)
-            except (discord.NotFound, discord.HTTPException):
-                # If we can't edit the original, send a followup
-                await interaction.followup.send(embed=embed, ephemeral=True)
-        
-        except CustomCommandExistsError:
-            embed = EmbedTemplate.error(
-                title="Command Already Exists",
-                description=f"A command named `{modal.result['name']}` already exists.\nTry a different name." # pyright: ignore[reportOptionalSubscript]
-            )
-            await interaction.followup.send(embed=embed, ephemeral=True)
-        
-        except Exception as e:
-            self.logger.error("Failed to create custom command",
-                            command_name=modal.result.get('name'), # pyright: ignore[reportOptionalMemberAccess]
-                            user_id=interaction.user.id,
-                            error=e)
-            embed = EmbedTemplate.error(
-                title="Creation Failed",
-                description="An error occurred while creating your command. Please try again."
-            )
-            await interaction.followup.send(embed=embed, ephemeral=True)
+
+        # Modal's on_submit will show preview with confirmation buttons
+        # The CustomCommandCreateConfirmationView handles actual command creation
     
     @app_commands.command(name="cc-edit", description="Edit one of your custom commands")
     @app_commands.describe(name="Name of the command to edit")
+    @requires_team()
     @logged_command("/cc-edit")
     async def edit_custom_command(self, interaction: discord.Interaction, name: str):
         """Edit an existing custom command."""
@@ -266,6 +210,7 @@ class CustomCommandsCommands(commands.Cog):
     
     @app_commands.command(name="cc-delete", description="Delete one of your custom commands")
     @app_commands.describe(name="Name of the command to delete")
+    @requires_team()
     @logged_command("/cc-delete")
     async def delete_custom_command(self, interaction: discord.Interaction, name: str):
         """Delete a custom command with confirmation."""
@@ -342,6 +287,7 @@ class CustomCommandsCommands(commands.Cog):
             return []
     
     @app_commands.command(name="cc-mine", description="View and manage your custom commands")
+    @requires_team()
     @logged_command("/cc-mine")
     async def my_custom_commands(self, interaction: discord.Interaction):
         """Show user's custom commands with management interface."""

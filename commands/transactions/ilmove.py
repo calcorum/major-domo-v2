@@ -17,6 +17,7 @@ from config import get_config
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
 from utils.autocomplete import player_autocomplete
+from utils.permissions import league_only
 from utils.team_utils import validate_user_has_team
 
 from services.transaction_builder import (
@@ -54,6 +55,7 @@ class ILMoveCommands(commands.Cog):
         app_commands.Choice(name="Injured List", value="il"),
         app_commands.Choice(name="Free Agency", value="fa")
     ])
+    @league_only()
     @logged_command("/ilmove")
     async def ilmove(
         self,

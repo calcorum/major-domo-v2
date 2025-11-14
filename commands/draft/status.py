@@ -11,6 +11,7 @@ from services.draft_service import draft_service
 from services.draft_pick_service import draft_pick_service
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
+from utils.permissions import requires_team
 from views.draft_views import create_draft_status_embed, create_on_the_clock_embed
 from views.embeds import EmbedTemplate
 
@@ -26,6 +27,7 @@ class DraftStatusCommands(commands.Cog):
         name="draft-status",
         description="View current draft state and timer information"
     )
+    @requires_team()
     @logged_command("/draft-status")
     async def draft_status(self, interaction: discord.Interaction):
         """Display current draft state."""
@@ -77,6 +79,7 @@ class DraftStatusCommands(commands.Cog):
         name="draft-on-clock",
         description="View detailed 'on the clock' information"
     )
+    @requires_team()
     @logged_command("/draft-on-clock")
     async def draft_on_clock(self, interaction: discord.Interaction):
         """Display detailed 'on the clock' information with recent and upcoming picks."""

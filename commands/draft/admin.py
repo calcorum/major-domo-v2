@@ -14,6 +14,7 @@ from services.draft_service import draft_service
 from services.draft_pick_service import draft_pick_service
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
+from utils.permissions import league_admin_only
 from views.draft_views import create_admin_draft_info_embed
 from views.embeds import EmbedTemplate
 
@@ -29,7 +30,7 @@ class DraftAdminGroup(app_commands.Group):
         self.logger = get_contextual_logger(f'{__name__}.DraftAdminGroup')
 
     @app_commands.command(name="info", description="View current draft configuration")
-    @app_commands.checks.has_permissions(administrator=True)
+    @league_admin_only()
     @logged_command("/draft-admin info")
     async def draft_admin_info(self, interaction: discord.Interaction):
         """Display current draft configuration and state."""
@@ -61,7 +62,7 @@ class DraftAdminGroup(app_commands.Group):
         enabled="Turn timer on or off",
         minutes="Minutes per pick (optional, default uses current setting)"
     )
-    @app_commands.checks.has_permissions(administrator=True)
+    @league_admin_only()
     @logged_command("/draft-admin timer")
     async def draft_admin_timer(
         self,
@@ -109,7 +110,7 @@ class DraftAdminGroup(app_commands.Group):
     @app_commands.describe(
         pick_number="Overall pick number to jump to (1-512)"
     )
-    @app_commands.checks.has_permissions(administrator=True)
+    @league_admin_only()
     @logged_command("/draft-admin set-pick")
     async def draft_admin_set_pick(
         self,
@@ -180,7 +181,7 @@ class DraftAdminGroup(app_commands.Group):
         ping_channel="Channel for 'on the clock' pings",
         result_channel="Channel for draft results"
     )
-    @app_commands.checks.has_permissions(administrator=True)
+    @league_admin_only()
     @logged_command("/draft-admin channels")
     async def draft_admin_channels(
         self,
@@ -238,7 +239,7 @@ class DraftAdminGroup(app_commands.Group):
     @app_commands.describe(
         minutes="Minutes to add (uses default if not provided)"
     )
-    @app_commands.checks.has_permissions(administrator=True)
+    @league_admin_only()
     @logged_command("/draft-admin reset-deadline")
     async def draft_admin_reset_deadline(
         self,

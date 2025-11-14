@@ -15,6 +15,7 @@ from models.current import Current
 from models.game import Game
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
+from utils.permissions import requires_team
 from utils.team_utils import get_user_major_league_team
 from views.embeds import EmbedTemplate, EmbedColors
 
@@ -34,6 +35,7 @@ class WeatherCommands(commands.Cog):
     @discord.app_commands.describe(
         team_abbrev="Team abbreviation (optional - defaults to channel or your team)"
     )
+    @requires_team()
     @logged_command("/weather")
     async def weather(self, interaction: discord.Interaction, team_abbrev: Optional[str] = None):
         """Display weather check for a team's ballpark."""

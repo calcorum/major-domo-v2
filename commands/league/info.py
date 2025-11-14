@@ -12,6 +12,7 @@ from config import get_config
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
 from exceptions import BotException
+from utils.permissions import requires_team
 from views.embeds import EmbedTemplate
 
 class LeagueInfoCommands(commands.Cog):
@@ -23,6 +24,7 @@ class LeagueInfoCommands(commands.Cog):
         self.logger.info("LeagueInfoCommands cog initialized")
     
     @discord.app_commands.command(name="league-metadata", description="Display current league metadata")
+    @requires_team()
     @logged_command("/league-metadata")
     async def league_info(self, interaction: discord.Interaction):
         """Display current league state and information."""

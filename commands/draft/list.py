@@ -15,6 +15,7 @@ from services.player_service import player_service
 from services.team_service import team_service
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command, requires_draft_period
+from utils.permissions import requires_team
 from views.draft_views import create_draft_list_embed
 from views.embeds import EmbedTemplate
 
@@ -62,6 +63,7 @@ class DraftListCommands(commands.Cog):
         description="View your team's auto-draft queue"
     )
     @requires_draft_period
+    @requires_team()
     @logged_command("/draft-list")
     async def draft_list_view(self, interaction: discord.Interaction):
         """Display team's draft list."""
@@ -103,6 +105,7 @@ class DraftListCommands(commands.Cog):
     )
     @discord.app_commands.autocomplete(player=fa_player_autocomplete)
     @requires_draft_period
+    @requires_team()
     @logged_command("/draft-list-add")
     async def draft_list_add(
         self,
@@ -210,6 +213,7 @@ class DraftListCommands(commands.Cog):
     )
     @discord.app_commands.autocomplete(player=fa_player_autocomplete)
     @requires_draft_period
+    @requires_team()
     @logged_command("/draft-list-remove")
     async def draft_list_remove(
         self,
@@ -272,6 +276,7 @@ class DraftListCommands(commands.Cog):
         description="Clear your entire auto-draft queue"
     )
     @requires_draft_period
+    @requires_team()
     @logged_command("/draft-list-clear")
     async def draft_list_clear(self, interaction: discord.Interaction):
         """Clear entire draft list."""

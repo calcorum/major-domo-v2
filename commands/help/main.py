@@ -16,6 +16,7 @@ from services.help_commands_service import (
 )
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
+from utils.permissions import league_admin_only
 from views.embeds import EmbedTemplate, EmbedColors
 from views.help_commands import (
     HelpCommandCreateModal,
@@ -129,6 +130,7 @@ class HelpCommands(commands.Cog):
             await interaction.followup.send(embed=embed, ephemeral=True)
 
     @app_commands.command(name="help-create", description="Create a new help topic (admin/help editor only)")
+    @league_admin_only()
     @logged_command("/help-create")
     async def help_create(self, interaction: discord.Interaction):
         """Create a new help topic using an interactive modal."""
@@ -210,6 +212,7 @@ class HelpCommands(commands.Cog):
     @app_commands.command(name="help-edit", description="Edit an existing help topic (admin/help editor only)")
     @app_commands.describe(topic="Help topic to edit")
     @app_commands.autocomplete(topic=help_topic_autocomplete)
+    @league_admin_only()
     @logged_command("/help-edit")
     async def help_edit(self, interaction: discord.Interaction, topic: str):
         """Edit an existing help topic."""
@@ -285,6 +288,7 @@ class HelpCommands(commands.Cog):
     @app_commands.command(name="help-delete", description="Delete a help topic (admin/help editor only)")
     @app_commands.describe(topic="Help topic to delete")
     @app_commands.autocomplete(topic=help_topic_autocomplete)
+    @league_admin_only()
     @logged_command("/help-delete")
     async def help_delete(self, interaction: discord.Interaction, topic: str):
         """Delete a help topic with confirmation."""

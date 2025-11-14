@@ -4,6 +4,7 @@ Admin Management Commands
 Administrative commands for league management and bot maintenance.
 """
 import asyncio
+from typing import List, Dict, Any
 
 import discord
 from discord.ext import commands
@@ -13,7 +14,11 @@ from config import get_config
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
 from utils.discord_helpers import set_channel_visibility
+from utils.permissions import league_admin_only
 from views.embeds import EmbedColors, EmbedTemplate
+from services.league_service import league_service
+from services.transaction_service import transaction_service
+from services.player_service import player_service
 
 
 class AdminCommands(commands.Cog):
@@ -45,6 +50,7 @@ class AdminCommands(commands.Cog):
         name="admin-status",
         description="Display bot status and system information"
     )
+    @league_admin_only()
     @logged_command("/admin-status")
     async def admin_status(self, interaction: discord.Interaction):
         """Display comprehensive bot status information."""
@@ -99,6 +105,7 @@ class AdminCommands(commands.Cog):
         name="admin-help",
         description="Display available admin commands and their usage"
     )
+    @league_admin_only()
     @logged_command("/admin-help")
     async def admin_help(self, interaction: discord.Interaction):
         """Display comprehensive admin help information."""
@@ -121,12 +128,13 @@ class AdminCommands(commands.Cog):
             inline=False
         )
         
-        # League Management  
+        # League Management
         embed.add_field(
             name="League Management",
             value="**`/admin-season <season>`** - Set current season\n"
                   "**`/admin-announce <message>`** - Send announcement to channel\n"
-                  "**`/admin-maintenance <on/off>`** - Toggle maintenance mode",
+                  "**`/admin-maintenance <on/off>`** - Toggle maintenance mode\n"
+                  "**`/admin-process-transactions [week]`** - Manually process weekly transactions",
             inline=False
         )
         
@@ -157,6 +165,7 @@ class AdminCommands(commands.Cog):
     @app_commands.describe(
         cog="Name of the cog to reload (e.g., 'commands.players.info')"
     )
+    @league_admin_only()
     @logged_command("/admin-reload")
     async def admin_reload(self, interaction: discord.Interaction, cog: str):
         """Reload a specific cog for hot-swapping code changes."""
@@ -209,6 +218,7 @@ class AdminCommands(commands.Cog):
         local="Sync to this guild only (fast, for development)",
         clear_local="Clear locally synced commands (does not sync after clearing)"
     )
+    @league_admin_only()
     @logged_command("/admin-sync")
     async def admin_sync(
         self,
@@ -292,17 +302,19 @@ class AdminCommands(commands.Cog):
         await interaction.followup.send(embed=embed)
 
     @commands.command(name="admin-sync")
-    @commands.has_permissions(administrator=True)
+    @league_admin_only()
     async def admin_sync_prefix(self, ctx: commands.Context):
         """
         Prefix command version of admin-sync for bootstrap scenarios.
 
         Use this when slash commands aren't synced yet and you can't access /admin-sync.
+        Syncs to the current guild only (for multi-bot scenarios).
         """
         self.logger.info(f"Prefix command !admin-sync invoked by {ctx.author} in {ctx.guild}")
 
         try:
-            synced_commands = await self.bot.tree.sync()
+            # Sync to current guild only (not globally) for multi-bot scenarios
+            synced_commands = await self.bot.tree.sync(guild=ctx.guild)
 
             embed = EmbedTemplate.create_base_embed(
                 title="✅ Commands Synced Successfully",
@@ -322,12 +334,13 @@ class AdminCommands(commands.Cog):
             embed.add_field(
                 name="Sync Details",
                 value=f"**Total Commands:** {len(synced_commands)}\n"
+                      f"**Sync Type:** Local Guild\n"
                       f"**Guild ID:** {ctx.guild.id}\n"
                       f"**Time:** {discord.utils.utcnow().strftime('%H:%M:%S UTC')}",
                 inline=False
             )
 
-            embed.set_footer(text="💡 Use /admin-sync (slash command) for future syncs")
+            embed.set_footer(text="💡 Use /admin-sync local:True for guild-only sync")
 
         except Exception as e:
             self.logger.error(f"Prefix command sync failed: {e}", exc_info=True)
@@ -346,6 +359,7 @@ class AdminCommands(commands.Cog):
     @app_commands.describe(
         count="Number of messages to delete (1-100)"
     )
+    @league_admin_only()
     @logged_command("/admin-clear")
     async def admin_clear(self, interaction: discord.Interaction, count: int):
         """Clear a specified number of messages from the channel."""
@@ -412,6 +426,7 @@ class AdminCommands(commands.Cog):
         message="Announcement message to send",
         mention_everyone="Whether to mention @everyone (default: False)"
     )
+    @league_admin_only()
     @logged_command("/admin-announce")
     async def admin_announce(
         self, 
@@ -455,6 +470,7 @@ class AdminCommands(commands.Cog):
         app_commands.Choice(name="On", value="on"),
         app_commands.Choice(name="Off", value="off")
     ])
+    @league_admin_only()
     @logged_command("/admin-maintenance")
     async def admin_maintenance(self, interaction: discord.Interaction, mode: str):
         """Toggle maintenance mode to prevent normal command usage."""
@@ -504,6 +520,7 @@ class AdminCommands(commands.Cog):
         name="admin-clear-scorecards",
         description="Manually clear the live scorebug channel and hide it from members"
     )
+    @league_admin_only()
     @logged_command("/admin-clear-scorecards")
     async def admin_clear_scorecards(self, interaction: discord.Interaction):
         """
@@ -597,6 +614,283 @@ class AdminCommands(commands.Cog):
                 f"❌ Failed to clear channel: {str(e)}",
                 ephemeral=True
             )
+
+    @app_commands.command(
+        name="admin-process-transactions",
+        description="[ADMIN] Manually process all transactions for the current week (or specified week)"
+    )
+    @app_commands.describe(
+        week="Week number to process (optional, defaults to current week)"
+    )
+    @league_admin_only()
+    @logged_command("/admin-process-transactions")
+    async def admin_process_transactions(
+        self,
+        interaction: discord.Interaction,
+        week: int | None = None
+    ):
+        """
+        Manually process all transactions for the current week.
+
+        This is a fallback mechanism if the Monday morning task fails to run.
+        It will:
+        1. Get all non-frozen, non-cancelled transactions for the specified week
+        2. Execute each transaction by updating player rosters via the API
+        3. Report success/failure counts
+
+        Args:
+            week: Optional week number to process. If not provided, uses current week.
+        """
+        await interaction.response.defer()
+
+        try:
+            # Get current league state
+            current = await league_service.get_current_state()
+            if not current:
+                await interaction.followup.send(
+                    "❌ Could not get current league state from the API.",
+                    ephemeral=True
+                )
+                return
+
+            # Use provided week or current week
+            target_week = week if week is not None else current.week
+            target_season = current.season
+
+            self.logger.info(
+                f"Processing transactions for week {target_week}, season {target_season}",
+                requested_by=str(interaction.user)
+            )
+
+            # Get all non-frozen, non-cancelled transactions for the target week using service layer
+            transactions = await transaction_service.get_all_items(params=[
+                ('season', str(target_season)),
+                ('week_start', str(target_week)),
+                ('week_end', str(target_week)),
+                ('frozen', 'false'),
+                ('cancelled', 'false')
+            ])
+
+            if not transactions:
+                embed = EmbedTemplate.info(
+                    title="No Transactions to Process",
+                    description=f"No non-frozen, non-cancelled transactions found for Week {target_week}"
+                )
+
+                embed.add_field(
+                    name="Search Criteria",
+                    value=f"**Season:** {target_season}\n"
+                          f"**Week:** {target_week}\n"
+                          f"**Frozen:** No\n"
+                          f"**Cancelled:** No",
+                    inline=False
+                )
+
+                await interaction.followup.send(embed=embed)
+                return
+
+            # Count total transactions
+            total_count = len(transactions)
+
+            self.logger.info(f"Found {total_count} transactions to process for week {target_week}")
+
+            # Process each transaction
+            success_count = 0
+            failure_count = 0
+            errors: List[Dict[str, Any]] = []
+
+            # Create initial status embed
+            processing_embed = EmbedTemplate.loading(
+                title="Processing Transactions",
+                description=f"Processing {total_count} transactions for Week {target_week}..."
+            )
+            processing_embed.add_field(
+                name="Progress",
+                value="Starting...",
+                inline=False
+            )
+
+            status_message = await interaction.followup.send(embed=processing_embed)
+
+            for idx, transaction in enumerate(transactions, start=1):
+                try:
+                    # Execute player roster update via service layer
+                    await self._execute_player_update(
+                        player_id=transaction.player.id,
+                        new_team_id=transaction.newteam.id,
+                        player_name=transaction.player.name
+                    )
+
+                    success_count += 1
+
+                    # Update progress every 5 transactions or on last transaction
+                    if idx % 5 == 0 or idx == total_count:
+                        processing_embed.set_field_at(
+                            0,
+                            name="Progress",
+                            value=f"Processed {idx}/{total_count} transactions\n"
+                                  f"✅ Successful: {success_count}\n"
+                                  f"❌ Failed: {failure_count}",
+                            inline=False
+                        )
+                        await status_message.edit(embed=processing_embed) # type: ignore
+
+                    # Rate limiting: 100ms delay between requests
+                    await asyncio.sleep(0.1)
+
+                except Exception as e:
+                    failure_count += 1
+                    error_info = {
+                        'player': transaction.player.name,
+                        'player_id': transaction.player.id,
+                        'new_team': transaction.newteam.abbrev,
+                        'error': str(e)
+                    }
+                    errors.append(error_info)
+
+                    self.logger.error(
+                        f"Failed to execute transaction for {error_info['player']}",
+                        player_id=error_info['player_id'],
+                        new_team=error_info['new_team'],
+                        error=e
+                    )
+
+            # Create completion embed
+            if failure_count == 0:
+                completion_embed = EmbedTemplate.success(
+                    title="Transactions Processed Successfully",
+                    description=f"All {total_count} transactions for Week {target_week} have been processed."
+                )
+            elif success_count == 0:
+                completion_embed = EmbedTemplate.error(
+                    title="Transaction Processing Failed",
+                    description=f"Failed to process all {total_count} transactions for Week {target_week}."
+                )
+            else:
+                completion_embed = EmbedTemplate.warning(
+                    title="Transactions Partially Processed",
+                    description=f"Some transactions for Week {target_week} failed to process."
+                )
+
+            completion_embed.add_field(
+                name="Processing Summary",
+                value=f"**Total Transactions:** {total_count}\n"
+                      f"**✅ Successful:** {success_count}\n"
+                      f"**❌ Failed:** {failure_count}\n"
+                      f"**Week:** {target_week}\n"
+                      f"**Season:** {target_season}",
+                inline=False
+            )
+
+            # Add error details if there were failures
+            if errors:
+                error_text = ""
+                for error in errors[:5]:  # Show first 5 errors
+                    error_text += f"• **{error['player']}** → {error['new_team']}: {error['error'][:50]}\n"
+
+                if len(errors) > 5:
+                    error_text += f"\n... and {len(errors) - 5} more errors"
+
+                completion_embed.add_field(
+                    name="Errors",
+                    value=error_text,
+                    inline=False
+                )
+
+            completion_embed.add_field(
+                name="Next Steps",
+                value="• Verify transactions in the database\n"
+                      "• Check #transaction-log channel for posted moves\n"
+                      "• Review any errors and retry if necessary",
+                inline=False
+            )
+
+            completion_embed.set_footer(
+                text=f"Processed by {interaction.user.display_name} • {discord.utils.utcnow().strftime('%H:%M:%S UTC')}"
+            )
+
+            # Update the status message with final results
+            await status_message.edit(embed=completion_embed) # type: ignore
+
+            self.logger.info(
+                f"Transaction processing complete for week {target_week}",
+                success=success_count,
+                failures=failure_count,
+                total=total_count
+            )
+
+        except Exception as e:
+            self.logger.error(f"Error processing transactions: {e}", exc_info=True)
+
+            embed = EmbedTemplate.error(
+                title="Transaction Processing Failed",
+                description=f"An error occurred while processing transactions: {str(e)}"
+            )
+
+            await interaction.followup.send(embed=embed, ephemeral=True)
+
+    async def _execute_player_update(
+        self,
+        player_id: int,
+        new_team_id: int,
+        player_name: str
+    ) -> bool:
+        """
+        Execute a player roster update via service layer.
+
+        Args:
+            player_id: Player database ID
+            new_team_id: New team ID to assign
+            player_name: Player name for logging
+
+        Returns:
+            True if update successful, False otherwise
+
+        Raises:
+            Exception: If API call fails
+        """
+        try:
+            self.logger.info(
+                f"Updating player roster",
+                player_id=player_id,
+                player_name=player_name,
+                new_team_id=new_team_id
+            )
+
+            # Execute player team update via service layer
+            updated_player = await player_service.update_player_team(
+                player_id=player_id,
+                new_team_id=new_team_id
+            )
+
+            # Verify update was successful
+            if updated_player:
+                self.logger.info(
+                    f"Successfully updated player roster",
+                    player_id=player_id,
+                    player_name=player_name,
+                    new_team_id=new_team_id
+                )
+                return True
+            else:
+                self.logger.warning(
+                    f"Player update returned no response",
+                    player_id=player_id,
+                    player_name=player_name,
+                    new_team_id=new_team_id
+                )
+                return False
+
+        except Exception as e:
+            self.logger.error(
+                f"Failed to update player roster",
+                player_id=player_id,
+                player_name=player_name,
+                new_team_id=new_team_id,
+                error=e,
+                exc_info=True
+            )
+            raise
 
 
 async def setup(bot: commands.Bot):
