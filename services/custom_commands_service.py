@@ -544,7 +544,7 @@ class CustomCommandsService(BaseService[CustomCommand]):
             'active_commands': 0
         }
         
-        result = await self.create_item_in_table('custom_command_creators', creator_data)
+        result = await self.create_item_in_table('custom_commands/creators', creator_data)
         if not result:
             raise BotException("Failed to create command creator")
         
@@ -729,7 +729,7 @@ class CustomCommandsService(BaseService[CustomCommand]):
         # Update creator via API
         try:
             client = await self.get_client()
-            await client.put('custom_command_creators', {
+            await client.put('custom_commands/creators', {
                 'total_commands': total,
                 'active_commands': active
             }, object_id=creator_id)
@@ -737,15 +737,15 @@ class CustomCommandsService(BaseService[CustomCommand]):
             self.logger.error(f"Failed to update creator {creator_id} stats: {e}")
     
     async def _update_creator_info(
-        self, 
-        creator_id: int, 
-        username: str, 
+        self,
+        creator_id: int,
+        username: str,
         display_name: Optional[str]
     ) -> None:
         """Update creator username and display name."""
         try:
             client = await self.get_client()
-            await client.put('custom_command_creators', {
+            await client.put('custom_commands/creators', {
                 'username': username,
                 'display_name': display_name
             }, object_id=creator_id)
@@ -759,13 +759,13 @@ class CustomCommandsService(BaseService[CustomCommand]):
     
     async def _get_creator_count(self) -> int:
         """Get total number of creators."""
-        creators = await self.get_items_from_table_with_params('custom_command_creators', [])
+        creators = await self.get_items_from_table_with_params('custom_commands/creators', [])
         return len(creators)
     
     async def _get_most_active_creator(self) -> Optional[CustomCommandCreator]:
         """Get creator with most active commands."""
         creators = await self.get_items_from_table_with_params(
-            'custom_command_creators',
+            'custom_commands/creators',
             [('sort', '-active_commands'), ('limit', 1)]
         )
         
