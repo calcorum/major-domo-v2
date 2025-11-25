@@ -11,6 +11,7 @@ from discord.ext import commands
 
 from .info import TeamInfoCommands
 from .roster import TeamRosterCommands
+from .branding import BrandingCommands
 
 logger = logging.getLogger(f'{__name__}.setup_teams')
 
@@ -25,6 +26,7 @@ async def setup_teams(bot: commands.Bot) -> Tuple[int, int, List[str]]:
     team_cogs: List[Tuple[str, Type[commands.Cog]]] = [
         ("TeamInfoCommands", TeamInfoCommands),
         ("TeamRosterCommands", TeamRosterCommands),
+        ("BrandingCommands", BrandingCommands),
     ]
     
     successful = 0

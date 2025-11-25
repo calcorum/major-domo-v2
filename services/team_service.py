@@ -273,16 +273,17 @@ class TeamService(BaseService[Team]):
     async def update_team(self, team_id: int, updates: dict) -> Optional[Team]:
         """
         Update team information.
-        
+
         Args:
             team_id: Team ID to update
             updates: Dictionary of fields to update
-            
+
         Returns:
             Updated team instance or None
         """
         try:
-            return await self.update(team_id, updates)
+            # Use PATCH with query parameters (database API expects this)
+            return await self.patch(team_id, updates, use_query_params=True)
         except Exception as e:
             logger.error(f"Failed to update team {team_id}: {e}")
             return None

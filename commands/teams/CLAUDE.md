@@ -26,6 +26,15 @@ This directory contains Discord slash commands for team information and roster m
   - `team_service.get_team_by_abbrev()`
   - `team_service.get_team_roster()`
 
+### `branding.py`
+- **Command**: `/branding`
+- **Description**: Update team colors and logos via interactive modal
+- **Access**: Team owners only (verified via `team_service.get_team_by_owner()`)
+- **Service Dependencies**:
+  - `team_service.get_team_by_owner()`
+  - `team_service.update_team()`
+  - `models.team.Team.minor_league_affiliate()`
+
 ## Key Features
 
 ### Team Information Display (`info.py`)
@@ -66,6 +75,49 @@ This directory contains Discord slash commands for team information and roster m
 - **Detailed Player Lists**: Separate embeds for each roster type
 - **Player Organization**: Batters and pitchers grouped separately
 - **Chunked Display**: Long player lists split across multiple fields
+
+### Team Branding Management (`branding.py`)
+- **Modal-Based Input**: Interactive form with 5 optional fields
+- **Preview + Confirmation**: Visual preview before applying changes
+- **Multi-Team Support**: Updates major league and minor league teams
+- **Discord Integration**: Attempts to update Discord role colors (non-blocking)
+
+#### Workflow
+1. User runs `/branding`
+2. Bot verifies user owns a team
+3. Modal displays with 5 optional fields showing current values
+4. User fills in desired changes, submits
+5. Bot validates all inputs (hex colors, URL accessibility)
+6. Bot shows preview embeds with confirmation buttons
+7. User confirms or cancels
+8. Bot applies changes to database
+9. Bot attempts to update Discord role color (non-blocking)
+10. Bot shows success message with details
+
+#### Modal Fields
+- **Major League Team Color** - 6-character hex code (e.g., FF5733 or #FF5733)
+- **Major League Logo URL** - Public image URL (.png, .jpg, .jpeg, .gif, .webp)
+- **Minor League Team Color** - 6-character hex code
+- **Minor League Logo URL** - Public image URL
+- **Dice Roll Color** - 6-character hex code for dice displays
+
+#### Validation Rules
+- **Hex Colors**: Must be exactly 6 characters, valid hex digits (0-9, A-F), # prefix optional
+- **Image URLs**: Must start with http:// or https://, end with valid extension, be publicly accessible
+- **All Fields Optional**: Leave blank to keep current value
+- **URL Accessibility**: Tests URLs with HEAD request (5 second timeout)
+- **Content Type Check**: Verifies URLs point to images
+
+#### Database Updates
+- Major league team: `color`, `thumbnail`, `dice_color` fields
+- Minor league team: `color`, `thumbnail` fields
+- Uses `team_service.update_team()` for all database operations
+
+#### Discord Role Updates
+- Bot attempts to update Discord role color to match team color
+- Failures are non-blocking (show warning but database updates succeed)
+- Common failure reasons: role not found, missing permissions
+- Updates role by matching `team.lname` (long name)
 
 ## Architecture Notes
 
@@ -109,6 +161,13 @@ This directory contains Discord slash commands for team information and roster m
    - Verify standings data structure matches expected format
    - Ensure error handling for malformed standings data
 
+5. **Branding command issues**:
+   - **"You don't own a team"**: User is not registered as team owner for current season
+   - **"URL not accessible"**: Image URL returned non-200 status or timed out (check URL is public)
+   - **"Color must be 6 characters"**: Hex color is wrong length or contains invalid characters
+   - **"Discord role update failed"**: Role color couldn't be updated (database still succeeded - not critical)
+   - **"No minor league affiliate"**: Team doesn't have MiL team (this is normal for some teams)
+
 ### Dependencies
 - `services.team_service`
 - `models.team.Team`
@@ -118,7 +177,9 @@ This directory contains Discord slash commands for team information and roster m
 - `exceptions.BotException`
 
 ### Testing
-Run tests with: `python -m pytest tests/test_commands_teams.py -v`
+Run tests with:
+- All team commands: `python -m pytest tests/test_commands_teams.py -v`
+- Branding command only: `python -m pytest tests/test_commands_teams_branding.py -v`
 
 ## Database Requirements
 - Team records with abbreviations, names, colors, logos
