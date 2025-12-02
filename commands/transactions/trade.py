@@ -282,7 +282,7 @@ class TradeCommands(commands.Cog):
             return
 
         # Find the player
-        players = await player_service.search_players(player_name, limit=10, season=get_config().sba_current_season)
+        players = await player_service.search_players(player_name, limit=10, season=get_config().sba_season)
         if not players:
             await interaction.followup.send(
                 f"❌ Player '{player_name}' not found.",
@@ -392,7 +392,7 @@ class TradeCommands(commands.Cog):
             return
 
         # Find the player
-        players = await player_service.search_players(player_name, limit=10, season=get_config().sba_current_season)
+        players = await player_service.search_players(player_name, limit=10, season=get_config().sba_season)
         if not players:
             await interaction.followup.send(
                 f"❌ Player '{player_name}' not found.",

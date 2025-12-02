@@ -45,7 +45,7 @@ class ScheduleCommands(commands.Cog):
         """Display game schedule for a week or team."""
         await interaction.response.defer()
         
-        search_season = season or get_config().sba_current_season
+        search_season = season or get_config().sba_season
         
         if team:
             # Show team schedule
@@ -75,7 +75,7 @@ class ScheduleCommands(commands.Cog):
     #     """Display recent game results."""
     #     await interaction.response.defer()
         
-    #     search_season = season or get_config().sba_current_season
+    #     search_season = season or get_config().sba_season
         
     #     if week:
     #         # Show specific week results

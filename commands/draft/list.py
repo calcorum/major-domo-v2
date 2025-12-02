@@ -33,7 +33,7 @@ async def fa_player_autocomplete(
         players = await player_service.search_players(
             current,
             limit=25,
-            season=config.sba_current_season
+            season=config.sba_season
         )
 
         # Filter to FA team
@@ -74,7 +74,7 @@ class DraftListCommands(commands.Cog):
         # Get user's team
         team = await team_service.get_team_by_owner(
             interaction.user.id,
-            config.sba_current_season
+            config.sba_season
         )
 
         if not team:
@@ -87,7 +87,7 @@ class DraftListCommands(commands.Cog):
 
         # Get draft list
         draft_list = await draft_list_service.get_team_list(
-            config.sba_current_season,
+            config.sba_season,
             team.id
         )
 
@@ -121,7 +121,7 @@ class DraftListCommands(commands.Cog):
         # Get user's team
         team = await team_service.get_team_by_owner(
             interaction.user.id,
-            config.sba_current_season
+            config.sba_season
         )
 
         if not team:
@@ -133,7 +133,7 @@ class DraftListCommands(commands.Cog):
             return
 
         # Get player
-        players = await player_service.get_players_by_name(player, config.sba_current_season)
+        players = await player_service.get_players_by_name(player, config.sba_season)
         if not players:
             embed = EmbedTemplate.error(
                 "Player Not Found",
@@ -155,7 +155,7 @@ class DraftListCommands(commands.Cog):
 
         # Check if player already in list
         current_list = await draft_list_service.get_team_list(
-            config.sba_current_season,
+            config.sba_season,
             team.id
         )
 
@@ -179,7 +179,7 @@ class DraftListCommands(commands.Cog):
 
         # Add to list
         updated_list = await draft_list_service.add_to_list(
-            config.sba_current_season,
+            config.sba_season,
             team.id,
             player_obj.id,
             rank
@@ -228,7 +228,7 @@ class DraftListCommands(commands.Cog):
         # Get user's team
         team = await team_service.get_team_by_owner(
             interaction.user.id,
-            config.sba_current_season
+            config.sba_season
         )
 
         if not team:
@@ -240,7 +240,7 @@ class DraftListCommands(commands.Cog):
             return
 
         # Get player
-        players = await player_service.get_players_by_name(player, config.sba_current_season)
+        players = await player_service.get_players_by_name(player, config.sba_season)
         if not players:
             embed = EmbedTemplate.error(
                 "Player Not Found",
@@ -253,7 +253,7 @@ class DraftListCommands(commands.Cog):
 
         # Remove from list
         success = await draft_list_service.remove_player_from_list(
-            config.sba_current_season,
+            config.sba_season,
             team.id,
             player_obj.id
         )
@@ -287,7 +287,7 @@ class DraftListCommands(commands.Cog):
         # Get user's team
         team = await team_service.get_team_by_owner(
             interaction.user.id,
-            config.sba_current_season
+            config.sba_season
         )
 
         if not team:
@@ -300,7 +300,7 @@ class DraftListCommands(commands.Cog):
 
         # Get current list size
         current_list = await draft_list_service.get_team_list(
-            config.sba_current_season,
+            config.sba_season,
             team.id
         )
 
@@ -314,7 +314,7 @@ class DraftListCommands(commands.Cog):
 
         # Clear list
         success = await draft_list_service.clear_list(
-            config.sba_current_season,
+            config.sba_season,
             team.id
         )
 

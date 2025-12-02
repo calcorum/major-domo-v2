@@ -79,7 +79,7 @@ class TeamService(BaseService[Team]):
             Exception: If there's an error communicating with the API
                        Allows caller to distinguish between "no teams" vs "error occurred"
         """
-        season = season or get_config().sba_current_season
+        season = season or get_config().sba_season
         params = [
             ('owner_id', str(owner_id)),
             ('season', str(season))
@@ -139,7 +139,7 @@ class TeamService(BaseService[Team]):
             Team instance or None if not found
         """
         try:
-            season = season or get_config().sba_current_season
+            season = season or get_config().sba_season
             params = [
                 ('team_abbrev', abbrev.upper()),
                 ('season', str(season))
@@ -336,7 +336,7 @@ class TeamService(BaseService[Team]):
         Returns:
             List of teams in current season
         """
-        return await self.get_teams_by_season(get_config().sba_current_season)
+        return await self.get_teams_by_season(get_config().sba_season)
 
 
 # Global service instance

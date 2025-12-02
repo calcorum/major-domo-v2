@@ -47,7 +47,7 @@ class DraftStatusCommands(commands.Cog):
 
         # Get current pick
         current_pick = await draft_pick_service.get_pick(
-            config.sba_current_season,
+            config.sba_season,
             draft_data.currentpick
         )
 
@@ -99,7 +99,7 @@ class DraftStatusCommands(commands.Cog):
 
         # Get current pick
         current_pick = await draft_pick_service.get_pick(
-            config.sba_current_season,
+            config.sba_season,
             draft_data.currentpick
         )
 
@@ -113,14 +113,14 @@ class DraftStatusCommands(commands.Cog):
 
         # Get recent picks
         recent_picks = await draft_pick_service.get_recent_picks(
-            config.sba_current_season,
+            config.sba_season,
             draft_data.currentpick,
             limit=5
         )
 
         # Get upcoming picks
         upcoming_picks = await draft_pick_service.get_upcoming_picks(
-            config.sba_current_season,
+            config.sba_season,
             draft_data.currentpick,
             limit=5
         )

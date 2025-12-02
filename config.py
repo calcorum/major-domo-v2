@@ -26,8 +26,8 @@ class BotConfig(BaseSettings):
     discord_embed_description_limit: int = 4096
 
     # League settings
-    sba_season: int = 12
-    pd_season: int = 9
+    sba_season: int = 13
+    pd_season: int = 10
     fa_lock_week: int = 14
     sba_color: str = "a6ce39"
     weeks_per_season: int = 18
@@ -39,9 +39,6 @@ class BotConfig(BaseSettings):
     modern_stats_start_season: int = 8
     offseason_flag: bool = False  # When True, relaxes roster limits and disables weekly freeze/thaw
 
-    # Current Season Constants
-    sba_current_season: int = 12
-    pd_current_season: int = 9
 
     # API Constants
     api_version: str = "v3"

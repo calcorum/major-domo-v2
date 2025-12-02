@@ -279,7 +279,7 @@ class ImageCommands(commands.Cog):
 
         # Step 3: Find player
         self.logger.debug("Searching for player", player_name=player_name)
-        players = await player_service.get_players_by_name(player_name, get_config().sba_current_season)
+        players = await player_service.get_players_by_name(player_name, get_config().sba_season)
 
         if not players:
             self.logger.warning("Player not found", player_name=player_name)
@@ -316,7 +316,7 @@ class ImageCommands(commands.Cog):
 
         # Step 4: Check permissions
         has_permission, permission_error = await can_edit_player_image(
-            interaction, player, get_config().sba_current_season, self.logger
+            interaction, player, get_config().sba_season, self.logger
         )
 
         if not has_permission:

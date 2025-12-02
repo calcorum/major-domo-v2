@@ -68,7 +68,7 @@ async def test_player_search():
     try:
         # Test 1: Search for a common name (should find multiple)
         logger.info("Testing search for common player name")
-        players = await player_service.get_players_by_name("Smith", get_config().sba_current_season)
+        players = await player_service.get_players_by_name("Smith", get_config().sba_season)
         logger.info("Common name search completed", 
                    search_term="Smith", 
                    results_found=len(players))
@@ -82,7 +82,7 @@ async def test_player_search():
         
         # Test 2: Search for specific player (exact match)
         logger.info("Testing search for specific player")
-        players = await player_service.get_players_by_name("Mike Trout", get_config().sba_current_season)
+        players = await player_service.get_players_by_name("Mike Trout", get_config().sba_season)
         logger.info("Specific player search completed",
                    search_term="Mike Trout",
                    results_found=len(players))
@@ -144,7 +144,7 @@ async def test_player_service_methods():
         # Test get_all with limit (need to include season)
         logger.info("Testing get_all with limit")
         players, total_count = await player_service.get_all(params=[
-            ('season', str(get_config().sba_current_season)),
+            ('season', str(get_config().sba_season)),
             ('limit', '10')
         ])
         
@@ -153,7 +153,7 @@ async def test_player_service_methods():
                    retrieved_count=len(players),
                    total_count=total_count,
                    limit=10,
-                   season=get_config().sba_current_season)
+                   season=get_config().sba_season)
         
         if players:
             print("     Sample players:")
@@ -164,7 +164,7 @@ async def test_player_service_methods():
         if players:
             test_position = players[0].primary_position
             logger.info("Testing position search", position=test_position)
-            position_players = await player_service.get_players_by_position(test_position, get_config().sba_current_season)
+            position_players = await player_service.get_players_by_position(test_position, get_config().sba_season)
             
             print(f"  ✅ Found {len(position_players)} players at position {test_position}")
             logger.info("Position search completed",

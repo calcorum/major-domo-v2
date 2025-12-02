@@ -61,7 +61,7 @@ class VoiceChannelCommands(commands.Cog):
         Returns:
             Team object or None if not found
         """
-        season = season or get_config().sba_current_season
+        season = season or get_config().sba_season
         teams = await team_service.get_teams_by_owner(user_id, season)
         return teams[0] if teams else None
 
@@ -76,7 +76,7 @@ class VoiceChannelCommands(commands.Cog):
         Returns:
             Major League Team object or None if not found
         """
-        season = season or get_config().sba_current_season
+        season = season or get_config().sba_season
         teams = await team_service.get_teams_by_owner(user_id, season)
 
         # Filter to only Major League teams (3-character abbreviations)

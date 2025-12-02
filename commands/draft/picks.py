@@ -40,7 +40,7 @@ async def fa_player_autocomplete(
         players = await player_service.search_players(
             current,
             limit=25,
-            season=config.sba_current_season
+            season=config.sba_season
         )
 
         # Filter to FA team
@@ -138,7 +138,7 @@ class DraftPicksCog(commands.Cog):
         # Get user's team (CACHED via @cached_single_item)
         team = await team_service.get_team_by_owner(
             interaction.user.id,
-            config.sba_current_season
+            config.sba_season
         )
 
         if not team:
@@ -161,7 +161,7 @@ class DraftPicksCog(commands.Cog):
 
         # Get current pick
         current_pick = await draft_pick_service.get_pick(
-            config.sba_current_season,
+            config.sba_season,
             draft_data.currentpick
         )
 
@@ -184,7 +184,7 @@ class DraftPicksCog(commands.Cog):
             return
 
         # Get player
-        players = await player_service.get_players_by_name(player_name, config.sba_current_season)
+        players = await player_service.get_players_by_name(player_name, config.sba_season)
 
         if not players:
             embed = await create_pick_illegal_embed(

@@ -71,7 +71,7 @@ class EnhancedPlayerCommands(commands.Cog):
             return
         
         # Use current season if not specified
-        search_season = season or get_config().sba_current_season
+        search_season = season or get_config().sba_season
         
         # Search for players
         players = await player_service.get_players_by_name(name, search_season)
@@ -342,7 +342,7 @@ class EnhancedPlayerCommands(commands.Cog):
             # Perform search based on criteria
             players = await player_service.get_players_by_name(
                 search_criteria['name'], 
-                search_criteria['season'] or get_config().sba_current_season
+                search_criteria['season'] or get_config().sba_season
             )
             
             if players:
@@ -351,13 +351,13 @@ class EnhancedPlayerCommands(commands.Cog):
                     await self._show_player_details(
                         interaction, 
                         players[0], 
-                        search_criteria['season'] or get_config().sba_current_season
+                        search_criteria['season'] or get_config().sba_season
                     )
                 else:
                     await self._show_player_selection(
                         interaction, 
                         players, 
-                        search_criteria['season'] or get_config().sba_current_season
+                        search_criteria['season'] or get_config().sba_season
                     )
             else:
                 embed = EmbedTemplate.warning(

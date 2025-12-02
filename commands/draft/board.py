@@ -58,7 +58,7 @@ class DraftBoardCommands(commands.Cog):
 
         # Get picks for this round
         picks = await draft_pick_service.get_picks_by_round(
-            config.sba_current_season,
+            config.sba_season,
             round_number,
             include_taken=True
         )

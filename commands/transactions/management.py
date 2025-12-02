@@ -124,7 +124,7 @@ class TransactionCommands(commands.Cog):
         await interaction.response.defer()
         
         # Get user's team
-        team = await get_user_major_league_team(interaction.user.id, get_config().sba_current_season)
+        team = await get_user_major_league_team(interaction.user.id, get_config().sba_season)
         
         if not team:
             await interaction.followup.send(
@@ -134,9 +134,9 @@ class TransactionCommands(commands.Cog):
             return
         
         # Get transactions in parallel
-        pending_task = transaction_service.get_pending_transactions(team.abbrev, get_config().sba_current_season)
-        frozen_task = transaction_service.get_frozen_transactions(team.abbrev, get_config().sba_current_season) 
-        processed_task = transaction_service.get_processed_transactions(team.abbrev, get_config().sba_current_season)
+        pending_task = transaction_service.get_pending_transactions(team.abbrev, get_config().sba_season)
+        frozen_task = transaction_service.get_frozen_transactions(team.abbrev, get_config().sba_season) 
+        processed_task = transaction_service.get_processed_transactions(team.abbrev, get_config().sba_season)
         
         pending_transactions = await pending_task
         frozen_transactions = await frozen_task
@@ -147,7 +147,7 @@ class TransactionCommands(commands.Cog):
         if show_cancelled:
             cancelled_transactions = await transaction_service.get_team_transactions(
                 team.abbrev,
-                get_config().sba_current_season,
+                get_config().sba_season,
                 cancelled=True
             )
 
@@ -200,16 +200,16 @@ class TransactionCommands(commands.Cog):
         
         # Get target team
         if team:
-            target_team = await team_service.get_team_by_abbrev(team.upper(), get_config().sba_current_season)
+            target_team = await team_service.get_team_by_abbrev(team.upper(), get_config().sba_season)
             if not target_team:
                 await interaction.followup.send(
-                    f"❌ Could not find team '{team}' in season {get_config().sba_current_season}.",
+                    f"❌ Could not find team '{team}' in season {get_config().sba_season}.",
                     ephemeral=True
                 )
                 return
         else:
             # Get user's team
-            user_teams = await team_service.get_teams_by_owner(interaction.user.id, get_config().sba_current_season)
+            user_teams = await team_service.get_teams_by_owner(interaction.user.id, get_config().sba_season)
             if not user_teams:
                 await interaction.followup.send(
                     "❌ You don't appear to own a team. Please specify a team abbreviation.",
@@ -286,7 +286,7 @@ class TransactionCommands(commands.Cog):
 
                 embed = EmbedTemplate.create_base_embed(
                     title=f"📋 Transaction Status - {team.abbrev}",
-                    description=f"{team.lname} • Season {get_config().sba_current_season}",
+                    description=f"{team.lname} • Season {get_config().sba_season}",
                     color=EmbedColors.INFO
                 )
 
@@ -323,7 +323,7 @@ class TransactionCommands(commands.Cog):
             # No pending transactions - create single page
             embed = EmbedTemplate.create_base_embed(
                 title=f"📋 Transaction Status - {team.abbrev}",
-                description=f"{team.lname} • Season {get_config().sba_current_season}",
+                description=f"{team.lname} • Season {get_config().sba_season}",
                 color=EmbedColors.INFO
             )
 
@@ -353,7 +353,7 @@ class TransactionCommands(commands.Cog):
         if frozen_transactions:
             embed = EmbedTemplate.create_base_embed(
                 title=f"📋 Transaction Status - {team.abbrev}",
-                description=f"{team.lname} • Season {get_config().sba_current_season}",
+                description=f"{team.lname} • Season {get_config().sba_season}",
                 color=EmbedColors.INFO
             )
 
@@ -374,7 +374,7 @@ class TransactionCommands(commands.Cog):
         if processed_transactions:
             embed = EmbedTemplate.create_base_embed(
                 title=f"📋 Transaction Status - {team.abbrev}",
-                description=f"{team.lname} • Season {get_config().sba_current_season}",
+                description=f"{team.lname} • Season {get_config().sba_season}",
                 color=EmbedColors.INFO
             )
 
@@ -395,7 +395,7 @@ class TransactionCommands(commands.Cog):
         if cancelled_transactions:
             embed = EmbedTemplate.create_base_embed(
                 title=f"📋 Transaction Status - {team.abbrev}",
-                description=f"{team.lname} • Season {get_config().sba_current_season}",
+                description=f"{team.lname} • Season {get_config().sba_season}",
                 color=EmbedColors.INFO
             )
 
@@ -440,7 +440,7 @@ class TransactionCommands(commands.Cog):
         
         embed = EmbedTemplate.create_base_embed(
             title=f"{status_emoji} Roster Check - {team.abbrev}",
-            description=f"{team.lname} • Season {get_config().sba_current_season}",
+            description=f"{team.lname} • Season {get_config().sba_season}",
             color=embed_color
         )
         

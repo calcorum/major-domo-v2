@@ -27,7 +27,7 @@ async def player_name_autocomplete(
 
     try:
         # Use the dedicated search endpoint to get matching players
-        players = await player_service.search_players(current, limit=25, season=get_config().sba_current_season)
+        players = await player_service.search_players(current, limit=25, season=get_config().sba_season)
 
         # Convert to discord choices, limiting to 25 (Discord's max)
         choices = []
@@ -78,7 +78,7 @@ class PlayerInfoCommands(commands.Cog):
         self.logger.debug("Response deferred")
         
         # Search for player by name (use season parameter or default to current)
-        search_season = season or get_config().sba_current_season
+        search_season = season or get_config().sba_season
         self.logger.debug("Starting player search", api_call="get_players_by_name", season=search_season)
         players = await player_service.get_players_by_name(name, search_season)
         self.logger.info("Player search completed", players_found=len(players), season=search_season)

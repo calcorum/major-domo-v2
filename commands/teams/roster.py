@@ -43,7 +43,7 @@ class TeamRosterCommands(commands.Cog):
         await interaction.response.defer()
         
         # Get team by abbreviation
-        team = await team_service.get_team_by_abbrev(abbrev, get_config().sba_current_season)
+        team = await team_service.get_team_by_abbrev(abbrev, get_config().sba_season)
         
         if team is None:
             self.logger.info("Team not found", team_abbrev=abbrev)

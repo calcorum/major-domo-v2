@@ -259,8 +259,8 @@ class TestTeamService:
         mock_data = {
             'count': 2,
             'teams': [
-                self.create_team_data(1, 'TEA', season=get_config().sba_current_season),
-                self.create_team_data(2, 'TEB', season=get_config().sba_current_season)
+                self.create_team_data(1, 'TEA', season=get_config().sba_season),
+                self.create_team_data(2, 'TEB', season=get_config().sba_season)
             ]
         }
         mock_client.get.return_value = mock_data
@@ -268,8 +268,8 @@ class TestTeamService:
         result = await team_service_instance.get_current_season_teams()
         
         assert len(result) == 2
-        assert all(team.season == get_config().sba_current_season for team in result)
-        mock_client.get.assert_called_once_with('teams', params=[('season', str(get_config().sba_current_season))])
+        assert all(team.season == get_config().sba_season for team in result)
+        mock_client.get.assert_called_once_with('teams', params=[('season', str(get_config().sba_season))])
     
     @pytest.mark.asyncio
     async def test_error_handling(self, team_service_instance, mock_client):

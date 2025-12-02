@@ -48,7 +48,7 @@ class MigrationExampleCommands(commands.Cog):
         """Old style team listing - basic embed only."""
         await interaction.response.defer()
         
-        season = season or get_config().sba_current_season
+        season = season or get_config().sba_season
         teams = await team_service.get_teams_by_season(season)
         
         if not teams:
@@ -91,7 +91,7 @@ class MigrationExampleCommands(commands.Cog):
         """New style team listing - interactive with pagination and selection."""
         await interaction.response.defer()
         
-        season = season or get_config().sba_current_season
+        season = season or get_config().sba_season
         teams = await team_service.get_teams_by_season(season)
         
         if not teams:

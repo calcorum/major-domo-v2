@@ -13,7 +13,7 @@ from config import get_config
 
 async def get_user_major_league_team(
     user_id: int,
-    season: int = get_config().sba_current_season
+    season: int = get_config().sba_season
 ) -> Optional[Team]:
     """
     Get the major league team owned by a Discord user.
@@ -47,7 +47,7 @@ async def get_user_major_league_team(
 
 async def validate_user_has_team(
     interaction: discord.Interaction,
-    season: int = get_config().sba_current_season
+    season: int = get_config().sba_season
 ) -> Optional[Team]:
     """
     Validate that a user has a major league team and send error message if not.
@@ -76,7 +76,7 @@ async def validate_user_has_team(
 async def get_team_by_abbrev_with_validation(
     team_abbrev: str,
     interaction: discord.Interaction,
-    season: int = get_config().sba_current_season
+    season: int = get_config().sba_season
 ) -> Optional[Team]:
     """
     Get a team by abbreviation with standard error messaging.

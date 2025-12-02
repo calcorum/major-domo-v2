@@ -36,7 +36,7 @@ class TeamInfoCommands(commands.Cog):
         await interaction.response.defer()
         
         # Use current season if not specified
-        season = season or get_config().sba_current_season
+        season = season or get_config().sba_season
         
         # Get team by abbreviation
         team = await team_service.get_team_by_abbrev(abbrev, season)
@@ -67,7 +67,7 @@ class TeamInfoCommands(commands.Cog):
         """List all teams in a season."""
         await interaction.response.defer()
 
-        season = season or get_config().sba_current_season
+        season = season or get_config().sba_season
 
         teams = await team_service.get_teams_by_season(season)
 

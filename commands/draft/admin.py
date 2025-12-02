@@ -49,7 +49,7 @@ class DraftAdminGroup(app_commands.Group):
         # Get current pick
         config = get_config()
         current_pick = await draft_pick_service.get_pick(
-            config.sba_current_season,
+            config.sba_season,
             draft_data.currentpick
         )
 
@@ -142,7 +142,7 @@ class DraftAdminGroup(app_commands.Group):
             return
 
         # Verify pick exists
-        pick = await draft_pick_service.get_pick(config.sba_current_season, pick_number)
+        pick = await draft_pick_service.get_pick(config.sba_season, pick_number)
         if not pick:
             embed = EmbedTemplate.error(
                 "Pick Not Found",

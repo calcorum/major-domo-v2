@@ -17,6 +17,7 @@ from services import team_service
 from models.team import Team
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
+from utils.permissions import league_only
 from views.embeds import EmbedTemplate, EmbedColors
 from views.confirmations import ConfirmationView
 
@@ -217,6 +218,7 @@ class BrandingCommands(commands.Cog):
         self.logger.info("BrandingCommands cog initialized")
 
     @app_commands.command(name="branding", description="Update your team's colors and logos")
+    @league_only()
     @logged_command("/branding")
     async def team_branding(self, interaction: discord.Interaction):
         """
@@ -229,7 +231,7 @@ class BrandingCommands(commands.Cog):
         """
         # Get current season
         config = get_config()
-        season = config.sba_current_season
+        season = config.sba_season
 
         # Verify user owns a team (must do this BEFORE responding to interaction)
         ml_team = await team_service.get_team_by_owner(interaction.user.id, season)

@@ -169,7 +169,7 @@ class DraftService(BaseService[DraftData]):
             from config import get_config
 
             config = get_config()
-            season = config.sba_current_season
+            season = config.sba_season
             total_picks = config.draft_total_picks
 
             # Start with next pick

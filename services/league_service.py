@@ -113,7 +113,7 @@ class LeagueService(BaseService[Current]):
             List of standings data or None if not available
         """
         try:
-            season = season or get_config().sba_current_season
+            season = season or get_config().sba_season
             client = await self.get_client()
             data = await client.get('standings', params=[('season', str(season))])
             
@@ -146,7 +146,7 @@ class LeagueService(BaseService[Current]):
             List of division standings or None if not available
         """
         try:
-            season = season or get_config().sba_current_season
+            season = season or get_config().sba_season
             client = await self.get_client()
             data = await client.get(f'standings/division/{division_id}', params=[('season', str(season))])
             
@@ -174,7 +174,7 @@ class LeagueService(BaseService[Current]):
             List of league leaders or None if not available
         """
         try:
-            season = season or get_config().sba_current_season
+            season = season or get_config().sba_season
             client = await self.get_client()
             
             params = [

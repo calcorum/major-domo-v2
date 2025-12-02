@@ -115,7 +115,7 @@ class DraftMonitorTask:
 
             # Get current pick
             current_pick = await draft_pick_service.get_pick(
-                config.sba_current_season,
+                config.sba_season,
                 draft_data.currentpick
             )
 
@@ -169,7 +169,7 @@ class DraftMonitorTask:
 
             # Get team's draft list
             draft_list = await draft_list_service.get_team_list(
-                config.sba_current_season,
+                config.sba_season,
                 current_pick.owner.id
             )
 
@@ -315,7 +315,7 @@ class DraftMonitorTask:
 
             # Get current pick for mention
             current_pick = await draft_pick_service.get_pick(
-                config.sba_current_season,
+                config.sba_season,
                 draft_data.currentpick
             )
 

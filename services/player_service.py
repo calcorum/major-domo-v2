@@ -192,7 +192,7 @@ class PlayerService(BaseService[Player]):
         """
         try:
             if season is None:
-                season = get_config().sba_current_season
+                season = get_config().sba_season
 
             # Use the existing name-based search that actually works
             players = await self.get_players_by_name(query, season)

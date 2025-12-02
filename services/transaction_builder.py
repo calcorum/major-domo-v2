@@ -136,7 +136,7 @@ class RosterValidationResult:
 class TransactionBuilder:
     """Interactive transaction builder for complex multi-move transactions."""
     
-    def __init__(self, team: Team, user_id: int, season: int = get_config().sba_current_season):
+    def __init__(self, team: Team, user_id: int, season: int = get_config().sba_season):
         """
         Initialize transaction builder.
         

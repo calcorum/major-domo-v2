@@ -37,7 +37,7 @@ async def player_autocomplete(
         user_team = await get_user_major_league_team(interaction.user.id)
 
         # Search for players using the search endpoint
-        players = await player_service.search_players(current, limit=50, season=get_config().sba_current_season)
+        players = await player_service.search_players(current, limit=50, season=get_config().sba_season)
 
         # Separate players by team (user's team vs others)
         user_team_players = []
@@ -105,7 +105,7 @@ async def team_autocomplete(
 
     try:
         # Get all teams for current season
-        teams = await team_service.get_teams_by_season(get_config().sba_current_season)
+        teams = await team_service.get_teams_by_season(get_config().sba_season)
 
         # Filter teams by current input and limit to 25
         matching_teams = [
@@ -146,7 +146,7 @@ async def major_league_team_autocomplete(
 
     try:
         # Get all teams for current season
-        all_teams = await team_service.get_teams_by_season(get_config().sba_current_season)
+        all_teams = await team_service.get_teams_by_season(get_config().sba_season)
 
         # Filter to only Major League teams using the model's helper method
         from models.team import RosterType

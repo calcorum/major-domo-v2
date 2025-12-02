@@ -55,7 +55,7 @@ async def get_user_team(user_id: int) -> Optional[dict]:
     config = get_config()
     team = await team_service.get_team_by_owner(
         owner_id=user_id,
-        season=config.sba_current_season
+        season=config.sba_season
     )
 
     if team:

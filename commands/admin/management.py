@@ -85,7 +85,7 @@ class AdminCommands(commands.Cog):
             name="Bot Information",
             value=f"**Latency:** {round(self.bot.latency * 1000)}ms\n"
                   f"**Version:** Discord.py {discord.__version__}\n"
-                  f"**Current Season:** {get_config().sba_current_season}",
+                  f"**Current Season:** {get_config().sba_season}",
             inline=True
         )
         

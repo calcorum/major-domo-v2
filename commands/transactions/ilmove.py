@@ -134,7 +134,7 @@ class ILMoveCommands(commands.Cog):
         """
         try:
             # Find player using the new search endpoint
-            players = await player_service.search_players(player_name, limit=10, season=get_config().sba_current_season)
+            players = await player_service.search_players(player_name, limit=10, season=get_config().sba_season)
             if not players:
                 self.logger.error(f"Player not found: {player_name}")
                 return False, f"Player '{player_name}' not found"

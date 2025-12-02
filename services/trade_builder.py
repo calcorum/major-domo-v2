@@ -66,7 +66,7 @@ class TradeBuilder:
     Extends the functionality of TransactionBuilder to support trades between teams.
     """
 
-    def __init__(self, initiated_by: int, initiating_team: Team, season: int = get_config().sba_current_season):
+    def __init__(self, initiated_by: int, initiating_team: Team, season: int = get_config().sba_season):
         """
         Initialize trade builder.
 
