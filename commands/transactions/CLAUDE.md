@@ -152,7 +152,11 @@ This directory contains Discord slash commands for transaction management and ro
    - Channel receives real-time updates
 5. **`/trade view`** - Review complete trade with validation
    - Posts current state to trade channel if viewed elsewhere
-6. **Submit via interactive UI** - Trade submission through Discord buttons
+6. **Accept/Reject via interactive UI** - All team GMs must accept for trade to complete
+   - Each GM clicks "Accept Trade" or "Reject Trade" button
+   - Trade status updates show which teams have accepted
+   - Trade executes automatically when all teams accept
+7. **Trade completion** - Transactions created and posted to #transaction-log
 
 **Channel Behavior**:
 - Commands executed **in** the trade channel: Only ephemeral response to user
@@ -299,6 +303,23 @@ Run tests with:
 
 ## Recent Enhancements
 
+### December 2025
+- ✅ **Trade Acceptance Workflow (v2.22.0)**: Multi-team trade approval system
+  - All participating GMs must accept for trade to complete
+  - Accept/Reject buttons with GM permission validation
+  - Real-time status tracking showing which teams have accepted
+  - Automatic trade execution when all teams accept
+  - Transactions created with `frozen=false` for immediate effect
+  - Rich trade embed posted to #transaction-log on completion
+  - **Files**: `views/trade_embed.py`, `services/trade_builder.py`, `utils/transaction_logging.py`
+
+- ✅ **Trade Transaction Logging**: Rich embeds for completed trades
+  - Groups players by receiving team with "📥 Team receives:" sections
+  - Shows player name, sWAR, and sending team for each move
+  - Uses first team's thumbnail and color for branding
+  - Footer includes Trade ID and SBA season branding
+  - **Function**: `post_trade_to_log()` in `utils/transaction_logging.py`
+
 ### October 2025
 - ✅ **Real-Time IL Move System (`/ilmove`)**: Immediate transaction execution for current week roster changes
   - 95% code reuse with `/dropadd` via shared `TransactionBuilder`
@@ -321,9 +342,7 @@ Run tests with:
 - ✅ **Interactive Trade UI**: Rich Discord embeds with real-time validation
 
 ## Future Enhancements
-- **Trade Submission Integration**: Connect trade system to transaction processing pipeline
 - **Advanced transaction analytics and history
-- **Trade Approval Workflow**: Multi-party trade approval system
 - **Roster optimization suggestions
 - **Automated roster validation alerts
 - **Trade History Tracking**: Complete audit trail for multi-team trades
