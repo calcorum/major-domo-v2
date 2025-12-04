@@ -39,6 +39,15 @@ class BotConfig(BaseSettings):
     modern_stats_start_season: int = 8
     offseason_flag: bool = False  # When True, relaxes roster limits and disables weekly freeze/thaw
 
+    # Roster Limits
+    expand_mil_week: int = 15            # Week when MiL roster expands (early vs late limits)
+    ml_roster_limit_early: int = 26      # ML limit for weeks before expand_mil_week
+    ml_roster_limit_late: int = 26       # ML limit for weeks >= expand_mil_week
+    mil_roster_limit_early: int = 6      # MiL limit for weeks before expand_mil_week
+    mil_roster_limit_late: int = 14      # MiL limit for weeks >= expand_mil_week
+    ml_roster_limit_offseason: int = 69  # ML limit during offseason
+    mil_roster_limit_offseason: int = 69 # MiL limit during offseason
+
 
     # API Constants
     api_version: str = "v3"
@@ -54,7 +63,7 @@ class BotConfig(BaseSettings):
     cap_player_count: int = 26                 # Number of players that count toward cap
 
     # Special Team IDs
-    free_agent_team_id: int = 498
+    free_agent_team_id: int = 547
 
     # Role Names
     help_editor_role_name: str = "Help Editor"

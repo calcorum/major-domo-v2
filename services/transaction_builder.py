@@ -379,23 +379,27 @@ class TransactionBuilder:
         logger.debug(f"🔍 VALIDATION: Projected roster - ML:{projected_ml_size}, MiL:{projected_mil_size}")
         logger.debug(f"🔍 VALIDATION: Projected sWAR - ML:{projected_ml_swar:.2f}, MiL:{projected_mil_swar:.2f}")
         
-        # Get current week to determine roster limits
+        # Get current week and config to determine roster limits
+        config = get_config()
         try:
             current_state = await league_service.get_current_state()
             current_week = current_state.week if current_state else 1
         except Exception as e:
             logger.warning(f"Could not get current week, using default limits: {e}")
             current_week = 1
-        
-        # Determine roster limits based on week
-        # Major league: <=26 if week<=14, <=25 if week>14  
-        # Minor league: <=6 if week<=14, <=14 if week>14
-        if current_week <= 14:
-            ml_limit = 26
-            mil_limit = 6
+
+        # Determine roster limits based on week and offseason flag
+        # During offseason, limits are relaxed to allow roster building
+        if config.offseason_flag:
+            ml_limit = config.ml_roster_limit_offseason
+            mil_limit = config.mil_roster_limit_offseason
+            logger.debug("🔍 VALIDATION: Offseason mode - using relaxed roster limits")
+        elif current_week < config.expand_mil_week:
+            ml_limit = config.ml_roster_limit_early
+            mil_limit = config.mil_roster_limit_early
         else:
-            ml_limit = 26
-            mil_limit = 14
+            ml_limit = config.ml_roster_limit_late
+            mil_limit = config.mil_roster_limit_late
         
         # Validate roster limits
         is_legal = True

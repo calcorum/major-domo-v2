@@ -5,9 +5,10 @@ Handles the Discord embed and button interfaces for the multi-team trade builder
 """
 import discord
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 from services.trade_builder import TradeBuilder, TradeValidationResult
+from models.team import Team, RosterType
 from views.embeds import EmbedColors, EmbedTemplate
 
 
@@ -258,14 +259,15 @@ class RemoveTradeMovesSelect(discord.ui.Select):
 
 
 class SubmitTradeConfirmationModal(discord.ui.Modal):
-    """Modal for confirming trade submission."""
+    """Modal for confirming trade submission - posts acceptance request to trade channel."""
 
-    def __init__(self, builder: TradeBuilder):
+    def __init__(self, builder: TradeBuilder, trade_channel: Optional[discord.TextChannel] = None):
         super().__init__(title="Confirm Trade Submission")
         self.builder = builder
+        self.trade_channel = trade_channel
 
         self.confirmation = discord.ui.TextInput(
-            label="Type 'CONFIRM' to submit",
+            label="Type 'CONFIRM' to submit for approval",
             placeholder="CONFIRM",
             required=True,
             max_length=7
@@ -274,7 +276,7 @@ class SubmitTradeConfirmationModal(discord.ui.Modal):
         self.add_item(self.confirmation)
 
     async def on_submit(self, interaction: discord.Interaction):
-        """Handle confirmation submission."""
+        """Handle confirmation submission - posts acceptance view to trade channel."""
         if self.confirmation.value.upper() != "CONFIRM":
             await interaction.response.send_message(
                 "❌ Trade not submitted. You must type 'CONFIRM' exactly.",
@@ -285,62 +287,425 @@ class SubmitTradeConfirmationModal(discord.ui.Modal):
         await interaction.response.defer(ephemeral=True)
 
         try:
-            # For now, just show success message since actual submission
-            # would require integration with the transaction processing system
+            # Update trade status to PROPOSED
+            from models.trade import TradeStatus
+            self.builder.trade.status = TradeStatus.PROPOSED
 
-            # Create success message
-            success_msg = f"✅ **Trade Submitted Successfully!**\n\n"
-            success_msg += f"**Trade ID:** `{self.builder.trade_id}`\n"
-            success_msg += f"**Teams:** {self.builder.trade.get_trade_summary()}\n"
-            success_msg += f"**Total Moves:** {self.builder.move_count}\n\n"
+            # Create acceptance embed and view
+            acceptance_embed = await create_trade_acceptance_embed(self.builder)
+            acceptance_view = TradeAcceptanceView(self.builder)
 
-            success_msg += "**Trade Details:**\n"
+            # Find the trade channel to post to
+            channel = self.trade_channel
+            if not channel:
+                # Try to find trade channel by name pattern
+                trade_channel_name = f"trade-{'-'.join(t.abbrev.lower() for t in self.builder.participating_teams)}"
+                for ch in interaction.guild.text_channels:  # type: ignore
+                    if ch.name.startswith("trade-") and self.builder.trade_id[:4] in ch.name:
+                        channel = ch
+                        break
 
-            # Show cross-team moves
-            if self.builder.trade.cross_team_moves:
-                success_msg += "**Player Exchanges:**\n"
-                for move in self.builder.trade.cross_team_moves:
-                    success_msg += f"• {move.description}\n"
-
-            # Show supplementary moves
-            if self.builder.trade.supplementary_moves:
-                success_msg += "\n**Supplementary Moves:**\n"
-                for move in self.builder.trade.supplementary_moves:
-                    success_msg += f"• {move.description}\n"
-
-            success_msg += f"\n💡 Use `/trade view` to check trade status"
-
-            await interaction.followup.send(success_msg, ephemeral=True)
-
-            # Clear the builder after successful submission
-            from services.trade_builder import clear_trade_builder
-            clear_trade_builder(interaction.user.id)
-
-            # Update the original embed to show completion
-            completion_embed = discord.Embed(
-                title="✅ Trade Submitted",
-                description=f"Your trade has been submitted successfully!\n\nTrade ID: `{self.builder.trade_id}`",
-                color=0x00ff00
-            )
-
-            # Disable all buttons
-            view = discord.ui.View()
-
-            try:
-                # Find and update the original message
-                async for message in interaction.channel.history(limit=50): # type: ignore
-                    if message.author == interaction.client.user and message.embeds:
-                        if "Trade Builder" in message.embeds[0].title: # type: ignore
-                            await message.edit(embed=completion_embed, view=view)
-                            break
-            except:
-                pass
+            if channel:
+                # Post acceptance request to trade channel
+                await channel.send(
+                    content="📋 **Trade submitted for approval!** All teams must accept to complete the trade.",
+                    embed=acceptance_embed,
+                    view=acceptance_view
+                )
+                await interaction.followup.send(
+                    f"✅ Trade submitted for approval!\n\nThe acceptance request has been posted to {channel.mention}.\n"
+                    f"All participating teams must click **Accept Trade** to finalize.",
+                    ephemeral=True
+                )
+            else:
+                # No trade channel found, post in current channel
+                await interaction.followup.send(
+                    content="📋 **Trade submitted for approval!** All teams must accept to complete the trade.",
+                    embed=acceptance_embed,
+                    view=acceptance_view
+                )
 
         except Exception as e:
             await interaction.followup.send(
                 f"❌ Error submitting trade: {str(e)}",
                 ephemeral=True
             )
+
+
+class TradeAcceptanceView(discord.ui.View):
+    """View for accepting or rejecting a proposed trade."""
+
+    def __init__(self, builder: TradeBuilder):
+        super().__init__(timeout=3600.0)  # 1 hour timeout
+        self.builder = builder
+
+    async def _get_user_team(self, interaction: discord.Interaction) -> Optional[Team]:
+        """Get the team owned by the interacting user."""
+        from services.team_service import team_service
+        from config import get_config
+        config = get_config()
+        return await team_service.get_team_by_owner(interaction.user.id, config.sba_season)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        """Check if user is a GM of a participating team."""
+        user_team = await self._get_user_team(interaction)
+
+        if not user_team:
+            await interaction.response.send_message(
+                "❌ You don't own a team in the league.",
+                ephemeral=True
+            )
+            return False
+
+        # Check if their team (or organization) is participating
+        participant = self.builder.trade.get_participant_by_organization(user_team)
+        if not participant:
+            await interaction.response.send_message(
+                "❌ Your team is not part of this trade.",
+                ephemeral=True
+            )
+            return False
+
+        return True
+
+    async def on_timeout(self) -> None:
+        """Handle view timeout - disable buttons but keep trade in memory."""
+        for item in self.children:
+            if isinstance(item, discord.ui.Button):
+                item.disabled = True
+
+    @discord.ui.button(label="Accept Trade", style=discord.ButtonStyle.success, emoji="✅")
+    async def accept_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Handle accept button click."""
+        user_team = await self._get_user_team(interaction)
+        if not user_team:
+            return
+
+        # Find the participating team (could be org affiliate)
+        participant = self.builder.trade.get_participant_by_organization(user_team)
+        if not participant:
+            return
+
+        team_id = participant.team.id
+
+        # Check if already accepted
+        if self.builder.has_team_accepted(team_id):
+            await interaction.response.send_message(
+                f"✅ {participant.team.abbrev} has already accepted this trade.",
+                ephemeral=True
+            )
+            return
+
+        # Record acceptance
+        all_accepted = self.builder.accept_trade(team_id)
+
+        if all_accepted:
+            # All teams accepted - finalize the trade
+            await self._finalize_trade(interaction)
+        else:
+            # Update embed to show new acceptance status
+            embed = await create_trade_acceptance_embed(self.builder)
+            await interaction.response.edit_message(embed=embed, view=self)
+
+            # Send confirmation to channel
+            await interaction.followup.send(
+                f"✅ **{participant.team.abbrev}** has accepted the trade! "
+                f"({len(self.builder.accepted_teams)}/{self.builder.team_count} teams)"
+            )
+
+    @discord.ui.button(label="Reject Trade", style=discord.ButtonStyle.danger, emoji="❌")
+    async def reject_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Handle reject button click - moves trade back to DRAFT."""
+        user_team = await self._get_user_team(interaction)
+        if not user_team:
+            return
+
+        participant = self.builder.trade.get_participant_by_organization(user_team)
+        if not participant:
+            return
+
+        # Reject the trade
+        self.builder.reject_trade()
+
+        # Disable buttons
+        self.accept_button.disabled = True
+        self.reject_button.disabled = True
+
+        # Update embed to show rejection
+        embed = await create_trade_rejection_embed(self.builder, participant.team)
+        await interaction.response.edit_message(embed=embed, view=self)
+
+        # Notify the channel
+        await interaction.followup.send(
+            f"❌ **{participant.team.abbrev}** has rejected the trade.\n\n"
+            f"The trade has been moved back to **DRAFT** status. "
+            f"Teams can continue negotiating using `/trade` commands."
+        )
+
+        self.stop()
+
+    async def _finalize_trade(self, interaction: discord.Interaction) -> None:
+        """Finalize the trade - create transactions and complete."""
+        from services.league_service import league_service
+        from services.transaction_service import transaction_service
+        from services.trade_builder import clear_trade_builder_by_team
+        from models.transaction import Transaction
+        from models.trade import TradeStatus
+        from utils.transaction_logging import post_trade_to_log
+        from config import get_config
+
+        try:
+            await interaction.response.defer()
+
+            config = get_config()
+
+            # Get next week for transactions
+            current = await league_service.get_current_state()
+            next_week = current.week + 1 if current else 1
+
+            # Create FA team for reference
+            fa_team = Team(
+                id=config.free_agent_team_id,
+                abbrev="FA",
+                sname="Free Agents",
+                lname="Free Agency",
+                season=self.builder.trade.season
+            )  # type: ignore
+
+            # Create transactions from all moves
+            transactions: List[Transaction] = []
+            move_id = f"Trade-{self.builder.trade_id}-{int(datetime.now(timezone.utc).timestamp())}"
+
+            # Process cross-team moves
+            for move in self.builder.trade.cross_team_moves:
+                # Get actual team affiliates for from/to based on roster type
+                if move.from_roster == RosterType.MAJOR_LEAGUE:
+                    old_team = move.source_team
+                elif move.from_roster == RosterType.MINOR_LEAGUE:
+                    old_team = await move.source_team.minor_league_affiliate() if move.source_team else None
+                elif move.from_roster == RosterType.INJURED_LIST:
+                    old_team = await move.source_team.injured_list_affiliate() if move.source_team else None
+                else:
+                    old_team = move.source_team
+
+                if move.to_roster == RosterType.MAJOR_LEAGUE:
+                    new_team = move.destination_team
+                elif move.to_roster == RosterType.MINOR_LEAGUE:
+                    new_team = await move.destination_team.minor_league_affiliate() if move.destination_team else None
+                elif move.to_roster == RosterType.INJURED_LIST:
+                    new_team = await move.destination_team.injured_list_affiliate() if move.destination_team else None
+                else:
+                    new_team = move.destination_team
+
+                if old_team and new_team:
+                    transaction = Transaction(
+                        id=0,
+                        week=next_week,
+                        season=self.builder.trade.season,
+                        moveid=move_id,
+                        player=move.player,
+                        oldteam=old_team,
+                        newteam=new_team,
+                        cancelled=False,
+                        frozen=False  # Trades are NOT frozen - immediately effective
+                    )
+                    transactions.append(transaction)
+
+            # Process supplementary moves
+            for move in self.builder.trade.supplementary_moves:
+                if move.from_roster == RosterType.MAJOR_LEAGUE:
+                    old_team = move.source_team
+                elif move.from_roster == RosterType.MINOR_LEAGUE:
+                    old_team = await move.source_team.minor_league_affiliate() if move.source_team else None
+                elif move.from_roster == RosterType.INJURED_LIST:
+                    old_team = await move.source_team.injured_list_affiliate() if move.source_team else None
+                elif move.from_roster == RosterType.FREE_AGENCY:
+                    old_team = fa_team
+                else:
+                    old_team = move.source_team
+
+                if move.to_roster == RosterType.MAJOR_LEAGUE:
+                    new_team = move.destination_team
+                elif move.to_roster == RosterType.MINOR_LEAGUE:
+                    new_team = await move.destination_team.minor_league_affiliate() if move.destination_team else None
+                elif move.to_roster == RosterType.INJURED_LIST:
+                    new_team = await move.destination_team.injured_list_affiliate() if move.destination_team else None
+                elif move.to_roster == RosterType.FREE_AGENCY:
+                    new_team = fa_team
+                else:
+                    new_team = move.destination_team
+
+                if old_team and new_team:
+                    transaction = Transaction(
+                        id=0,
+                        week=next_week,
+                        season=self.builder.trade.season,
+                        moveid=move_id,
+                        player=move.player,
+                        oldteam=old_team,
+                        newteam=new_team,
+                        cancelled=False,
+                        frozen=False  # Trades are NOT frozen - immediately effective
+                    )
+                    transactions.append(transaction)
+
+            # POST transactions to database
+            if transactions:
+                created_transactions = await transaction_service.create_transaction_batch(transactions)
+            else:
+                created_transactions = []
+
+            # Post to #transaction-log channel
+            if created_transactions and interaction.client:
+                await post_trade_to_log(
+                    bot=interaction.client,
+                    builder=self.builder,
+                    transactions=created_transactions,
+                    effective_week=next_week
+                )
+
+            # Update trade status
+            self.builder.trade.status = TradeStatus.ACCEPTED
+
+            # Disable buttons
+            self.accept_button.disabled = True
+            self.reject_button.disabled = True
+
+            # Update embed to show completion
+            embed = await create_trade_complete_embed(self.builder, len(created_transactions), next_week)
+            await interaction.edit_original_response(embed=embed, view=self)
+
+            # Send completion message
+            await interaction.followup.send(
+                f"🎉 **Trade Complete!**\n\n"
+                f"All {self.builder.team_count} teams have accepted the trade.\n"
+                f"**{len(created_transactions)} transactions** have been created for **Week {next_week}**.\n\n"
+                f"Trade ID: `{self.builder.trade_id}`"
+            )
+
+            # Clear the trade builder
+            for team in self.builder.participating_teams:
+                clear_trade_builder_by_team(team.id)
+
+            self.stop()
+
+        except Exception as e:
+            await interaction.followup.send(
+                f"❌ Error finalizing trade: {str(e)}",
+                ephemeral=True
+            )
+
+
+async def create_trade_acceptance_embed(builder: TradeBuilder) -> discord.Embed:
+    """Create embed showing trade details and acceptance status."""
+    embed = EmbedTemplate.create_base_embed(
+        title=f"📋 Trade Pending Acceptance - {builder.trade.get_trade_summary()}",
+        description="All participating teams must accept to complete the trade.",
+        color=EmbedColors.WARNING
+    )
+
+    # Show participating teams
+    team_list = [f"• {team.abbrev} - {team.sname}" for team in builder.participating_teams]
+    embed.add_field(
+        name=f"🏟️ Participating Teams ({builder.team_count})",
+        value="\n".join(team_list),
+        inline=False
+    )
+
+    # Show cross-team moves
+    if builder.trade.cross_team_moves:
+        moves_text = ""
+        for move in builder.trade.cross_team_moves[:10]:
+            moves_text += f"• {move.description}\n"
+        if len(builder.trade.cross_team_moves) > 10:
+            moves_text += f"... and {len(builder.trade.cross_team_moves) - 10} more"
+        embed.add_field(
+            name=f"🔄 Player Exchanges ({len(builder.trade.cross_team_moves)})",
+            value=moves_text,
+            inline=False
+        )
+
+    # Show supplementary moves if any
+    if builder.trade.supplementary_moves:
+        supp_text = ""
+        for move in builder.trade.supplementary_moves[:5]:
+            supp_text += f"• {move.description}\n"
+        if len(builder.trade.supplementary_moves) > 5:
+            supp_text += f"... and {len(builder.trade.supplementary_moves) - 5} more"
+        embed.add_field(
+            name=f"⚙️ Supplementary Moves ({len(builder.trade.supplementary_moves)})",
+            value=supp_text,
+            inline=False
+        )
+
+    # Show acceptance status
+    status_lines = []
+    for team in builder.participating_teams:
+        if team.id in builder.accepted_teams:
+            status_lines.append(f"✅ **{team.abbrev}** - Accepted")
+        else:
+            status_lines.append(f"⏳ **{team.abbrev}** - Pending")
+
+    embed.add_field(
+        name="📊 Acceptance Status",
+        value="\n".join(status_lines),
+        inline=False
+    )
+
+    # Add footer
+    embed.set_footer(text=f"Trade ID: {builder.trade_id} • {len(builder.accepted_teams)}/{builder.team_count} teams accepted")
+
+    return embed
+
+
+async def create_trade_rejection_embed(builder: TradeBuilder, rejecting_team: Team) -> discord.Embed:
+    """Create embed showing trade was rejected."""
+    embed = EmbedTemplate.create_base_embed(
+        title=f"❌ Trade Rejected - {builder.trade.get_trade_summary()}",
+        description=f"**{rejecting_team.abbrev}** has rejected the trade.\n\n"
+                    f"The trade has been moved back to **DRAFT** status.\n"
+                    f"Teams can continue negotiating using `/trade` commands.",
+        color=EmbedColors.ERROR
+    )
+
+    embed.set_footer(text=f"Trade ID: {builder.trade_id}")
+
+    return embed
+
+
+async def create_trade_complete_embed(builder: TradeBuilder, transaction_count: int, effective_week: int) -> discord.Embed:
+    """Create embed showing trade was completed."""
+    embed = EmbedTemplate.create_base_embed(
+        title=f"🎉 Trade Complete! - {builder.trade.get_trade_summary()}",
+        description=f"All {builder.team_count} teams have accepted the trade!\n\n"
+                    f"**{transaction_count} transactions** created for **Week {effective_week}**.",
+        color=EmbedColors.SUCCESS
+    )
+
+    # Show final acceptance status (all green)
+    status_lines = [f"✅ **{team.abbrev}** - Accepted" for team in builder.participating_teams]
+    embed.add_field(
+        name="📊 Final Status",
+        value="\n".join(status_lines),
+        inline=False
+    )
+
+    # Show cross-team moves
+    if builder.trade.cross_team_moves:
+        moves_text = ""
+        for move in builder.trade.cross_team_moves[:8]:
+            moves_text += f"• {move.description}\n"
+        if len(builder.trade.cross_team_moves) > 8:
+            moves_text += f"... and {len(builder.trade.cross_team_moves) - 8} more"
+        embed.add_field(
+            name=f"🔄 Player Exchanges",
+            value=moves_text,
+            inline=False
+        )
+
+    embed.set_footer(text=f"Trade ID: {builder.trade_id} • Effective: Week {effective_week}")
+
+    return embed
 
 
 async def create_trade_embed(builder: TradeBuilder) -> discord.Embed:
