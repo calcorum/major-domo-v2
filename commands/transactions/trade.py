@@ -183,7 +183,7 @@ class TradeCommands(commands.Cog):
         other_team: str
     ):
         """Add a team to an existing trade."""
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer(ephemeral=False)
 
         # Get user's team first
         user_team = await validate_user_has_team(interaction)
@@ -266,7 +266,7 @@ class TradeCommands(commands.Cog):
         destination_team: str
     ):
         """Add a player move to the trade."""
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer(ephemeral=False)
 
         # Get user's team first
         user_team = await validate_user_has_team(interaction)
@@ -373,7 +373,7 @@ class TradeCommands(commands.Cog):
         destination: str
     ):
         """Add a supplementary (internal organization) move for roster legality."""
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer(ephemeral=False)
 
         # Get user's team first
         user_team = await validate_user_has_team(interaction)
@@ -464,7 +464,7 @@ class TradeCommands(commands.Cog):
     @logged_command("/trade view")
     async def trade_view(self, interaction: discord.Interaction):
         """View the current trade."""
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer(ephemeral=False)
 
         # Get user's team first
         user_team = await validate_user_has_team(interaction)
@@ -506,7 +506,7 @@ class TradeCommands(commands.Cog):
     @logged_command("/trade clear")
     async def trade_clear(self, interaction: discord.Interaction):
         """Clear the current trade."""
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer(ephemeral=False)
 
         # Get user's team first
         user_team = await validate_user_has_team(interaction)

@@ -4,7 +4,7 @@ Trade Builder Service
 Extends the TransactionBuilder to support multi-team trades and player exchanges.
 """
 import logging
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 from datetime import datetime, timezone
 import uuid
 
@@ -90,6 +90,9 @@ class TradeBuilder:
         # Cache transaction builders for each participating team
         self._team_builders: Dict[int, TransactionBuilder] = {}
 
+        # Track which teams have accepted the trade (team_id -> True)
+        self.accepted_teams: Set[int] = set()
+
         logger.info(f"TradeBuilder initialized: {self.trade.trade_id} by user {initiated_by} for {initiating_team.abbrev}")
 
     @property
@@ -116,6 +119,54 @@ class TradeBuilder:
     def move_count(self) -> int:
         """Get total number of moves in trade."""
         return self.trade.total_moves
+
+    @property
+    def all_teams_accepted(self) -> bool:
+        """Check if all participating teams have accepted the trade."""
+        participating_ids = {team.id for team in self.participating_teams}
+        return participating_ids == self.accepted_teams
+
+    @property
+    def pending_teams(self) -> List[Team]:
+        """Get list of teams that haven't accepted yet."""
+        return [team for team in self.participating_teams if team.id not in self.accepted_teams]
+
+    def accept_trade(self, team_id: int) -> bool:
+        """
+        Record a team's acceptance of the trade.
+
+        Args:
+            team_id: ID of the team accepting
+
+        Returns:
+            True if all teams have now accepted, False otherwise
+        """
+        self.accepted_teams.add(team_id)
+        logger.info(f"Team {team_id} accepted trade {self.trade_id}. Accepted: {len(self.accepted_teams)}/{self.team_count}")
+        return self.all_teams_accepted
+
+    def reject_trade(self) -> None:
+        """
+        Reject the trade, moving it back to DRAFT status.
+
+        Clears all acceptances so teams can renegotiate.
+        """
+        self.accepted_teams.clear()
+        self.trade.status = TradeStatus.DRAFT
+        logger.info(f"Trade {self.trade_id} rejected and moved back to DRAFT")
+
+    def get_acceptance_status(self) -> Dict[int, bool]:
+        """
+        Get acceptance status for each participating team.
+
+        Returns:
+            Dict mapping team_id to acceptance status (True/False)
+        """
+        return {team.id: team.id in self.accepted_teams for team in self.participating_teams}
+
+    def has_team_accepted(self, team_id: int) -> bool:
+        """Check if a specific team has accepted."""
+        return team_id in self.accepted_teams
 
     async def add_team(self, team: Team) -> tuple[bool, str]:
         """

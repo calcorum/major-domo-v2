@@ -499,6 +499,248 @@ class TestTradeBuilder:
         assert "WV" in summary and "NY" in summary
 
 
+class TestTradeAcceptance:
+    """
+    Test trade acceptance tracking functionality.
+
+    The acceptance system allows multi-GM approval of trades before they are finalized.
+    Each participating team's GM must accept the trade before it can be converted to
+    transactions and posted to the database.
+    """
+
+    def setup_method(self):
+        """Set up test fixtures."""
+        self.user_id = 12345
+        self.team1 = TeamFactory.west_virginia()
+        self.team2 = TeamFactory.new_york()
+        self.team3 = TeamFactory.create(id=3, abbrev="BOS", sname="Red Sox")
+
+        # Clear any existing trade builders
+        _active_trade_builders.clear()
+
+    def test_initial_acceptance_state(self):
+        """
+        Test that a new trade has no acceptances.
+
+        When a trade is first created, no teams should be marked as accepted
+        since acceptance happens after the trade is submitted for approval.
+        """
+        builder = TradeBuilder(self.user_id, self.team1, season=12)
+
+        assert builder.accepted_teams == set()
+        assert not builder.all_teams_accepted
+        assert builder.pending_teams == [self.team1]
+        assert not builder.has_team_accepted(self.team1.id)
+
+    def test_accept_trade_single_team(self):
+        """
+        Test single team acceptance.
+
+        When only one team is in the trade and accepts, all_teams_accepted
+        should return True since all participating teams (just 1) have accepted.
+        """
+        builder = TradeBuilder(self.user_id, self.team1, season=12)
+
+        # Accept trade as team1
+        all_accepted = builder.accept_trade(self.team1.id)
+
+        assert all_accepted  # Only one team, so should be True
+        assert builder.has_team_accepted(self.team1.id)
+        assert builder.all_teams_accepted
+        assert builder.pending_teams == []
+
+    @pytest.mark.asyncio
+    async def test_accept_trade_two_teams(self):
+        """
+        Test acceptance workflow with two teams.
+
+        Both teams must accept before all_teams_accepted returns True.
+        This tests the core multi-GM acceptance requirement.
+        """
+        builder = TradeBuilder(self.user_id, self.team1, season=12)
+        await builder.add_team(self.team2)
+
+        # Team1 accepts first
+        all_accepted = builder.accept_trade(self.team1.id)
+        assert not all_accepted  # Team2 hasn't accepted yet
+        assert builder.has_team_accepted(self.team1.id)
+        assert not builder.has_team_accepted(self.team2.id)
+        assert builder.pending_teams == [self.team2]
+
+        # Team2 accepts second
+        all_accepted = builder.accept_trade(self.team2.id)
+        assert all_accepted  # Now all teams have accepted
+        assert builder.has_team_accepted(self.team2.id)
+        assert builder.all_teams_accepted
+        assert builder.pending_teams == []
+
+    @pytest.mark.asyncio
+    async def test_accept_trade_three_teams(self):
+        """
+        Test acceptance workflow with three teams (multi-team trade).
+
+        Multi-team trades require all participating teams to accept.
+        This validates proper handling of 3+ team trades.
+        """
+        builder = TradeBuilder(self.user_id, self.team1, season=12)
+        await builder.add_team(self.team2)
+        await builder.add_team(self.team3)
+
+        # First team accepts
+        all_accepted = builder.accept_trade(self.team1.id)
+        assert not all_accepted
+        assert len(builder.pending_teams) == 2
+
+        # Second team accepts
+        all_accepted = builder.accept_trade(self.team2.id)
+        assert not all_accepted
+        assert len(builder.pending_teams) == 1
+
+        # Third team accepts
+        all_accepted = builder.accept_trade(self.team3.id)
+        assert all_accepted
+        assert len(builder.pending_teams) == 0
+
+    @pytest.mark.asyncio
+    async def test_reject_trade_clears_acceptances(self):
+        """
+        Test that rejecting a trade clears all acceptances.
+
+        When any team rejects, the trade goes back to DRAFT status and
+        all previous acceptances are cleared so teams can renegotiate.
+        """
+        builder = TradeBuilder(self.user_id, self.team1, season=12)
+        await builder.add_team(self.team2)
+
+        # Both teams accept
+        builder.accept_trade(self.team1.id)
+        builder.accept_trade(self.team2.id)
+        assert builder.all_teams_accepted
+
+        # Reject trade
+        builder.reject_trade()
+
+        # All acceptances should be cleared
+        assert builder.accepted_teams == set()
+        assert not builder.all_teams_accepted
+        assert not builder.has_team_accepted(self.team1.id)
+        assert not builder.has_team_accepted(self.team2.id)
+        assert len(builder.pending_teams) == 2
+
+    @pytest.mark.asyncio
+    async def test_reject_trade_changes_status_to_draft(self):
+        """
+        Test that rejecting a trade moves status back to DRAFT.
+
+        DRAFT status allows teams to continue modifying the trade
+        before re-submitting for approval.
+        """
+        builder = TradeBuilder(self.user_id, self.team1, season=12)
+        await builder.add_team(self.team2)
+
+        # Change status to PROPOSED (simulating submission)
+        builder.trade.status = TradeStatus.PROPOSED
+        assert builder.trade.status == TradeStatus.PROPOSED
+
+        # Reject trade
+        builder.reject_trade()
+
+        # Status should be back to DRAFT
+        assert builder.trade.status == TradeStatus.DRAFT
+
+    @pytest.mark.asyncio
+    async def test_get_acceptance_status(self):
+        """
+        Test getting acceptance status for all teams.
+
+        The get_acceptance_status method returns a dictionary mapping
+        each team's ID to their acceptance status (True/False).
+        """
+        builder = TradeBuilder(self.user_id, self.team1, season=12)
+        await builder.add_team(self.team2)
+
+        # Initial status - both False
+        status = builder.get_acceptance_status()
+        assert status == {self.team1.id: False, self.team2.id: False}
+
+        # After team1 accepts
+        builder.accept_trade(self.team1.id)
+        status = builder.get_acceptance_status()
+        assert status == {self.team1.id: True, self.team2.id: False}
+
+        # After both accept
+        builder.accept_trade(self.team2.id)
+        status = builder.get_acceptance_status()
+        assert status == {self.team1.id: True, self.team2.id: True}
+
+    @pytest.mark.asyncio
+    async def test_duplicate_acceptance_is_idempotent(self):
+        """
+        Test that accepting twice has no adverse effects.
+
+        GMs might click the Accept button multiple times. The system should
+        handle this gracefully by treating it as idempotent.
+        """
+        builder = TradeBuilder(self.user_id, self.team1, season=12)
+        await builder.add_team(self.team2)
+
+        # Team1 accepts once
+        builder.accept_trade(self.team1.id)
+        assert len(builder.accepted_teams) == 1
+
+        # Team1 accepts again (idempotent)
+        builder.accept_trade(self.team1.id)
+        assert len(builder.accepted_teams) == 1  # Still just 1
+        assert builder.has_team_accepted(self.team1.id)
+
+    @pytest.mark.asyncio
+    async def test_pending_teams_returns_correct_order(self):
+        """
+        Test that pending_teams returns teams in participation order.
+
+        The order of pending teams should match the order they were added
+        to the trade for consistent display in the UI.
+        """
+        builder = TradeBuilder(self.user_id, self.team1, season=12)
+        await builder.add_team(self.team2)
+        await builder.add_team(self.team3)
+
+        # All teams pending initially
+        pending = builder.pending_teams
+        assert len(pending) == 3
+        assert pending[0].id == self.team1.id
+        assert pending[1].id == self.team2.id
+        assert pending[2].id == self.team3.id
+
+        # After middle team accepts, order preserved for remaining
+        builder.accept_trade(self.team2.id)
+        pending = builder.pending_teams
+        assert len(pending) == 2
+        assert pending[0].id == self.team1.id
+        assert pending[1].id == self.team3.id
+
+    @pytest.mark.asyncio
+    async def test_acceptance_survives_trade_modifications(self):
+        """
+        Test that acceptances are independent of trade move changes.
+
+        Note: In real usage, the UI should prevent modifications after
+        submission, but the data model doesn't enforce this coupling.
+        """
+        builder = TradeBuilder(self.user_id, self.team1, season=12)
+        await builder.add_team(self.team2)
+
+        # Team1 accepts
+        builder.accept_trade(self.team1.id)
+        assert builder.has_team_accepted(self.team1.id)
+
+        # Clear trade moves (would require UI re-submission in real use)
+        builder.clear_trade()
+
+        # Acceptance is still recorded (UI should handle re-submission flow)
+        assert builder.has_team_accepted(self.team1.id)
+
+
 class TestTradeBuilderCache:
     """Test trade builder cache functionality."""
 

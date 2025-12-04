@@ -513,7 +513,30 @@ jq 'select(.extra.duration_ms > 5000)' logs/discord_bot_v2.json
 - [ ] Added tests following established patterns
 - [ ] Verified all tests pass
 
-## 🔄 Recent Major Enhancements (January 2025)
+## 🔄 Recent Major Enhancements
+
+### Multi-GM Trade Access (December 2025)
+**Enables any GM participating in a trade to access and modify the trade builder**
+
+**Problem Solved**: Previously, only the user who initiated a trade (`/trade initiate`) could add players, view, or modify the trade. Other GMs whose teams were part of the trade had no access.
+
+**Solution**: Implemented dual-key indexing pattern with a secondary index mapping team IDs to trade keys.
+
+**Key Changes**:
+- **`services/trade_builder.py`**:
+  - Added `_team_to_trade_key` secondary index
+  - Added `get_trade_builder_by_team(team_id)` function
+  - Added `clear_trade_builder_by_team(team_id)` function
+  - Updated `add_team()`, `remove_team()`, `clear_trade_builder()` to maintain index
+- **`commands/transactions/trade.py`**:
+  - Refactored 5 commands to use team-based lookups: `add-team`, `add-player`, `supplementary`, `view`, `clear`
+  - Any GM whose team is in the trade can now use these commands
+
+**Docker Images**:
+- `manticorum67/major-domo-discordapp:2.22.0`
+- `manticorum67/major-domo-discordapp:dev`
+
+**Tests**: 9 new tests added to `tests/test_services_trade_builder.py`
 
 ### Custom Help Commands System (January 2025)
 **Comprehensive admin-managed help system for league documentation**:
