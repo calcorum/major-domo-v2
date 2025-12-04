@@ -137,6 +137,10 @@ class TradeBuilder:
         # Create transaction builder for this team
         self._team_builders[team.id] = TransactionBuilder(team, self.trade.initiated_by, self.trade.season)
 
+        # Register team in secondary index for multi-GM access
+        trade_key = f"{self.trade.initiated_by}:trade"
+        _team_to_trade_key[team.id] = trade_key
+
         logger.info(f"Added team {team.abbrev} to trade {self.trade_id}")
         return True, ""
 
@@ -160,10 +164,12 @@ class TradeBuilder:
 
         # Remove team
         removed = self.trade.remove_participant(team_id)
-        if removed and team_id in self._team_builders:
-            del self._team_builders[team_id]
-
         if removed:
+            if team_id in self._team_builders:
+                del self._team_builders[team_id]
+            # Remove from secondary index
+            if team_id in _team_to_trade_key:
+                del _team_to_trade_key[team_id]
             logger.info(f"Removed team {team_id} from trade {self.trade_id}")
 
         return removed, "" if removed else "Failed to remove team"
@@ -444,6 +450,9 @@ class TradeBuilder:
 # Global cache for active trade builders
 _active_trade_builders: Dict[str, TradeBuilder] = {}
 
+# Secondary index: maps team_id -> trade_key for multi-GM access
+_team_to_trade_key: Dict[int, str] = {}
+
 
 def get_trade_builder(user_id: int, initiating_team: Team) -> TradeBuilder:
     """
@@ -456,21 +465,78 @@ def get_trade_builder(user_id: int, initiating_team: Team) -> TradeBuilder:
     Returns:
         TradeBuilder instance
     """
-    # For now, use user_id as the key. In the future, could support multiple concurrent trades
     trade_key = f"{user_id}:trade"
 
     if trade_key not in _active_trade_builders:
-        _active_trade_builders[trade_key] = TradeBuilder(user_id, initiating_team)
+        builder = TradeBuilder(user_id, initiating_team)
+        _active_trade_builders[trade_key] = builder
+        # Register initiating team in secondary index for multi-GM access
+        _team_to_trade_key[initiating_team.id] = trade_key
 
     return _active_trade_builders[trade_key]
 
 
+def get_trade_builder_by_team(team_id: int) -> Optional[TradeBuilder]:
+    """
+    Get trade builder that includes a specific team.
+
+    This allows any GM whose team is participating in a trade to access
+    the trade builder, not just the initiator.
+
+    Args:
+        team_id: Team ID to look up
+
+    Returns:
+        TradeBuilder if team is in an active trade, None otherwise
+    """
+    trade_key = _team_to_trade_key.get(team_id)
+    if trade_key:
+        return _active_trade_builders.get(trade_key)
+    return None
+
+
 def clear_trade_builder(user_id: int) -> None:
-    """Clear trade builder for a user."""
+    """Clear trade builder for a user and remove all team mappings."""
     trade_key = f"{user_id}:trade"
     if trade_key in _active_trade_builders:
+        # Remove all team mappings for this trade
+        builder = _active_trade_builders[trade_key]
+        for team in builder.participating_teams:
+            if team.id in _team_to_trade_key:
+                del _team_to_trade_key[team.id]
+
         del _active_trade_builders[trade_key]
         logger.info(f"Cleared trade builder for user {user_id}")
+
+
+def clear_trade_builder_by_team(team_id: int) -> bool:
+    """
+    Clear trade builder that includes a specific team.
+
+    This allows any GM in a trade to clear it, not just the initiator.
+
+    Args:
+        team_id: Team ID whose trade should be cleared
+
+    Returns:
+        True if a trade was cleared, False if no trade found
+    """
+    trade_key = _team_to_trade_key.get(team_id)
+    if not trade_key:
+        return False
+
+    if trade_key in _active_trade_builders:
+        builder = _active_trade_builders[trade_key]
+        # Remove all team mappings
+        for team in builder.participating_teams:
+            if team.id in _team_to_trade_key:
+                del _team_to_trade_key[team.id]
+
+        del _active_trade_builders[trade_key]
+        logger.info(f"Cleared trade builder via team {team_id}")
+        return True
+
+    return False
 
 
 def get_active_trades() -> Dict[str, TradeBuilder]:

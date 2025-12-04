@@ -18,7 +18,9 @@ from utils.team_utils import validate_user_has_team, get_team_by_abbrev_with_val
 from services.trade_builder import (
     TradeBuilder,
     get_trade_builder,
-    clear_trade_builder
+    get_trade_builder_by_team,
+    clear_trade_builder,
+    clear_trade_builder_by_team,
 )
 from services.player_service import player_service
 from models.team import RosterType
@@ -183,17 +185,19 @@ class TradeCommands(commands.Cog):
         """Add a team to an existing trade."""
         await interaction.response.defer(ephemeral=True)
 
-        # Check if user has an active trade
-        trade_key = f"{interaction.user.id}:trade"
-        from services.trade_builder import _active_trade_builders
-        if trade_key not in _active_trade_builders:
+        # Get user's team first
+        user_team = await validate_user_has_team(interaction)
+        if not user_team:
+            return
+
+        # Look up trade by user's team (allows any GM in the trade to participate)
+        trade_builder = get_trade_builder_by_team(user_team.id)
+        if not trade_builder:
             await interaction.followup.send(
-                "❌ You don't have an active trade. Use `/trade initiate` first.",
+                "❌ Your team is not part of an active trade. Use `/trade initiate` first.",
                 ephemeral=True
             )
             return
-
-        trade_builder = _active_trade_builders[trade_key]
 
         # Get the team to add
         team_to_add = await get_team_by_abbrev_with_validation(other_team, interaction)
@@ -264,21 +268,18 @@ class TradeCommands(commands.Cog):
         """Add a player move to the trade."""
         await interaction.response.defer(ephemeral=True)
 
-        # Check if user has an active trade
-        trade_key = f"{interaction.user.id}:trade"
-        from services.trade_builder import _active_trade_builders
-        if trade_key not in _active_trade_builders:
-            await interaction.followup.send(
-                "❌ You don't have an active trade. Use `/trade initiate` first.",
-                ephemeral=True
-            )
-            return
-
-        trade_builder = _active_trade_builders[trade_key]
-
-        # Get user's team
+        # Get user's team first
         user_team = await validate_user_has_team(interaction)
         if not user_team:
+            return
+
+        # Look up trade by user's team (allows any GM in the trade to participate)
+        trade_builder = get_trade_builder_by_team(user_team.id)
+        if not trade_builder:
+            await interaction.followup.send(
+                "❌ Your team is not part of an active trade. Use `/trade initiate` or ask another GM to add your team.",
+                ephemeral=True
+            )
             return
 
         # Find the player
@@ -374,21 +375,18 @@ class TradeCommands(commands.Cog):
         """Add a supplementary (internal organization) move for roster legality."""
         await interaction.response.defer(ephemeral=True)
 
-        # Check if user has an active trade
-        trade_key = f"{interaction.user.id}:trade"
-        from services.trade_builder import _active_trade_builders
-        if trade_key not in _active_trade_builders:
-            await interaction.followup.send(
-                "❌ You don't have an active trade. Use `/trade initiate` first.",
-                ephemeral=True
-            )
-            return
-
-        trade_builder = _active_trade_builders[trade_key]
-
-        # Get user's team
+        # Get user's team first
         user_team = await validate_user_has_team(interaction)
         if not user_team:
+            return
+
+        # Look up trade by user's team (allows any GM in the trade to participate)
+        trade_builder = get_trade_builder_by_team(user_team.id)
+        if not trade_builder:
+            await interaction.followup.send(
+                "❌ Your team is not part of an active trade. Use `/trade initiate` or ask another GM to add your team.",
+                ephemeral=True
+            )
             return
 
         # Find the player
@@ -468,16 +466,19 @@ class TradeCommands(commands.Cog):
         """View the current trade."""
         await interaction.response.defer(ephemeral=True)
 
-        trade_key = f"{interaction.user.id}:trade"
-        from services.trade_builder import _active_trade_builders
-        if trade_key not in _active_trade_builders:
+        # Get user's team first
+        user_team = await validate_user_has_team(interaction)
+        if not user_team:
+            return
+
+        # Look up trade by user's team (allows any GM in the trade to view)
+        trade_builder = get_trade_builder_by_team(user_team.id)
+        if not trade_builder:
             await interaction.followup.send(
-                "❌ You don't have an active trade.",
+                "❌ Your team is not part of an active trade.",
                 ephemeral=True
             )
             return
-
-        trade_builder = _active_trade_builders[trade_key]
 
         # Show trade interface
         embed = await create_trade_embed(trade_builder)
@@ -507,25 +508,33 @@ class TradeCommands(commands.Cog):
         """Clear the current trade."""
         await interaction.response.defer(ephemeral=True)
 
-        # Get trade_id before clearing (for channel deletion)
-        trade_key = f"{interaction.user.id}:trade"
-        from services.trade_builder import _active_trade_builders
-        trade_id = None
-        if trade_key in _active_trade_builders:
-            trade_id = _active_trade_builders[trade_key].trade_id
+        # Get user's team first
+        user_team = await validate_user_has_team(interaction)
+        if not user_team:
+            return
+
+        # Look up trade by user's team (allows any GM in the trade to clear)
+        trade_builder = get_trade_builder_by_team(user_team.id)
+        if not trade_builder:
+            await interaction.followup.send(
+                "❌ Your team is not part of an active trade.",
+                ephemeral=True
+            )
+            return
+
+        trade_id = trade_builder.trade_id
 
         # Delete associated trade channel if it exists
-        if trade_id:
-            await self.channel_manager.delete_trade_channel(
-                guild=interaction.guild,
-                trade_id=trade_id
-            )
+        await self.channel_manager.delete_trade_channel(
+            guild=interaction.guild,
+            trade_id=trade_id
+        )
 
-        # Clear the trade builder
-        clear_trade_builder(interaction.user.id)
+        # Clear the trade builder using team-based function
+        clear_trade_builder_by_team(user_team.id)
 
         await interaction.followup.send(
-            "✅ Your trade has been cleared.",
+            "✅ The trade has been cleared.",
             ephemeral=True
         )
 

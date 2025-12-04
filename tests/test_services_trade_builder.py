@@ -12,8 +12,11 @@ from services.trade_builder import (
     TradeBuilder,
     TradeValidationResult,
     get_trade_builder,
+    get_trade_builder_by_team,
     clear_trade_builder,
-    _active_trade_builders
+    clear_trade_builder_by_team,
+    _active_trade_builders,
+    _team_to_trade_key,
 )
 from models.trade import TradeStatus
 from models.team import RosterType, Team
@@ -502,6 +505,7 @@ class TestTradeBuilderCache:
     def setup_method(self):
         """Clear cache before each test."""
         _active_trade_builders.clear()
+        _team_to_trade_key.clear()
 
     def test_get_trade_builder(self):
         """Test getting trade builder from cache."""
@@ -533,6 +537,185 @@ class TestTradeBuilderCache:
         # Next call should create new builder
         new_builder = get_trade_builder(user_id, team)
         assert new_builder is not builder
+
+    def test_get_trade_builder_registers_initiating_team(self):
+        """
+        Test that get_trade_builder registers the initiating team in the secondary index.
+
+        The secondary index allows any GM in the trade to access the builder by team ID,
+        enabling multi-GM participation in trades.
+        """
+        user_id = 12345
+        team = TeamFactory.west_virginia()
+
+        # Create builder
+        builder = get_trade_builder(user_id, team)
+
+        # Secondary index should have initiating team mapped
+        assert team.id in _team_to_trade_key
+        assert _team_to_trade_key[team.id] == f"{user_id}:trade"
+
+    def test_get_trade_builder_by_team_returns_builder(self):
+        """
+        Test that get_trade_builder_by_team returns the correct builder for a team.
+
+        This is the core function that enables any GM in a trade to access the builder.
+        """
+        user_id = 12345
+        team1 = TeamFactory.west_virginia()
+        team2 = TeamFactory.new_york()
+
+        # Create builder and add second team
+        builder = get_trade_builder(user_id, team1)
+        builder.trade.add_participant(team2)
+        # Manually add to secondary index (simulating add_team)
+        _team_to_trade_key[team2.id] = f"{user_id}:trade"
+
+        # Both teams should find the same builder
+        found_by_team1 = get_trade_builder_by_team(team1.id)
+        found_by_team2 = get_trade_builder_by_team(team2.id)
+
+        assert found_by_team1 is builder
+        assert found_by_team2 is builder
+
+    def test_get_trade_builder_by_team_returns_none_for_nonparticipant(self):
+        """
+        Test that get_trade_builder_by_team returns None for a team not in any trade.
+
+        This ensures proper error handling when a GM tries to access a trade they're not part of.
+        """
+        user_id = 12345
+        team1 = TeamFactory.west_virginia()
+        team3 = TeamFactory.create(id=999, abbrev="POR", name="Portland")  # Non-participant
+
+        # Create builder with team1
+        get_trade_builder(user_id, team1)
+
+        # team3 should not find any builder
+        found = get_trade_builder_by_team(team3.id)
+        assert found is None
+
+    @pytest.mark.asyncio
+    async def test_add_team_registers_in_secondary_index(self):
+        """
+        Test that add_team registers the new team in the secondary index.
+
+        This ensures that when a new team joins a trade, their GM can immediately
+        access the trade builder.
+        """
+        user_id = 12345
+        team1 = TeamFactory.west_virginia()
+        team2 = TeamFactory.new_york()
+
+        # Create builder
+        builder = get_trade_builder(user_id, team1)
+
+        # Add second team
+        success, error = await builder.add_team(team2)
+        assert success
+
+        # Both teams should be in secondary index
+        assert team1.id in _team_to_trade_key
+        assert team2.id in _team_to_trade_key
+        assert _team_to_trade_key[team1.id] == _team_to_trade_key[team2.id]
+
+        # Both teams should find the same builder
+        assert get_trade_builder_by_team(team1.id) is builder
+        assert get_trade_builder_by_team(team2.id) is builder
+
+    @pytest.mark.asyncio
+    async def test_remove_team_clears_from_secondary_index(self):
+        """
+        Test that remove_team clears the team from the secondary index.
+
+        This ensures that when a team is removed from a trade, their GM can no
+        longer access the trade builder.
+        """
+        user_id = 12345
+        team1 = TeamFactory.west_virginia()
+        team2 = TeamFactory.new_york()
+
+        # Create builder and add team2
+        builder = get_trade_builder(user_id, team1)
+        await builder.add_team(team2)
+
+        # Both teams should be in index
+        assert team1.id in _team_to_trade_key
+        assert team2.id in _team_to_trade_key
+
+        # Remove team2
+        success, error = await builder.remove_team(team2.id)
+        assert success
+
+        # team2 should be removed from index, team1 should remain
+        assert team1.id in _team_to_trade_key
+        assert team2.id not in _team_to_trade_key
+
+    def test_clear_trade_builder_clears_secondary_index(self):
+        """
+        Test that clear_trade_builder removes all teams from secondary index.
+
+        This ensures that when a trade is cleared, all participating GMs lose access.
+        """
+        user_id = 12345
+        team1 = TeamFactory.west_virginia()
+        team2 = TeamFactory.new_york()
+
+        # Create builder and manually add team2 to secondary index
+        builder = get_trade_builder(user_id, team1)
+        builder.trade.add_participant(team2)
+        _team_to_trade_key[team2.id] = f"{user_id}:trade"
+
+        # Both teams in index
+        assert team1.id in _team_to_trade_key
+        assert team2.id in _team_to_trade_key
+
+        # Clear trade builder
+        clear_trade_builder(user_id)
+
+        # Both teams should be removed from index
+        assert team1.id not in _team_to_trade_key
+        assert team2.id not in _team_to_trade_key
+
+    def test_clear_trade_builder_by_team_clears_all_participants(self):
+        """
+        Test that clear_trade_builder_by_team removes all teams from secondary index.
+
+        This allows any GM in the trade to clear it, and ensures all participants
+        lose access simultaneously.
+        """
+        user_id = 12345
+        team1 = TeamFactory.west_virginia()
+        team2 = TeamFactory.new_york()
+
+        # Create builder and manually add team2 to secondary index
+        builder = get_trade_builder(user_id, team1)
+        builder.trade.add_participant(team2)
+        _team_to_trade_key[team2.id] = f"{user_id}:trade"
+
+        # Both teams in index
+        assert team1.id in _team_to_trade_key
+        assert team2.id in _team_to_trade_key
+
+        # Clear using team2's ID (non-initiator)
+        result = clear_trade_builder_by_team(team2.id)
+        assert result is True
+
+        # Both teams should be removed from index
+        assert team1.id not in _team_to_trade_key
+        assert team2.id not in _team_to_trade_key
+        assert len(_active_trade_builders) == 0
+
+    def test_clear_trade_builder_by_team_returns_false_for_nonparticipant(self):
+        """
+        Test that clear_trade_builder_by_team returns False for non-participating team.
+
+        This ensures proper error handling when a GM not in the trade tries to clear it.
+        """
+        team3 = TeamFactory.create(id=999, abbrev="POR", name="Portland")  # Non-participant
+
+        result = clear_trade_builder_by_team(team3.id)
+        assert result is False
 
 
 class TestTradeValidationResult:
