@@ -91,8 +91,8 @@ class DraftPickService(BaseService[DraftPick]):
             params = [
                 ('season', str(season)),
                 ('owner_team_id', str(team_id)),
-                ('round_start', str(round_start)),
-                ('round_end', str(round_end)),
+                ('pick_round_start', str(round_start)),
+                ('pick_round_end', str(round_end)),
                 ('sort', 'order-asc')
             ]
 
@@ -260,6 +260,9 @@ class DraftPickService(BaseService[DraftPick]):
         """
         Update a pick with player selection.
 
+        NOTE: The API PATCH endpoint requires the full DraftPickModel body,
+        so we must first GET the pick, then send the complete model back.
+
         Args:
             pick_id: Draft pick database ID
             player_id: Player ID being selected
@@ -268,7 +271,21 @@ class DraftPickService(BaseService[DraftPick]):
             Updated DraftPick instance or None if update failed
         """
         try:
-            update_data = {'player_id': player_id}
+            # First, get the current pick to retrieve all required fields
+            current_pick = await self.get_by_id(pick_id)
+            if not current_pick:
+                logger.error(f"Pick #{pick_id} not found")
+                return None
+
+            # Build full model for PATCH (API requires complete DraftPickModel)
+            update_data = {
+                'overall': current_pick.overall,
+                'round': current_pick.round,
+                'origowner_id': current_pick.origowner_id,
+                'owner_id': current_pick.owner_id,
+                'season': current_pick.season,
+                'player_id': player_id  # The field we're updating
+            }
             updated_pick = await self.patch(pick_id, update_data)
 
             if updated_pick:
@@ -286,6 +303,9 @@ class DraftPickService(BaseService[DraftPick]):
         """
         Clear player selection from a pick (for admin wipe operations).
 
+        NOTE: The API PATCH endpoint requires the full DraftPickModel body,
+        so we must first GET the pick, then send the complete model back.
+
         Args:
             pick_id: Draft pick database ID
 
@@ -293,7 +313,21 @@ class DraftPickService(BaseService[DraftPick]):
             Updated DraftPick instance with player cleared, or None if failed
         """
         try:
-            update_data = {'player_id': None}
+            # First, get the current pick to retrieve all required fields
+            current_pick = await self.get_by_id(pick_id)
+            if not current_pick:
+                logger.error(f"Pick #{pick_id} not found")
+                return None
+
+            # Build full model for PATCH (API requires complete DraftPickModel)
+            update_data = {
+                'overall': current_pick.overall,
+                'round': current_pick.round,
+                'origowner_id': current_pick.origowner_id,
+                'owner_id': current_pick.owner_id,
+                'season': current_pick.season,
+                'player_id': None  # Clear the player selection
+            }
             updated_pick = await self.patch(pick_id, update_data)
 
             if updated_pick:

@@ -32,6 +32,12 @@ This file provides comprehensive guidance to Claude Code (claude.ai/code) when w
 - **[commands/voice/CLAUDE.md](commands/voice/CLAUDE.md)** - Voice channel management commands (/voice-channel)
 - **[commands/help/CLAUDE.md](commands/help/CLAUDE.md)** - Help system commands (/help, /help-create, /help-edit, /help-delete, /help-list)
 
+### API Reference
+- **SBA Database API OpenAPI Spec**: https://sba.manticorum.com/api/openapi.json
+  - Use `WebFetch` to retrieve current endpoint definitions
+  - ~80+ endpoints covering players, teams, stats, transactions, draft, etc.
+  - Always fetch fresh rather than relying on cached/outdated specs
+
 ## 🏗️ Project Overview
 
 **Discord Bot v2.0** is a comprehensive Discord bot for managing a Strat-o-Matic Baseball Association (SBA) fantasy league. Built with discord.py and modern async Python patterns.

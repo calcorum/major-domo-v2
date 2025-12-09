@@ -85,11 +85,15 @@ class DraftListService(BaseService[DraftList]):
         try:
             params = [
                 ('season', str(season)),
-                ('team_id', str(team_id)),
-                ('sort', 'rank-asc')  # Order by priority
+                ('team_id', str(team_id))
+                # NOTE: API does not support 'sort' param - results must be sorted client-side
             ]
 
             entries = await self.get_all_items(params=params)
+
+            # Sort by rank client-side (API doesn't support sort parameter)
+            entries.sort(key=lambda e: e.rank)
+
             logger.debug(f"Found {len(entries)} draft list entries for team {team_id}")
             return entries
 
