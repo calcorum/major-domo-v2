@@ -55,9 +55,9 @@ def validate_url_format(url: str) -> Tuple[bool, str]:
     return True, ""
 
 
-async def test_url_accessibility(url: str) -> Tuple[bool, str]:
+async def check_url_accessibility(url: str) -> Tuple[bool, str]:
     """
-    Test if URL is accessible and returns image content.
+    Check if URL is accessible and returns image content.
 
     Args:
         url: URL to test
@@ -262,7 +262,7 @@ class ImageCommands(commands.Cog):
 
         # Step 2: Test URL accessibility
         self.logger.debug("Testing URL accessibility", url=image_url)
-        is_accessible, access_error = await test_url_accessibility(image_url)
+        is_accessible, access_error = await check_url_accessibility(image_url)
         if not is_accessible:
             self.logger.warning("URL not accessible", url=image_url, error=access_error)
             embed = EmbedTemplate.error(

@@ -42,6 +42,10 @@ class TestWeatherCommands:
         interaction.channel = MagicMock(spec=discord.TextChannel)
         interaction.channel.name = "test-channel"
 
+        # Guild mock required for @league_only decorator
+        interaction.guild = MagicMock()
+        interaction.guild.id = 669356687294988350  # SBA league server ID from config
+
         return interaction
 
     @pytest.fixture
@@ -52,7 +56,7 @@ class TestWeatherCommands:
             abbrev='NYY',
             sname='Yankees',
             lname='New York Yankees',
-            season=12,
+            season=13,
             color='a6ce39',
             stadium='https://example.com/yankee-stadium.jpg',
             thumbnail='https://example.com/yankee-thumbnail.png'
@@ -63,7 +67,7 @@ class TestWeatherCommands:
         """Create mock current league state."""
         return CurrentFactory.create(
             week=10,
-            season=12,
+            season=13,
             freeze=False,
             trade_deadline=14,
             playoffs_begin=19
@@ -73,24 +77,31 @@ class TestWeatherCommands:
     def mock_games(self):
         """Create mock game schedule."""
         # Create teams for the games
-        yankees = TeamFactory.create(id=499, abbrev='NYY', sname='Yankees', lname='New York Yankees', season=12)
-        red_sox = TeamFactory.create(id=500, abbrev='BOS', sname='Red Sox', lname='Boston Red Sox', season=12)
+        yankees = TeamFactory.create(id=499, abbrev='NYY', sname='Yankees', lname='New York Yankees', season=13)
+        red_sox = TeamFactory.create(id=500, abbrev='BOS', sname='Red Sox', lname='Boston Red Sox', season=13)
 
         # 2 completed games, 2 upcoming games
         games = [
-            GameFactory.completed(id=1, season=12, week=10, game_num=1, away_team=yankees, home_team=red_sox, away_score=5, home_score=3),
-            GameFactory.completed(id=2, season=12, week=10, game_num=2, away_team=yankees, home_team=red_sox, away_score=2, home_score=7),
-            GameFactory.upcoming(id=3, season=12, week=10, game_num=3, away_team=yankees, home_team=red_sox),
-            GameFactory.upcoming(id=4, season=12, week=10, game_num=4, away_team=yankees, home_team=red_sox),
+            GameFactory.completed(id=1, season=13, week=10, game_num=1, away_team=yankees, home_team=red_sox, away_score=5, home_score=3),
+            GameFactory.completed(id=2, season=13, week=10, game_num=2, away_team=yankees, home_team=red_sox, away_score=2, home_score=7),
+            GameFactory.upcoming(id=3, season=13, week=10, game_num=3, away_team=yankees, home_team=red_sox),
+            GameFactory.upcoming(id=4, season=13, week=10, game_num=4, away_team=yankees, home_team=red_sox),
         ]
         return games
 
     @pytest.mark.asyncio
     async def test_weather_explicit_team(self, commands_cog, mock_interaction, mock_team, mock_current, mock_games):
         """Test weather command with explicit team abbreviation."""
-        with patch('commands.utilities.weather.league_service') as mock_league_service, \
+        with patch('utils.permissions.get_user_team') as mock_get_user_team, \
+             patch('commands.utilities.weather.league_service') as mock_league_service, \
              patch('commands.utilities.weather.schedule_service') as mock_schedule_service, \
              patch('commands.utilities.weather.team_service') as mock_team_service:
+
+            # Mock @requires_team decorator lookup
+            mock_get_user_team.return_value = {
+                'id': mock_team.id, 'name': mock_team.lname,
+                'abbrev': mock_team.abbrev, 'season': mock_team.season
+            }
 
             # Mock service responses
             mock_league_service.get_current_state = AsyncMock(return_value=mock_current)
@@ -105,7 +116,7 @@ class TestWeatherCommands:
             mock_interaction.followup.send.assert_called_once()
 
             # Verify team lookup
-            mock_team_service.get_team_by_abbrev.assert_called_once_with('NYY', 12)
+            mock_team_service.get_team_by_abbrev.assert_called_once_with('NYY', 13)
 
             # Check embed was sent
             embed_call = mock_interaction.followup.send.call_args
@@ -119,10 +130,17 @@ class TestWeatherCommands:
         # Set channel name to format: <abbrev>-<park name>
         mock_interaction.channel.name = "NYY-Yankee-Stadium"
 
-        with patch('commands.utilities.weather.league_service') as mock_league_service, \
+        with patch('utils.permissions.get_user_team') as mock_get_user_team, \
+             patch('commands.utilities.weather.league_service') as mock_league_service, \
              patch('commands.utilities.weather.schedule_service') as mock_schedule_service, \
              patch('commands.utilities.weather.team_service') as mock_team_service, \
              patch('commands.utilities.weather.get_user_major_league_team') as mock_get_team:
+
+            # Mock @requires_team decorator lookup
+            mock_get_user_team.return_value = {
+                'id': mock_team.id, 'name': mock_team.lname,
+                'abbrev': mock_team.abbrev, 'season': mock_team.season
+            }
 
             mock_league_service.get_current_state = AsyncMock(return_value=mock_current)
             mock_schedule_service.get_week_schedule = AsyncMock(return_value=mock_games)
@@ -133,7 +151,7 @@ class TestWeatherCommands:
             await commands_cog.weather.callback(commands_cog, mock_interaction, team_abbrev=None)
 
             # Should resolve team from channel name "NYY-Yankee-Stadium" -> "NYY"
-            mock_team_service.get_team_by_abbrev.assert_called_once_with('NYY', 12)
+            mock_team_service.get_team_by_abbrev.assert_called_once_with('NYY', 13)
             mock_interaction.followup.send.assert_called_once()
 
     @pytest.mark.asyncio
@@ -142,10 +160,17 @@ class TestWeatherCommands:
         # Set channel name that won't match a team
         mock_interaction.channel.name = "general-chat"
 
-        with patch('commands.utilities.weather.league_service') as mock_league_service, \
+        with patch('utils.permissions.get_user_team') as mock_get_user_team, \
+             patch('commands.utilities.weather.league_service') as mock_league_service, \
              patch('commands.utilities.weather.schedule_service') as mock_schedule_service, \
              patch('commands.utilities.weather.team_service') as mock_team_service, \
              patch('commands.utilities.weather.get_user_major_league_team') as mock_get_team:
+
+            # Mock @requires_team decorator lookup
+            mock_get_user_team.return_value = {
+                'id': mock_team.id, 'name': mock_team.lname,
+                'abbrev': mock_team.abbrev, 'season': mock_team.season
+            }
 
             mock_league_service.get_current_state = AsyncMock(return_value=mock_current)
             mock_schedule_service.get_week_schedule = AsyncMock(return_value=mock_games)
@@ -155,15 +180,22 @@ class TestWeatherCommands:
             await commands_cog.weather.callback(commands_cog, mock_interaction, team_abbrev=None)
 
             # Should fall back to user ownership
-            mock_get_team.assert_called_once_with(258104532423147520, 12)
+            mock_get_team.assert_called_once_with(258104532423147520, 13)
             mock_interaction.followup.send.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_weather_no_team_found(self, commands_cog, mock_interaction, mock_current):
+    async def test_weather_no_team_found(self, commands_cog, mock_interaction, mock_current, mock_team):
         """Test weather command when no team can be resolved."""
-        with patch('commands.utilities.weather.league_service') as mock_league_service, \
+        with patch('utils.permissions.get_user_team') as mock_get_user_team, \
+             patch('commands.utilities.weather.league_service') as mock_league_service, \
              patch('commands.utilities.weather.team_service') as mock_team_service, \
              patch('commands.utilities.weather.get_user_major_league_team') as mock_get_team:
+
+            # Mock @requires_team decorator lookup - user has a team so decorator passes
+            mock_get_user_team.return_value = {
+                'id': mock_team.id, 'name': mock_team.lname,
+                'abbrev': mock_team.abbrev, 'season': mock_team.season
+            }
 
             mock_league_service.get_current_state = AsyncMock(return_value=mock_current)
             mock_team_service.get_team_by_abbrev = AsyncMock(return_value=None)
@@ -178,9 +210,17 @@ class TestWeatherCommands:
             assert "Could not find a team" in embed.description
 
     @pytest.mark.asyncio
-    async def test_weather_league_state_unavailable(self, commands_cog, mock_interaction):
+    async def test_weather_league_state_unavailable(self, commands_cog, mock_interaction, mock_team):
         """Test weather command when league state is unavailable."""
-        with patch('commands.utilities.weather.league_service') as mock_league_service:
+        with patch('utils.permissions.get_user_team') as mock_get_user_team, \
+             patch('commands.utilities.weather.league_service') as mock_league_service:
+
+            # Mock @requires_team decorator lookup
+            mock_get_user_team.return_value = {
+                'id': mock_team.id, 'name': mock_team.lname,
+                'abbrev': mock_team.abbrev, 'season': mock_team.season
+            }
+
             mock_league_service.get_current_state = AsyncMock(return_value=None)
 
             await commands_cog.weather.callback(commands_cog, mock_interaction)
@@ -325,9 +365,16 @@ class TestWeatherCommands:
     @pytest.mark.asyncio
     async def test_full_weather_workflow(self, commands_cog, mock_interaction, mock_team, mock_current, mock_games):
         """Test complete weather workflow with realistic data."""
-        with patch('commands.utilities.weather.league_service') as mock_league_service, \
+        with patch('utils.permissions.get_user_team') as mock_get_user_team, \
+             patch('commands.utilities.weather.league_service') as mock_league_service, \
              patch('commands.utilities.weather.schedule_service') as mock_schedule_service, \
              patch('commands.utilities.weather.team_service') as mock_team_service:
+
+            # Mock @requires_team decorator lookup
+            mock_get_user_team.return_value = {
+                'id': mock_team.id, 'name': mock_team.lname,
+                'abbrev': mock_team.abbrev, 'season': mock_team.season
+            }
 
             mock_league_service.get_current_state = AsyncMock(return_value=mock_current)
             mock_schedule_service.get_week_schedule = AsyncMock(return_value=mock_games)
@@ -338,8 +385,8 @@ class TestWeatherCommands:
             # Verify complete flow
             mock_interaction.response.defer.assert_called_once()
             mock_league_service.get_current_state.assert_called_once()
-            mock_schedule_service.get_week_schedule.assert_called_once_with(12, 10)
-            mock_team_service.get_team_by_abbrev.assert_called_once_with('NYY', 12)
+            mock_schedule_service.get_week_schedule.assert_called_once_with(13, 10)
+            mock_team_service.get_team_by_abbrev.assert_called_once_with('NYY', 13)
 
             # Check final embed
             embed_call = mock_interaction.followup.send.call_args

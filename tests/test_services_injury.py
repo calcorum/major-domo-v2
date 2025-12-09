@@ -6,28 +6,31 @@ Tests cover:
 - Creating injury records
 - Clearing injuries
 - Team-based injury queries
+
+Uses the standard service testing pattern: mock the service's _client directly
+rather than trying to mock HTTP responses, since the service uses BaseService
+which manages its own client instance.
 """
 import pytest
-from aioresponses import aioresponses
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 from services.injury_service import InjuryService
 from models.injury import Injury
 
 
 @pytest.fixture
-def mock_config():
-    """Mock configuration for testing."""
-    config = MagicMock()
-    config.db_url = "https://api.example.com"
-    config.api_token = "test-token"
-    return config
+def mock_client():
+    """Mock API client for testing."""
+    client = AsyncMock()
+    return client
 
 
 @pytest.fixture
-def injury_service():
-    """Create an InjuryService instance for testing."""
-    return InjuryService()
+def injury_service(mock_client):
+    """Create an InjuryService instance with mocked client."""
+    service = InjuryService()
+    service._client = mock_client
+    return service
 
 
 @pytest.fixture
@@ -124,155 +127,140 @@ class TestInjuryModel:
 
 
 class TestInjuryService:
-    """Tests for InjuryService."""
+    """Tests for InjuryService using mocked client."""
 
     @pytest.mark.asyncio
-    async def test_get_active_injury_found(self, mock_config, injury_service, sample_injury_data):
-        """Test getting active injury when one exists."""
-        with patch('api.client.get_config', return_value=mock_config):
-            with aioresponses() as m:
-                m.get(
-                    'https://api.example.com/v3/injuries?player_id=123&season=12&is_active=true',
-                    payload={
-                        'count': 1,
-                        'injuries': [sample_injury_data]
-                    }
-                )
+    async def test_get_active_injury_found(self, injury_service, mock_client, sample_injury_data):
+        """Test getting active injury when one exists.
 
-                injury = await injury_service.get_active_injury(123, 12)
+        Uses mocked client to return injury data without hitting real API.
+        """
+        # Mock the client.get() response - BaseService parses this
+        mock_client.get.return_value = {
+            'count': 1,
+            'injuries': [sample_injury_data]
+        }
 
-                assert injury is not None
-                assert injury.id == 1
-                assert injury.player_id == 123
-                assert injury.is_active is True
+        injury = await injury_service.get_active_injury(123, 12)
 
-    @pytest.mark.asyncio
-    async def test_get_active_injury_not_found(self, mock_config, injury_service):
-        """Test getting active injury when none exists."""
-        with patch('api.client.get_config', return_value=mock_config):
-            with aioresponses() as m:
-                m.get(
-                    'https://api.example.com/v3/injuries?player_id=123&season=12&is_active=true',
-                    payload={
-                        'count': 0,
-                        'injuries': []
-                    }
-                )
-
-                injury = await injury_service.get_active_injury(123, 12)
-
-                assert injury is None
+        assert injury is not None
+        assert injury.id == 1
+        assert injury.player_id == 123
+        assert injury.is_active is True
+        mock_client.get.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_get_injuries_by_player(self, mock_config, injury_service, multiple_injuries_data):
-        """Test getting all injuries for a player."""
-        with patch('api.client.get_config', return_value=mock_config):
-            with aioresponses() as m:
-                m.get(
-                    'https://api.example.com/v3/injuries?player_id=123&season=12',
-                    payload={
-                        'count': 1,
-                        'injuries': [multiple_injuries_data[0]]
-                    }
-                )
+    async def test_get_active_injury_not_found(self, injury_service, mock_client):
+        """Test getting active injury when none exists.
 
-                injuries = await injury_service.get_injuries_by_player(123, 12)
+        Returns None when API returns empty list.
+        """
+        mock_client.get.return_value = {
+            'count': 0,
+            'injuries': []
+        }
 
-                assert len(injuries) == 1
-                assert injuries[0].player_id == 123
+        injury = await injury_service.get_active_injury(123, 12)
+
+        assert injury is None
 
     @pytest.mark.asyncio
-    async def test_get_injuries_by_player_active_only(self, mock_config, injury_service, sample_injury_data):
-        """Test getting only active injuries for a player."""
-        with patch('api.client.get_config', return_value=mock_config):
-            with aioresponses() as m:
-                m.get(
-                    'https://api.example.com/v3/injuries?player_id=123&season=12&is_active=true',
-                    payload={
-                        'count': 1,
-                        'injuries': [sample_injury_data]
-                    }
-                )
+    async def test_get_injuries_by_player(self, injury_service, mock_client, multiple_injuries_data):
+        """Test getting all injuries for a player.
 
-                injuries = await injury_service.get_injuries_by_player(123, 12, active_only=True)
+        Uses mocked client to return injury list.
+        """
+        mock_client.get.return_value = {
+            'count': 1,
+            'injuries': [multiple_injuries_data[0]]
+        }
 
-                assert len(injuries) == 1
-                assert injuries[0].is_active is True
+        injuries = await injury_service.get_injuries_by_player(123, 12)
+
+        assert len(injuries) == 1
+        assert injuries[0].player_id == 123
 
     @pytest.mark.asyncio
-    async def test_get_injuries_by_team(self, mock_config, injury_service, multiple_injuries_data):
-        """Test getting injuries for a team."""
-        with patch('api.client.get_config', return_value=mock_config):
-            with aioresponses() as m:
-                m.get(
-                    'https://api.example.com/v3/injuries?team_id=10&season=12&is_active=true',
-                    payload={
-                        'count': 2,
-                        'injuries': multiple_injuries_data
-                    }
-                )
+    async def test_get_injuries_by_player_active_only(self, injury_service, mock_client, sample_injury_data):
+        """Test getting only active injuries for a player.
 
-                injuries = await injury_service.get_injuries_by_team(10, 12)
+        Verifies the active_only filter works correctly.
+        """
+        mock_client.get.return_value = {
+            'count': 1,
+            'injuries': [sample_injury_data]
+        }
 
-                assert len(injuries) == 2
+        injuries = await injury_service.get_injuries_by_player(123, 12, active_only=True)
 
-    @pytest.mark.asyncio
-    async def test_create_injury(self, mock_config, injury_service, sample_injury_data):
-        """Test creating a new injury record."""
-        with patch('api.client.get_config', return_value=mock_config):
-            with aioresponses() as m:
-                m.post(
-                    'https://api.example.com/v3/injuries',
-                    payload=sample_injury_data
-                )
-
-                injury = await injury_service.create_injury(
-                    season=12,
-                    player_id=123,
-                    total_games=4,
-                    start_week=5,
-                    start_game=2,
-                    end_week=6,
-                    end_game=2
-                )
-
-                assert injury is not None
-                assert injury.player_id == 123
-                assert injury.total_games == 4
+        assert len(injuries) == 1
+        assert injuries[0].is_active is True
 
     @pytest.mark.asyncio
-    async def test_clear_injury(self, mock_config, injury_service, sample_injury_data):
-        """Test clearing an injury."""
-        with patch('api.client.get_config', return_value=mock_config):
-            with aioresponses() as m:
-                # Mock the PATCH request - API expects is_active as query parameter
-                # Note: Python's str(False) converts to "False" (capital F)
-                cleared_data = sample_injury_data.copy()
-                cleared_data['is_active'] = False
+    async def test_get_injuries_by_team(self, injury_service, mock_client, multiple_injuries_data):
+        """Test getting injuries for a team.
 
-                m.patch(
-                    'https://api.example.com/v3/injuries/1?is_active=False',
-                    payload=cleared_data
-                )
+        Returns all injuries for a team (both active and inactive).
+        """
+        mock_client.get.return_value = {
+            'count': 2,
+            'injuries': multiple_injuries_data
+        }
 
-                success = await injury_service.clear_injury(1)
+        injuries = await injury_service.get_injuries_by_team(10, 12)
 
-                assert success is True
+        assert len(injuries) == 2
 
     @pytest.mark.asyncio
-    async def test_clear_injury_failure(self, mock_config, injury_service):
-        """Test clearing injury when it fails."""
-        with patch('api.client.get_config', return_value=mock_config):
-            with aioresponses() as m:
-                # Note: Python's str(False) converts to "False" (capital F)
-                m.patch(
-                    'https://api.example.com/v3/injuries/1?is_active=False',
-                    status=500
-                )
+    async def test_create_injury(self, injury_service, mock_client, sample_injury_data):
+        """Test creating a new injury record.
 
-                success = await injury_service.clear_injury(1)
+        The service posts injury data and returns the created injury model.
+        """
+        mock_client.post.return_value = sample_injury_data
 
-                assert success is False
+        injury = await injury_service.create_injury(
+            season=12,
+            player_id=123,
+            total_games=4,
+            start_week=5,
+            start_game=2,
+            end_week=6,
+            end_game=2
+        )
+
+        assert injury is not None
+        assert injury.player_id == 123
+        assert injury.total_games == 4
+        mock_client.post.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_clear_injury(self, injury_service, mock_client, sample_injury_data):
+        """Test clearing an injury.
+
+        Uses PATCH with query params to set is_active=False.
+        """
+        cleared_data = sample_injury_data.copy()
+        cleared_data['is_active'] = False
+
+        mock_client.patch.return_value = cleared_data
+
+        success = await injury_service.clear_injury(1)
+
+        assert success is True
+        mock_client.patch.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_clear_injury_failure(self, injury_service, mock_client):
+        """Test clearing injury when it fails.
+
+        Returns False when API returns None or error.
+        """
+        mock_client.patch.return_value = None
+
+        success = await injury_service.clear_injury(1)
+
+        assert success is False
 
 
 class TestInjuryRollLogic:
@@ -316,77 +304,89 @@ class TestInjuryRollLogic:
             games_played = int(injury_rating[0])
 
     def test_injury_table_lookup_ok_result(self):
-        """Test injury table lookup returning OK."""
-        from commands.injuries.management import InjuryCog
-        from unittest.mock import MagicMock
+        """Test injury table lookup returning OK.
 
-        cog = InjuryCog(MagicMock())
+        Uses InjuryGroup (app_commands.Group) which doesn't require a bot instance.
+        """
+        from commands.injuries.management import InjuryGroup
+
+        group = InjuryGroup()
 
         # p70 rating with 1 game played, roll of 3 should be OK
-        result = cog._get_injury_result('p70', 1, 3)
+        result = group._get_injury_result('p70', 1, 3)
         assert result == 'OK'
 
     def test_injury_table_lookup_rem_result(self):
-        """Test injury table lookup returning REM."""
-        from commands.injuries.management import InjuryCog
-        from unittest.mock import MagicMock
+        """Test injury table lookup returning REM.
 
-        cog = InjuryCog(MagicMock())
+        Uses InjuryGroup (app_commands.Group) which doesn't require a bot instance.
+        """
+        from commands.injuries.management import InjuryGroup
+
+        group = InjuryGroup()
 
         # p70 rating with 1 game played, roll of 9 should be REM
-        result = cog._get_injury_result('p70', 1, 9)
+        result = group._get_injury_result('p70', 1, 9)
         assert result == 'REM'
 
     def test_injury_table_lookup_games_result(self):
-        """Test injury table lookup returning number of games."""
-        from commands.injuries.management import InjuryCog
-        from unittest.mock import MagicMock
+        """Test injury table lookup returning number of games.
 
-        cog = InjuryCog(MagicMock())
+        Uses InjuryGroup (app_commands.Group) which doesn't require a bot instance.
+        """
+        from commands.injuries.management import InjuryGroup
+
+        group = InjuryGroup()
 
         # p70 rating with 1 game played, roll of 11 should be 1 game
-        result = cog._get_injury_result('p70', 1, 11)
+        result = group._get_injury_result('p70', 1, 11)
         assert result == 1
 
         # p65 rating with 1 game played, roll of 3 should be 2 games
-        result = cog._get_injury_result('p65', 1, 3)
+        result = group._get_injury_result('p65', 1, 3)
         assert result == 2
 
     def test_injury_table_no_table_exists(self):
-        """Test injury table when no table exists for rating/games combo."""
-        from commands.injuries.management import InjuryCog
-        from unittest.mock import MagicMock
+        """Test injury table when no table exists for rating/games combo.
 
-        cog = InjuryCog(MagicMock())
+        Uses InjuryGroup (app_commands.Group) which doesn't require a bot instance.
+        """
+        from commands.injuries.management import InjuryGroup
+
+        group = InjuryGroup()
 
         # p70 rating with 3 games played has no table, should return OK
-        result = cog._get_injury_result('p70', 3, 10)
+        result = group._get_injury_result('p70', 3, 10)
         assert result == 'OK'
 
     def test_injury_table_roll_out_of_range(self):
-        """Test injury table with out of range roll."""
-        from commands.injuries.management import InjuryCog
-        from unittest.mock import MagicMock
+        """Test injury table with out of range roll.
 
-        cog = InjuryCog(MagicMock())
+        Uses InjuryGroup (app_commands.Group) which doesn't require a bot instance.
+        """
+        from commands.injuries.management import InjuryGroup
+
+        group = InjuryGroup()
 
         # Roll less than 3 or greater than 18 should return OK
-        result = cog._get_injury_result('p65', 1, 2)
+        result = group._get_injury_result('p65', 1, 2)
         assert result == 'OK'
 
-        result = cog._get_injury_result('p65', 1, 19)
+        result = group._get_injury_result('p65', 1, 19)
         assert result == 'OK'
 
     def test_injury_table_games_played_mapping(self):
-        """Test games played maps correctly to table keys."""
-        from commands.injuries.management import InjuryCog
-        from unittest.mock import MagicMock
+        """Test games played maps correctly to table keys.
 
-        cog = InjuryCog(MagicMock())
+        Uses InjuryGroup (app_commands.Group) which doesn't require a bot instance.
+        """
+        from commands.injuries.management import InjuryGroup
+
+        group = InjuryGroup()
 
         # Test that different games_played values access different tables
-        result_1_game = cog._get_injury_result('p65', 1, 10)
-        result_2_games = cog._get_injury_result('p65', 2, 10)
+        result_1_game = group._get_injury_result('p65', 1, 10)
+        result_2_games = group._get_injury_result('p65', 2, 10)
 
         # These should potentially be different values (depends on tables)
         # Just verify both execute without error

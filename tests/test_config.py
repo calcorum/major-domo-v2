@@ -38,13 +38,13 @@ class TestBotConfig:
         }, clear=True):
             # Create config with disabled env file to test true defaults
             config = BotConfig(_env_file=None)
-            assert config.sba_season == 12
-            assert config.pd_season == 9
+            assert config.sba_season == 13
+            assert config.pd_season == 10
             assert config.fa_lock_week == 14
             assert config.sba_color == "a6ce39"
             assert config.log_level == "INFO"
             assert config.environment == "development"
-            assert config.testing is False
+            assert config.testing is True
     
     def test_config_overrides_defaults_from_env(self):
         """Test that environment variables override default values."""

@@ -138,11 +138,11 @@ class TestPlayerService:
         }
         mock_client.get.return_value = mock_data
         
-        result = await player_service_instance.get_players_by_name('John', season=12)
-        
+        result = await player_service_instance.get_players_by_name('John', season=13)
+
         assert len(result) == 1
         assert result[0].name == 'John Smith'
-        mock_client.get.assert_called_once_with('players', params=[('season', '12'), ('name', 'John')])
+        mock_client.get.assert_called_once_with('players', params=[('season', '13'), ('name', 'John')])
     
     @pytest.mark.asyncio
     async def test_get_player_by_name_exact(self, player_service_instance, mock_client):
@@ -258,7 +258,7 @@ class TestPlayerService:
         # Should return exact match first, then partial matches, limited to 2
         assert len(result) == 2
         assert result[0].name == 'John'  # exact match first
-        mock_client.get.assert_called_once_with('players', params=[('season', '12'), ('name', 'John')])
+        mock_client.get.assert_called_once_with('players', params=[('season', '13'), ('name', 'John')])
     
     @pytest.mark.asyncio
     async def test_get_players_by_position(self, player_service_instance, mock_client):
