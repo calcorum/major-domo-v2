@@ -235,7 +235,7 @@ class TransactionFreezeTask:
                 self.logger.debug("No freeze/thaw action needed at this time")
 
         except Exception as e:
-            self.logger.error(f"Unhandled exception in weekly_loop: {e}", exc_info=True)
+            self.logger.error(f"Unhandled exception in weekly_loop: {e}", error=e)
             error_message = (
                 f"⚠️ **Weekly Freeze Task Failed**\n"
                 f"```\n"

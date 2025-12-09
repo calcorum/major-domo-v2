@@ -113,14 +113,23 @@ class TestGiphyService:
 
     @pytest.mark.asyncio
     async def test_get_disappointment_gif_success(self):
-        """Test successful GIF fetch from Giphy API."""
+        """Test successful GIF fetch from Giphy API.
+
+        The actual GiphyService expects images.original.url in the response,
+        not just url. This matches the Giphy API translate endpoint response format.
+        """
         with aioresponses() as m:
-            # Mock successful Giphy response
+            # Mock successful Giphy response with correct response structure
+            # The service looks for data.images.original.url, not data.url
             m.get(
                 re.compile(r'https://api\.giphy\.com/v1/gifs/translate\?.*'),
                 payload={
                     'data': {
-                        'url': 'https://giphy.com/gifs/test123',
+                        'images': {
+                            'original': {
+                                'url': 'https://media.giphy.com/media/test123/giphy.gif'
+                            }
+                        },
                         'title': 'Disappointed Reaction'
                     }
                 },
@@ -128,29 +137,43 @@ class TestGiphyService:
             )
 
             gif_url = await get_disappointment_gif('tier_1')
-            assert gif_url == 'https://giphy.com/gifs/test123'
+            assert gif_url == 'https://media.giphy.com/media/test123/giphy.gif'
 
     @pytest.mark.asyncio
     async def test_get_disappointment_gif_filters_trump(self):
-        """Test that Trump GIFs are filtered out."""
+        """Test that Trump GIFs are filtered out.
+
+        The service iterates through shuffled phrases, so we need to mock multiple
+        responses. The first Trump GIF gets filtered, then the service tries
+        the next phrase which returns an acceptable GIF.
+        """
         with aioresponses() as m:
             # First response is Trump GIF (should be filtered)
-            # Second response is acceptable
+            # Uses correct response structure with images.original.url
             m.get(
                 re.compile(r'https://api\.giphy\.com/v1/gifs/translate\?.*'),
                 payload={
                     'data': {
-                        'url': 'https://giphy.com/gifs/trump123',
+                        'images': {
+                            'original': {
+                                'url': 'https://media.giphy.com/media/trump123/giphy.gif'
+                            }
+                        },
                         'title': 'Donald Trump Disappointed'
                     }
                 },
                 status=200
             )
+            # Second response is acceptable
             m.get(
                 re.compile(r'https://api\.giphy\.com/v1/gifs/translate\?.*'),
                 payload={
                     'data': {
-                        'url': 'https://giphy.com/gifs/good456',
+                        'images': {
+                            'original': {
+                                'url': 'https://media.giphy.com/media/good456/giphy.gif'
+                            }
+                        },
                         'title': 'Disappointed Reaction'
                     }
                 },
@@ -158,7 +181,7 @@ class TestGiphyService:
             )
 
             gif_url = await get_disappointment_gif('tier_1')
-            assert gif_url == 'https://giphy.com/gifs/good456'
+            assert gif_url == 'https://media.giphy.com/media/good456/giphy.gif'
 
     @pytest.mark.asyncio
     async def test_get_disappointment_gif_api_failure(self):

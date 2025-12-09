@@ -223,14 +223,14 @@ class TestTeamService:
         """Test team update functionality."""
         update_data = {'stadium': 'New Stadium', 'color': '#FF0000'}
         response_data = self.create_team_data(1, 'TST', stadium='New Stadium', color='#FF0000')
-        mock_client.put.return_value = response_data
-        
+        mock_client.patch.return_value = response_data
+
         result = await team_service_instance.update_team(1, update_data)
-        
+
         assert isinstance(result, Team)
         assert result.stadium == 'New Stadium'
         assert result.color == '#FF0000'
-        mock_client.put.assert_called_once_with('teams', update_data, object_id=1)
+        mock_client.patch.assert_called_once_with('teams', update_data, 1, use_query_params=True)
     
     @pytest.mark.asyncio
     async def test_is_valid_team_abbrev(self, team_service_instance, mock_client):

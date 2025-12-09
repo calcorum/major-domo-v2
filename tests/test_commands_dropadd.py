@@ -43,6 +43,9 @@ class TestDropAddCommands:
         interaction.client = MagicMock()
         interaction.client.user = MagicMock()
         interaction.channel = MagicMock()
+        # Guild mock required for @league_only decorator
+        interaction.guild = MagicMock()
+        interaction.guild.id = 669356687294988350  # Test guild ID matching config
         return interaction
     
     @pytest.fixture
@@ -112,65 +115,59 @@ class TestDropAddCommands:
     @pytest.mark.asyncio
     async def test_dropadd_command_no_team(self, commands_cog, mock_interaction):
         """Test /dropadd command when user has no team."""
-        with patch('commands.transactions.dropadd.team_service') as mock_service:
-            mock_service.get_teams_by_owner = AsyncMock(return_value=[])
+        with patch('commands.transactions.dropadd.validate_user_has_team') as mock_validate:
+            mock_validate.return_value = None
             await commands_cog.dropadd.callback(commands_cog, mock_interaction)
-            
+
             mock_interaction.response.defer.assert_called_once()
-            mock_interaction.followup.send.assert_called_once()
-            
-            # Check error message
-            call_args = mock_interaction.followup.send.call_args
-            assert "don't appear to own" in call_args[0][0]
-            assert call_args[1]['ephemeral'] is True
+            # validate_user_has_team sends its own error message, command just returns
+            mock_validate.assert_called_once_with(mock_interaction)
     
     @pytest.mark.asyncio
     async def test_dropadd_command_success_no_params(self, commands_cog, mock_interaction, mock_team):
         """Test /dropadd command success without parameters."""
-        with patch('commands.transactions.dropadd.team_service') as mock_team_service:
+        with patch('commands.transactions.dropadd.validate_user_has_team') as mock_validate:
             with patch('commands.transactions.dropadd.get_transaction_builder') as mock_get_builder:
                 with patch('commands.transactions.dropadd.create_transaction_embed') as mock_create_embed:
-                    mock_team_service.get_teams_by_owner = AsyncMock(return_value=[mock_team])
-                    
+                    mock_validate.return_value = mock_team
+
                     mock_builder = MagicMock()
                     mock_builder.team = mock_team
                     mock_get_builder.return_value = mock_builder
-                    
+
                     mock_embed = MagicMock()
                     mock_create_embed.return_value = mock_embed
-                    
+
                     await commands_cog.dropadd.callback(commands_cog, mock_interaction)
-                    
+
                     # Verify flow
                     mock_interaction.response.defer.assert_called_once()
-                    mock_team_service.get_teams_by_owner.assert_called_once_with(
-                        mock_interaction.user.id, 12, roster_type='ml'
-                    )
+                    mock_validate.assert_called_once_with(mock_interaction)
                     mock_get_builder.assert_called_once_with(mock_interaction.user.id, mock_team)
-                    mock_create_embed.assert_called_once_with(mock_builder)
+                    mock_create_embed.assert_called_once_with(mock_builder, command_name='/dropadd')
                     mock_interaction.followup.send.assert_called_once()
     
     @pytest.mark.asyncio
     async def test_dropadd_command_with_quick_move(self, commands_cog, mock_interaction, mock_team):
         """Test /dropadd command with quick move parameters."""
-        with patch('commands.transactions.dropadd.team_service') as mock_team_service:
+        with patch('commands.transactions.dropadd.validate_user_has_team') as mock_validate:
             with patch('commands.transactions.dropadd.get_transaction_builder') as mock_get_builder:
                 with patch.object(commands_cog, '_add_quick_move') as mock_add_quick:
                     with patch('commands.transactions.dropadd.create_transaction_embed') as mock_create_embed:
-                        mock_team_service.get_teams_by_owner = AsyncMock(return_value=[mock_team])
-                        
+                        mock_validate.return_value = mock_team
+
                         mock_builder = MagicMock()
                         mock_builder.move_count = 1
                         mock_get_builder.return_value = mock_builder
                         mock_add_quick.return_value = (True, "")
                         mock_create_embed.return_value = MagicMock()
-                        
+
                         await commands_cog.dropadd.callback(commands_cog,
                             mock_interaction,
                             player='Mike Trout',
                             destination='ml'
                         )
-                        
+
                         # Verify quick move was attempted
                         mock_add_quick.assert_called_once_with(
                             mock_builder, 'Mike Trout', 'ml'
@@ -197,7 +194,7 @@ class TestDropAddCommands:
 
             assert success is True
             assert error_message == ""
-            mock_service.search_players.assert_called_once_with('Mike Trout', limit=10, season=12)
+            mock_service.search_players.assert_called_once_with('Mike Trout', limit=10, season=13)
             mock_builder.add_move.assert_called_once()
     
     @pytest.mark.asyncio
@@ -313,11 +310,11 @@ class TestDropAddCommands:
     @pytest.mark.asyncio
     async def test_dropadd_first_move_shows_full_embed(self, commands_cog, mock_interaction, mock_team):
         """Test /dropadd command with first move shows full interactive embed."""
-        with patch('commands.transactions.dropadd.team_service') as mock_team_service:
+        with patch('commands.transactions.dropadd.validate_user_has_team') as mock_validate:
             with patch('commands.transactions.dropadd.get_transaction_builder') as mock_get_builder:
                 with patch.object(commands_cog, '_add_quick_move') as mock_add_quick:
                     with patch('commands.transactions.dropadd.create_transaction_embed') as mock_create_embed:
-                        mock_team_service.get_teams_by_owner = AsyncMock(return_value=[mock_team])
+                        mock_validate.return_value = mock_team
 
                         # Create empty builder (first move)
                         mock_builder = MagicMock()
@@ -344,10 +341,10 @@ class TestDropAddCommands:
     @pytest.mark.asyncio
     async def test_dropadd_append_mode_shows_confirmation(self, commands_cog, mock_interaction, mock_team):
         """Test /dropadd command in append mode shows ephemeral confirmation."""
-        with patch('commands.transactions.dropadd.team_service') as mock_team_service:
+        with patch('commands.transactions.dropadd.validate_user_has_team') as mock_validate:
             with patch('commands.transactions.dropadd.get_transaction_builder') as mock_get_builder:
                 with patch.object(commands_cog, '_add_quick_move') as mock_add_quick:
-                    mock_team_service.get_teams_by_owner = AsyncMock(return_value=[mock_team])
+                    mock_validate.return_value = mock_team
 
                     # Create builder with existing moves (append mode)
                     mock_builder = MagicMock()
@@ -402,34 +399,37 @@ class TestDropAddCommandsIntegration:
         """Test complete dropadd workflow from command to builder creation."""
         mock_interaction = AsyncMock()
         mock_interaction.user.id = 123456789
-        
+        # Add guild mock for @league_only decorator
+        mock_interaction.guild = MagicMock()
+        mock_interaction.guild.id = 669356687294988350
+
         mock_team = TeamFactory.west_virginia()
-        
+
         mock_player = PlayerFactory.mike_trout(id=12472)
-        
-        with patch('commands.transactions.dropadd.team_service') as mock_team_service:
+
+        with patch('commands.transactions.dropadd.validate_user_has_team') as mock_validate:
             with patch('commands.transactions.dropadd.player_service') as mock_player_service:
                 with patch('commands.transactions.dropadd.get_transaction_builder') as mock_get_builder:
                     with patch('commands.transactions.dropadd.create_transaction_embed') as mock_create_embed:
                         # Setup mocks
-                        mock_team_service.get_teams_by_owner = AsyncMock(return_value=[mock_team])
+                        mock_validate.return_value = mock_team
                         mock_player_service.search_players = AsyncMock(return_value=[mock_player])
-                        
-                        mock_builder = TransactionBuilder(mock_team, 123456789, 12)
+
+                        mock_builder = TransactionBuilder(mock_team, 123456789, 13)
                         mock_get_builder.return_value = mock_builder
 
                         # Mock the async function
-                        async def mock_create_embed_func(builder):
+                        async def mock_create_embed_func(builder, command_name=None):
                             return MagicMock()
                         mock_create_embed.side_effect = mock_create_embed_func
-                        
+
                         # Execute command with parameters
                         await commands_cog.dropadd.callback(commands_cog,
                             mock_interaction,
                             player='Mike Trout',
                             destination='ml'
                         )
-                        
+
                         # Verify the builder has the move
                         assert mock_builder.move_count == 1
                         move = mock_builder.moves[0]
@@ -442,11 +442,14 @@ class TestDropAddCommandsIntegration:
         """Test error recovery in dropadd workflow."""
         mock_interaction = AsyncMock()
         mock_interaction.user.id = 123456789
-        
-        with patch('commands.transactions.dropadd.team_service') as mock_service:
+        # Add guild mock for @league_only decorator
+        mock_interaction.guild = MagicMock()
+        mock_interaction.guild.id = 669356687294988350
+
+        with patch('commands.transactions.dropadd.validate_user_has_team') as mock_validate:
             # Simulate API error
-            mock_service.get_teams_by_owner = AsyncMock(side_effect=Exception("API Error"))
-            
+            mock_validate.side_effect = Exception("API Error")
+
             # Exception should be raised (logged_command decorator re-raises)
             with pytest.raises(Exception, match="API Error"):
                 await commands_cog.dropadd.callback(commands_cog, mock_interaction)

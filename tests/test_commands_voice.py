@@ -423,14 +423,15 @@ class TestVoiceChannelCommands:
         user.display_name = "TestUser"
         interaction.user = user
 
-        # Mock the guild
+        # Mock the guild - MUST match config guild_id for @league_only decorator
         guild = MagicMock(spec=discord.Guild)
-        guild.id = 67890
+        guild.id = 669356687294988350  # SBA league server ID from config
         guild.default_role = MagicMock()
         interaction.guild = guild
 
         # Mock response methods
         interaction.response.defer = AsyncMock()
+        interaction.response.send_message = AsyncMock()
         interaction.followup.send = AsyncMock()
 
         return interaction
@@ -601,8 +602,17 @@ class TestVoiceChannelCommands:
 
     @pytest.mark.asyncio
     async def test_deprecated_vc_command(self, voice_cog, mock_context):
-        """Test deprecated !vc command shows migration message."""
-        await voice_cog.deprecated_public_voice.callback(voice_cog, mock_context)
+        """Test deprecated !vc command shows migration message.
+
+        Note: These are text commands (not app commands), so we call them directly
+        without .callback. The @league_only decorator requires guild context.
+        """
+        # Add guild mock for @league_only decorator
+        mock_context.guild = MagicMock()
+        mock_context.guild.id = 669356687294988350  # SBA league server ID
+
+        # Text commands are called directly, not via .callback
+        await voice_cog.deprecated_public_voice(mock_context)
 
         # Verify migration message was sent
         mock_context.send.assert_called_once()
@@ -613,8 +623,17 @@ class TestVoiceChannelCommands:
 
     @pytest.mark.asyncio
     async def test_deprecated_private_command(self, voice_cog, mock_context):
-        """Test deprecated !private command shows migration message."""
-        await voice_cog.deprecated_private_voice.callback(voice_cog, mock_context)
+        """Test deprecated !private command shows migration message.
+
+        Note: These are text commands (not app commands), so we call them directly
+        without .callback. The @league_only decorator requires guild context.
+        """
+        # Add guild mock for @league_only decorator
+        mock_context.guild = MagicMock()
+        mock_context.guild.id = 669356687294988350  # SBA league server ID
+
+        # Text commands are called directly, not via .callback
+        await voice_cog.deprecated_private_voice(mock_context)
 
         # Verify migration message was sent
         mock_context.send.assert_called_once()

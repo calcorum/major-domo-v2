@@ -21,7 +21,7 @@ class TestLeagueService:
         """Mock current league state data."""
         return {
             'week': 10,
-            'season': 12,
+            'season': 13,
             'freeze': False,
             'bet_week': 'sheets',
             'trade_deadline': 14,
@@ -99,7 +99,7 @@ class TestLeagueService:
             assert result is not None
             assert isinstance(result, Current)
             assert result.week == 10
-            assert result.season == 12
+            assert result.season == 13
             assert result.freeze is False
             assert result.trade_deadline == 14
             
@@ -144,14 +144,14 @@ class TestLeagueService:
             mock_api.get.return_value = mock_standings_data
             mock_client.return_value = mock_api
             
-            result = await service.get_standings(12)
-            
+            result = await service.get_standings(13)
+
             assert result is not None
             assert len(result) == 3
             assert result[0]['abbrev'] == 'NYY'
             assert result[0]['wins'] == 85
-            
-            mock_api.get.assert_called_once_with('standings', params=[('season', '12')])
+
+            mock_api.get.assert_called_once_with('standings', params=[('season', '13')])
     
     @pytest.mark.asyncio
     async def test_get_standings_success_dict(self, mock_standings_data):
@@ -170,7 +170,7 @@ class TestLeagueService:
             assert len(result) == 3
             assert result[0]['abbrev'] == 'NYY'
             
-            mock_api.get.assert_called_once_with('standings', params=[('season', '12')])
+            mock_api.get.assert_called_once_with('standings', params=[('season', '13')])
     
     @pytest.mark.asyncio
     async def test_get_standings_no_data(self):
@@ -214,13 +214,13 @@ class TestLeagueService:
             mock_api.get.return_value = division_data
             mock_client.return_value = mock_api
             
-            result = await service.get_division_standings(1, 12)
-            
+            result = await service.get_division_standings(1, 13)
+
             assert result is not None
             assert len(result) == 2
             assert all(team['division_id'] == 1 for team in result)
-            
-            mock_api.get.assert_called_once_with('standings/division/1', params=[('season', '12')])
+
+            mock_api.get.assert_called_once_with('standings/division/1', params=[('season', '13')])
     
     @pytest.mark.asyncio
     async def test_get_division_standings_no_data(self):
@@ -246,7 +246,7 @@ class TestLeagueService:
             mock_api.get.side_effect = Exception("API Error")
             mock_client.return_value = mock_api
             
-            result = await service.get_division_standings(1, 12)
+            result = await service.get_division_standings(1, 13)
             
             assert result is None
     
@@ -260,14 +260,14 @@ class TestLeagueService:
             mock_api.get.return_value = mock_leaders_data
             mock_client.return_value = mock_api
             
-            result = await service.get_league_leaders('batting', 12, 10)
-            
+            result = await service.get_league_leaders('batting', 13, 10)
+
             assert result is not None
             assert len(result) == 3
             assert result[0]['name'] == 'Mike Trout'
             assert result[0]['avg'] == 0.325
-            
-            expected_params = [('season', '12'), ('limit', '10')]
+
+            expected_params = [('season', '13'), ('limit', '10')]
             mock_api.get.assert_called_once_with('leaders/batting', params=expected_params)
     
     @pytest.mark.asyncio
@@ -281,13 +281,13 @@ class TestLeagueService:
             mock_api.get.return_value = wrapped_data
             mock_client.return_value = mock_api
             
-            result = await service.get_league_leaders('pitching', 12, 5)
-            
+            result = await service.get_league_leaders('pitching', 13, 5)
+
             assert result is not None
             assert len(result) == 3
             assert result[0]['name'] == 'Mike Trout'
-            
-            expected_params = [('season', '12'), ('limit', '5')]
+
+            expected_params = [('season', '13'), ('limit', '5')]
             mock_api.get.assert_called_once_with('leaders/pitching', params=expected_params)
     
     @pytest.mark.asyncio
@@ -319,7 +319,7 @@ class TestLeagueService:
             result = await service.get_league_leaders()
             
             assert result is not None
-            expected_params = [('season', '12'), ('limit', '10')]
+            expected_params = [('season', '13'), ('limit', '10')]
             mock_api.get.assert_called_once_with('leaders/batting', params=expected_params)
     
     @pytest.mark.asyncio
@@ -346,7 +346,7 @@ class TestLeagueService:
             mock_api.get.side_effect = Exception("API Error")
             mock_client.return_value = mock_api
             
-            result = await service.get_league_leaders('batting', 12)
+            result = await service.get_league_leaders('batting', 13)
             
             assert result is None
     

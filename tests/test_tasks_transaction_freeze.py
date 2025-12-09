@@ -587,7 +587,7 @@ class TestTransactionFreezeTaskInitialization:
 
             assert task.bot == mock_bot
             assert task.logger is not None
-            assert task.weekly_warning_sent is False
+            assert task.error_notification_sent is False
             mock_loop.start.assert_called_once()
 
     def test_cog_unload(self, mock_bot):
@@ -1073,7 +1073,7 @@ class TestErrorHandlingAndRecovery:
                 task._send_owner_notification.assert_called_once()
 
                 # Verify warning flag was set
-                assert task.weekly_warning_sent is True
+                assert task.error_notification_sent is True
 
     @pytest.mark.asyncio
     async def test_owner_notification_prevents_duplicates(self, mock_bot):
@@ -1081,7 +1081,7 @@ class TestErrorHandlingAndRecovery:
         # Don't patch weekly_loop - let it initialize naturally then cancel it
         task = TransactionFreezeTask(mock_bot)
         task.weekly_loop.cancel()  # Stop the actual loop
-        task.weekly_warning_sent = True  # Already sent
+        task.error_notification_sent = True  # Already sent
 
         with patch('tasks.transaction_freeze.get_config') as mock_config:
             config = MagicMock()
@@ -1126,7 +1126,7 @@ class TestWeeklyScheduleTiming:
         # Don't patch weekly_loop - let it initialize naturally then cancel it
         task = TransactionFreezeTask(mock_bot)
         task.weekly_loop.cancel()  # Stop the actual loop
-        task.weekly_warning_sent = True  # Set to True (as if Saturday thaw completed)
+        task.error_notification_sent = True  # Set to True (as if Saturday thaw completed)
 
         # Mock datetime to be Monday (weekday=0) at 00:00
         mock_now = MagicMock()

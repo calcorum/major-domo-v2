@@ -11,7 +11,7 @@ from aioresponses import aioresponses
 
 from commands.profile.images import (
     validate_url_format,
-    test_url_accessibility,
+    check_url_accessibility,
     can_edit_player_image,
     ImageCommands
 )
@@ -98,7 +98,7 @@ class TestURLAccessibility:
         with aioresponses() as m:
             m.head(url, status=200, headers={'content-type': 'image/jpeg'})
 
-            is_accessible, error = await test_url_accessibility(url)
+            is_accessible, error = await check_url_accessibility(url)
 
             assert is_accessible is True
             assert error == ""
@@ -110,7 +110,7 @@ class TestURLAccessibility:
         with aioresponses() as m:
             m.head(url, status=404)
 
-            is_accessible, error = await test_url_accessibility(url)
+            is_accessible, error = await check_url_accessibility(url)
 
             assert is_accessible is False
             assert "404" in error
@@ -122,7 +122,7 @@ class TestURLAccessibility:
         with aioresponses() as m:
             m.head(url, status=200, headers={'content-type': 'text/html'})
 
-            is_accessible, error = await test_url_accessibility(url)
+            is_accessible, error = await check_url_accessibility(url)
 
             assert is_accessible is False
             assert "not return an image" in error
@@ -134,7 +134,7 @@ class TestURLAccessibility:
         with aioresponses() as m:
             m.head(url, exception=asyncio.TimeoutError())
 
-            is_accessible, error = await test_url_accessibility(url)
+            is_accessible, error = await check_url_accessibility(url)
 
             assert is_accessible is False
             assert "timed out" in error.lower()
@@ -146,7 +146,7 @@ class TestURLAccessibility:
         with aioresponses() as m:
             m.head(url, exception=aiohttp.ClientError("Connection failed"))
 
-            is_accessible, error = await test_url_accessibility(url)
+            is_accessible, error = await check_url_accessibility(url)
 
             assert is_accessible is False
             assert "could not access" in error.lower()
