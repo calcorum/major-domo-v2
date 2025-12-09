@@ -404,38 +404,73 @@ class TestDraftDataModel:
 
 
 class TestDraftListModel:
-    """Test DraftList model functionality."""
-    
+    """Test DraftList model functionality.
+
+    Note: DraftList model requires nested Team and Player objects,
+    not just IDs. The API returns these objects populated.
+    """
+
+    def _create_mock_team(self, team_id: int = 1) -> 'Team':
+        """Create a mock team for testing."""
+        return Team(
+            id=team_id,
+            abbrev="TST",
+            sname="Test",
+            lname="Test Team",
+            season=12
+        )
+
+    def _create_mock_player(self, player_id: int = 100) -> 'Player':
+        """Create a mock player for testing."""
+        return Player(
+            id=player_id,
+            name="Test Player",
+            fname="Test",
+            lname="Player",
+            pos_1="1B",
+            team_id=1,
+            season=12,
+            wara=2.5,
+            image="https://example.com/test.jpg"
+        )
+
     def test_draft_list_creation(self):
-        """Test draft list creation."""
+        """Test draft list creation with nested objects."""
+        mock_team = self._create_mock_team(team_id=1)
+        mock_player = self._create_mock_player(player_id=100)
+
         draft_entry = DraftList(
             season=12,
-            team_id=1,
+            team=mock_team,
             rank=1,
-            player_id=100
+            player=mock_player
         )
-        
+
         assert draft_entry.season == 12
         assert draft_entry.team_id == 1
         assert draft_entry.rank == 1
         assert draft_entry.player_id == 100
-    
+
     def test_draft_list_top_ranked_property(self):
         """Test top ranked property."""
+        mock_team = self._create_mock_team(team_id=1)
+        mock_player_top = self._create_mock_player(player_id=100)
+        mock_player_lower = self._create_mock_player(player_id=200)
+
         top_pick = DraftList(
             season=12,
-            team_id=1,
+            team=mock_team,
             rank=1,
-            player_id=100
+            player=mock_player_top
         )
-        
+
         lower_pick = DraftList(
             season=12,
-            team_id=1,
+            team=mock_team,
             rank=5,
-            player_id=200
+            player=mock_player_lower
         )
-        
+
         assert top_pick.is_top_ranked is True
         assert lower_pick.is_top_ranked is False
 
