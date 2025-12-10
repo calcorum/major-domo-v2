@@ -608,9 +608,10 @@ class ChartCategoryGroup(app_commands.Group):
         categories = self.chart_service.get_categories()
 
         if not categories:
-            embed = EmbedTemplate.info(
+            embed = EmbedTemplate.create_base_embed(
                 title="📊 Chart Categories",
-                description="No categories defined. Use `/chart-categories add` to create one."
+                description="No categories defined. Use `/chart-categories add` to create one.",
+                color=EmbedColors.INFO
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return

@@ -409,9 +409,10 @@ async def create_admin_draft_info_embed(
     Returns:
         Discord embed with admin information
     """
-    embed = EmbedTemplate.info(
+    embed = EmbedTemplate.create_base_embed(
         title="⚙️ Draft Administration",
-        description="Current draft configuration and state"
+        description="Current draft configuration and state",
+        color=EmbedColors.INFO
     )
 
     # Current pick
