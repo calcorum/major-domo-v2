@@ -259,7 +259,7 @@ async def create_draft_list_embed(
             inline=False
         )
 
-    embed.set_footer(text="Use /draft-list to manage your auto-draft queue")
+    embed.set_footer(text="Commands: /draft-list-add, /draft-list-remove, /draft-list-clear")
 
     return embed
 

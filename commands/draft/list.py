@@ -266,9 +266,17 @@ class DraftListCommands(commands.Cog):
             await interaction.followup.send(embed=embed, ephemeral=True)
             return
 
-        # Success message
-        description = f"Removed **{player_obj.name}** from your draft queue."
-        embed = EmbedTemplate.success("Player Removed", description)
+        # Get updated list
+        updated_list = await draft_list_service.get_team_list(
+            config.sba_season,
+            team.id
+        )
+
+        # Success message with full draft list
+        success_msg = f"✅ Removed **{player_obj.name}** from your draft queue."
+        embed = await create_draft_list_embed(team, updated_list)
+        embed.description = f"{success_msg}\n\n{embed.description}"
+
         await interaction.followup.send(embed=embed)
 
     @discord.app_commands.command(
@@ -329,6 +337,7 @@ class DraftListCommands(commands.Cog):
         # Success message
         description = f"Cleared **{len(current_list)} players** from your draft queue."
         embed = EmbedTemplate.success("Queue Cleared", description)
+        embed.set_footer(text="Use /draft-list-add to build your queue")
         await interaction.followup.send(embed=embed)
 
 
