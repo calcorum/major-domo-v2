@@ -47,6 +47,7 @@ class Team(SBABaseModel):
     thumbnail: Optional[str] = Field(None, description="Team thumbnail URL")
     color: Optional[str] = Field(None, description="Primary team color")
     dice_color: Optional[str] = Field(None, description="Dice rolling color")
+    salary_cap: Optional[float] = Field(None, description="Team-specific salary cap (None uses default)")
     
     @classmethod
     def from_api_data(cls, data: dict) -> 'Team':

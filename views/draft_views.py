@@ -67,10 +67,11 @@ async def create_on_the_clock_embed(
 
     # Add team sWAR if provided
     if team_roster_swar is not None:
-        config = get_config()
+        from utils.helpers import get_team_salary_cap
+        cap_limit = get_team_salary_cap(current_pick.owner)
         embed.add_field(
             name="Current sWAR",
-            value=f"{team_roster_swar:.2f} / {config.swar_cap_limit:.2f}",
+            value=f"{team_roster_swar:.2f} / {cap_limit:.2f}",
             inline=True
         )
 
@@ -345,7 +346,8 @@ async def create_pick_success_embed(
     player: Player,
     team: Team,
     pick_overall: int,
-    projected_swar: float
+    projected_swar: float,
+    cap_limit: float = None
 ) -> discord.Embed:
     """
     Create embed for successful pick.
@@ -355,10 +357,13 @@ async def create_pick_success_embed(
         team: Team that drafted player
         pick_overall: Overall pick number
         projected_swar: Projected team sWAR after pick
+        cap_limit: Team's salary cap limit (optional, uses helper if not provided)
 
     Returns:
         Discord success embed
     """
+    from utils.helpers import get_team_salary_cap
+
     embed = EmbedTemplate.success(
         title="Pick Confirmed",
         description=f"{team.abbrev} selects **{player.name}**"
@@ -377,10 +382,13 @@ async def create_pick_success_embed(
             inline=True
         )
 
-    config = get_config()
+    # Use provided cap_limit or get from team
+    if cap_limit is None:
+        cap_limit = get_team_salary_cap(team)
+
     embed.add_field(
         name="Projected Team sWAR",
-        value=f"{projected_swar:.2f} / {config.swar_cap_limit:.2f}",
+        value=f"{projected_swar:.2f} / {cap_limit:.2f}",
         inline=True
     )
 

@@ -215,12 +215,12 @@ class DraftPicksCog(commands.Cog):
             await interaction.followup.send(embed=embed)
             return
 
-        is_valid, projected_total = await validate_cap_space(roster, player_obj.wara)
+        is_valid, projected_total, cap_limit = await validate_cap_space(roster, player_obj.wara, team)
 
         if not is_valid:
             embed = await create_pick_illegal_embed(
                 "Cap Space Exceeded",
-                f"Drafting {player_obj.name} would put you at {projected_total:.2f} sWAR (limit: {config.swar_cap_limit:.2f})."
+                f"Drafting {player_obj.name} would put you at {projected_total:.2f} sWAR (limit: {cap_limit:.2f})."
             )
             await interaction.followup.send(embed=embed)
             return
@@ -253,7 +253,8 @@ class DraftPicksCog(commands.Cog):
             player_obj,
             team,
             current_pick.overall,
-            projected_total
+            projected_total,
+            cap_limit
         )
         await interaction.followup.send(embed=success_embed)
 

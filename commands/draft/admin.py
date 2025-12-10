@@ -173,6 +173,13 @@ class DraftAdminGroup(app_commands.Group):
         if pick.owner:
             description += f"\n\n{pick.owner.abbrev} {pick.owner.sname} is now on the clock."
 
+        # Add timer status
+        if updated.timer and updated.pick_deadline:
+            deadline_timestamp = int(updated.pick_deadline.timestamp())
+            description += f"\n\n⏱️ **Timer Active** - Deadline <t:{deadline_timestamp}:R>"
+        else:
+            description += "\n\n⏸️ **Timer Inactive**"
+
         embed = EmbedTemplate.success("Pick Updated", description)
         await interaction.followup.send(embed=embed)
 

@@ -33,6 +33,33 @@ class DraftPickService(BaseService[DraftPick]):
         super().__init__(DraftPick, 'draftpicks')
         logger.debug("DraftPickService initialized")
 
+    def _extract_items_and_count_from_response(self, data):
+        """
+        Override to handle API quirk: GET returns 'picks' instead of 'draftpicks'.
+
+        Args:
+            data: API response data
+
+        Returns:
+            Tuple of (items list, total count)
+        """
+        if isinstance(data, list):
+            return data, len(data)
+
+        if not isinstance(data, dict):
+            logger.warning(f"Unexpected response format: {type(data)}")
+            return [], 0
+
+        # Get count
+        count = data.get('count', 0)
+
+        # API returns items under 'picks' key (not 'draftpicks')
+        if 'picks' in data and isinstance(data['picks'], list):
+            return data['picks'], count or len(data['picks'])
+
+        # Fallback to standard extraction
+        return super()._extract_items_and_count_from_response(data)
+
     async def get_pick(self, season: int, overall: int) -> Optional[DraftPick]:
         """
         Get specific pick by season and overall number.
