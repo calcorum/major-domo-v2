@@ -231,16 +231,27 @@ When voice channels are cleaned up (deleted after being empty):
 - Prevents duplicate error messages
 - Continues operation despite individual scorecard failures
 
-### Draft Monitor (`draft_monitor.py`) (NEW - October 2025)
+### Draft Monitor (`draft_monitor.py`) (Updated December 2025)
 **Purpose:** Automated draft timer monitoring, warnings, and auto-draft execution
 
-**Schedule:** Every 15 seconds (only when draft timer is active)
+**Schedule:** Smart polling intervals based on time remaining:
+- **30 seconds** when >60s remaining on pick
+- **15 seconds** when 30-60s remaining
+- **5 seconds** when <30s remaining
 
 **Operations:**
 - **Timer Monitoring:**
-  - Checks draft state every 15 seconds
+  - Auto-starts when timer enabled via `/draft-admin timer`
+  - Auto-starts when `/draft-admin set-pick` used with active timer
   - Self-terminates when `draft_data.timer = False`
-  - Restarts when timer re-enabled via `/draft-admin`
+  - Uses `_ensure_monitor_running()` helper for consistent management
+
+- **On-Clock Announcements:**
+  - Posts announcement embed when pick advances
+  - Shows team name, pick info, and deadline
+  - Displays team sWAR and cap space
+  - Lists last 5 picks
+  - Shows top 5 roster players by sWAR
 
 - **Warning System:**
   - Sends 60-second warning to ping channel
@@ -255,6 +266,8 @@ When voice channels are cleaned up (deleted after being empty):
   - Advances to next pick after auto-draft
 
 #### Key Features
+- **Auto-Start:** Starts automatically when timer enabled or pick set
+- **Smart Polling:** Adjusts check frequency based on urgency
 - **Self-Terminating:** Stops automatically when timer disabled (resource efficient)
 - **Global Lock Integration:** Acquires same lock as `/draft` command
 - **Crash Recovery:** Respects 30-second stale lock timeout

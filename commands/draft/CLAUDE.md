@@ -236,30 +236,41 @@ The draft monitor task (`tasks/draft_monitor.py`) integrates with this command:
 3. **Draft List**: Monitor tries players from team's draft list in order
 4. **Pick Advancement**: Monitor calls same `draft_service.advance_pick()`
 
-## Future Commands
+## Implemented Commands
 
-### `/draft-status` (Pending Implementation)
+### `/draft-status`
 Display current draft state, timer, lock status
 
-### `/draft-admin` (Pending Implementation)
+### `/draft-admin` (Administrator Only)
 Admin controls:
-- Timer on/off
-- Set current pick
-- Configure channels
-- Wipe picks
-- Clear stale locks
-- Set keepers
+- `/draft-admin timer` - Enable/disable timer (auto-starts monitor task)
+- `/draft-admin set-pick` - Set current pick (auto-starts monitor if timer active)
+- `/draft-admin channels` - Configure ping/result channels
+- `/draft-admin wipe` - Clear all picks for season
+- `/draft-admin info` - View detailed draft configuration
 
-### `/draft-list` (Pending Implementation)
-Manage auto-draft queue:
-- View current list
-- Add players
-- Remove players
-- Reorder players
-- Clear list
+### `/draft-list`
+View auto-draft queue for your team
 
-### `/draft-board` (Pending Implementation)
+### `/draft-list-add`
+Add player to auto-draft queue
+
+### `/draft-list-remove`
+Remove player from auto-draft queue
+
+### `/draft-list-clear`
+Clear entire auto-draft queue
+
+### `/draft-board`
 View draft board by round with pagination
+
+### `/draft-on-clock`
+View detailed on-the-clock information including:
+- Current team on the clock
+- Deadline with relative timestamp
+- Team's current sWAR and cap space
+- Last 5 picks
+- Top 5 roster players by sWAR
 
 ## Dependencies
 
@@ -307,6 +318,6 @@ Test scenarios:
 
 ---
 
-**Last Updated:** October 2025
-**Status:** Core `/draft` command implemented and tested
-**Next:** Implement `/draft-status`, `/draft-admin`, `/draft-list` commands
+**Last Updated:** December 2025
+**Status:** All draft commands implemented and tested
+**Recent:** Added skipped pick support, draft monitor auto-start, on-clock announcements
