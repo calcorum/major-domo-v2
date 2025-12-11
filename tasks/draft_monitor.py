@@ -225,13 +225,24 @@ class DraftMonitorTask:
             # Try each player in order
             for entry in draft_list:
                 if not entry.player:
+                    self.logger.debug(f"Draft list entry has no player, skipping")
                     continue
 
                 player = entry.player
 
+                # Debug: Log player team_id for troubleshooting
+                self.logger.debug(
+                    f"Checking player {player.name}: team_id={player.team_id}, "
+                    f"FA team_id={config.free_agent_team_id}, "
+                    f"team.id={player.team.id if player.team else 'None'}"
+                )
+
                 # Check if player is still available
                 if player.team_id != config.free_agent_team_id:
-                    self.logger.debug(f"Player {player.name} no longer available, skipping")
+                    self.logger.debug(
+                        f"Player {player.name} no longer available "
+                        f"(team_id={player.team_id} != FA={config.free_agent_team_id}), skipping"
+                    )
                     continue
 
                 # Attempt to draft this player
@@ -299,7 +310,7 @@ class DraftMonitorTask:
                 return False
 
             # Validate cap space
-            is_valid, projected_total = await validate_cap_space(roster, player.wara)
+            is_valid, projected_total, cap_limit = await validate_cap_space(roster, player.wara)
 
             if not is_valid:
                 self.logger.debug(
