@@ -56,7 +56,7 @@ async def setup_draft(bot: commands.Bot):
 
     # Load draft admin group (app_commands.Group pattern)
     try:
-        bot.tree.add_command(DraftAdminGroup())
+        bot.tree.add_command(DraftAdminGroup(bot))
         logger.info("✅ Loaded DraftAdminGroup")
         successful += 1
     except Exception as e:

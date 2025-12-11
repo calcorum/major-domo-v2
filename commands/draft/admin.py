@@ -22,12 +22,34 @@ from views.embeds import EmbedTemplate
 class DraftAdminGroup(app_commands.Group):
     """Draft administration command group."""
 
-    def __init__(self):
+    def __init__(self, bot: commands.Bot):
         super().__init__(
             name="draft-admin",
             description="Admin commands for draft management"
         )
+        self.bot = bot
         self.logger = get_contextual_logger(f'{__name__}.DraftAdminGroup')
+
+    def _ensure_monitor_running(self) -> str:
+        """
+        Ensure the draft monitor task is running.
+
+        Returns:
+            Status message about the monitor state
+        """
+        from tasks.draft_monitor import setup_draft_monitor
+
+        if not hasattr(self.bot, 'draft_monitor') or self.bot.draft_monitor is None:
+            self.bot.draft_monitor = setup_draft_monitor(self.bot)
+            self.logger.info("Draft monitor task started")
+            return "\n\n🤖 **Draft monitor started** - auto-draft and warnings active"
+        elif not self.bot.draft_monitor.monitor_loop.is_running():
+            # Task exists but was stopped/cancelled - create a new one
+            self.bot.draft_monitor = setup_draft_monitor(self.bot)
+            self.logger.info("Draft monitor task recreated")
+            return "\n\n🤖 **Draft monitor restarted** - auto-draft and warnings active"
+        else:
+            return "\n\n🤖 Draft monitor already running"
 
     @app_commands.command(name="info", description="View current draft configuration")
     @league_admin_only()
@@ -94,14 +116,29 @@ class DraftAdminGroup(app_commands.Group):
             await interaction.followup.send(embed=embed, ephemeral=True)
             return
 
+        # Start draft monitor task if timer is enabled
+        monitor_status = ""
+        if enabled:
+            monitor_status = self._ensure_monitor_running()
+
         # Success message
         status = "enabled" if enabled else "disabled"
         description = f"Draft timer has been **{status}**."
 
-        if enabled and minutes:
-            description += f"\n\nPick duration: **{minutes} minutes**"
-        elif enabled:
-            description += f"\n\nPick duration: **{updated.pick_minutes} minutes**"
+        if enabled:
+            # Show pick duration
+            pick_mins = minutes if minutes else updated.pick_minutes
+            description += f"\n\n**Pick duration:** {pick_mins} minutes"
+
+            # Show current pick number
+            description += f"\n**Current Pick:** #{updated.currentpick}"
+
+            # Show deadline
+            if updated.pick_deadline:
+                deadline_timestamp = int(updated.pick_deadline.timestamp())
+                description += f"\n**Deadline:** <t:{deadline_timestamp}:T> (<t:{deadline_timestamp}:R>)"
+
+        description += monitor_status
 
         embed = EmbedTemplate.success("Timer Updated", description)
         await interaction.followup.send(embed=embed)
@@ -173,10 +210,13 @@ class DraftAdminGroup(app_commands.Group):
         if pick.owner:
             description += f"\n\n{pick.owner.abbrev} {pick.owner.sname} is now on the clock."
 
-        # Add timer status
+        # Add timer status and ensure monitor is running if timer is active
         if updated.timer and updated.pick_deadline:
             deadline_timestamp = int(updated.pick_deadline.timestamp())
             description += f"\n\n⏱️ **Timer Active** - Deadline <t:{deadline_timestamp}:R>"
+            # Ensure monitor is running
+            monitor_status = self._ensure_monitor_running()
+            description += monitor_status
         else:
             description += "\n\n⏸️ **Timer Inactive**"
 
@@ -298,4 +338,4 @@ class DraftAdminGroup(app_commands.Group):
 
 async def setup(bot: commands.Bot):
     """Setup function for loading the draft admin commands."""
-    bot.tree.add_command(DraftAdminGroup())
+    bot.tree.add_command(DraftAdminGroup(bot))

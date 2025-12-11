@@ -16,8 +16,11 @@ from services.draft_pick_service import draft_pick_service
 from services.draft_list_service import draft_list_service
 from services.player_service import player_service
 from services.team_service import team_service
+from services.roster_service import roster_service
 from utils.logging import get_contextual_logger
+from utils.helpers import get_team_salary_cap
 from views.embeds import EmbedTemplate, EmbedColors
+from views.draft_views import create_on_clock_announcement_embed
 from config import get_config
 
 
@@ -50,10 +53,35 @@ class DraftMonitorTask:
         """Stop the task when cog is unloaded."""
         self.monitor_loop.cancel()
 
-    @tasks.loop(seconds=15)
+    def _get_poll_interval(self, time_remaining: float) -> int:
+        """
+        Get the appropriate polling interval based on time remaining.
+
+        Args:
+            time_remaining: Seconds until deadline
+
+        Returns:
+            Poll interval in seconds:
+            - 30s when > 60s remaining
+            - 15s when 30-60s remaining
+            - 5s when < 30s remaining
+        """
+        if time_remaining > 60:
+            return 30
+        elif time_remaining > 30:
+            return 15
+        else:
+            return 5
+
+    @tasks.loop(seconds=30)
     async def monitor_loop(self):
         """
-        Main monitoring loop - checks draft state every 15 seconds.
+        Main monitoring loop - checks draft state with dynamic intervals.
+
+        Polling frequency increases as deadline approaches:
+        - Every 30s when > 60s remaining
+        - Every 15s when 30-60s remaining
+        - Every 5s when < 30s remaining
 
         Self-terminates when draft timer is disabled.
         """
@@ -81,6 +109,12 @@ class DraftMonitorTask:
 
             # Calculate time remaining
             time_remaining = (deadline - now).total_seconds()
+
+            # Adjust polling interval based on time remaining
+            new_interval = self._get_poll_interval(time_remaining)
+            if self.monitor_loop.seconds != new_interval:
+                self.monitor_loop.change_interval(seconds=new_interval)
+                self.logger.debug(f"Adjusted poll interval to {new_interval}s (time remaining: {time_remaining:.0f}s)")
 
             if time_remaining <= 0:
                 # Timer expired - auto-draft
@@ -180,6 +214,11 @@ class DraftMonitorTask:
                 )
                 # Advance to next pick
                 await draft_service.advance_pick(draft_data.id, draft_data.currentpick)
+                # Post on-clock announcement for next team
+                await self._post_on_clock_announcement(ping_channel, draft_data)
+                # Reset warning flags
+                self.warning_60s_sent = False
+                self.warning_30s_sent = False
                 return
 
             # Try each player in order
@@ -207,6 +246,8 @@ class DraftMonitorTask:
                     )
                     # Advance to next pick
                     await draft_service.advance_pick(draft_data.id, draft_data.currentpick)
+                    # Post on-clock announcement for next team
+                    await self._post_on_clock_announcement(ping_channel, draft_data)
                     # Reset warning flags
                     self.warning_60s_sent = False
                     self.warning_30s_sent = False
@@ -219,6 +260,11 @@ class DraftMonitorTask:
             )
             # Advance to next pick anyway
             await draft_service.advance_pick(draft_data.id, draft_data.currentpick)
+            # Post on-clock announcement for next team
+            await self._post_on_clock_announcement(ping_channel, draft_data)
+            # Reset warning flags
+            self.warning_60s_sent = False
+            self.warning_30s_sent = False
 
         except Exception as e:
             self.logger.error("Error auto-drafting player", error=e)
@@ -293,6 +339,80 @@ class DraftMonitorTask:
         except Exception as e:
             self.logger.error(f"Error attempting to draft {player.name}", error=e)
             return False
+
+    async def _post_on_clock_announcement(self, ping_channel, draft_data) -> None:
+        """
+        Post the on-clock announcement embed for the next team.
+
+        Called after advance_pick() to announce who is now on the clock.
+
+        Args:
+            ping_channel: Discord channel to post in
+            draft_data: Current draft configuration (will be refreshed)
+        """
+        try:
+            config = get_config()
+
+            # Refresh draft data to get updated currentpick and deadline
+            updated_draft_data = await draft_service.get_draft_data()
+            if not updated_draft_data:
+                self.logger.error("Could not refresh draft data for announcement")
+                return
+
+            # Get the new current pick
+            next_pick = await draft_pick_service.get_pick(
+                config.sba_season,
+                updated_draft_data.currentpick
+            )
+
+            if not next_pick or not next_pick.owner:
+                self.logger.error(f"Could not get pick #{updated_draft_data.currentpick} for announcement")
+                return
+
+            # Get recent picks (last 5 completed)
+            recent_picks = await draft_pick_service.get_recent_picks(
+                config.sba_season,
+                updated_draft_data.currentpick - 1,  # Start from previous pick
+                limit=5
+            )
+
+            # Get team roster for sWAR calculation
+            team_roster = await roster_service.get_team_roster(next_pick.owner.id, "current")
+            roster_swar = team_roster.total_wara if team_roster else 0.0
+            cap_limit = get_team_salary_cap(next_pick.owner)
+
+            # Get top 5 most expensive players on team roster
+            top_roster_players = []
+            if team_roster:
+                all_players = team_roster.all_players
+                sorted_players = sorted(all_players, key=lambda p: p.wara if p.wara else 0.0, reverse=True)
+                top_roster_players = sorted_players[:5]
+
+            # Create and send the embed
+            embed = await create_on_clock_announcement_embed(
+                current_pick=next_pick,
+                draft_data=updated_draft_data,
+                recent_picks=recent_picks if recent_picks else [],
+                roster_swar=roster_swar,
+                cap_limit=cap_limit,
+                top_roster_players=top_roster_players
+            )
+
+            # Mention the team's GM if available
+            gm_mention = ""
+            if next_pick.owner.gmid:
+                gm_mention = f"<@{next_pick.owner.gmid}> "
+
+            await ping_channel.send(content=gm_mention, embed=embed)
+            self.logger.info(f"Posted on-clock announcement for pick #{updated_draft_data.currentpick}")
+
+            # Reset poll interval to 30s for new pick
+            if self.monitor_loop.seconds != 30:
+                self.monitor_loop.change_interval(seconds=30)
+                self.logger.debug("Reset poll interval to 30s for new pick")
+
+        except Exception as e:
+            self.logger.error("Error posting on-clock announcement", error=e)
 
     async def _send_warnings_if_needed(self, draft_data, time_remaining: float):
         """
