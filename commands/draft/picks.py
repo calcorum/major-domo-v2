@@ -173,15 +173,32 @@ class DraftPicksCog(commands.Cog):
             await interaction.followup.send(embed=embed)
             return
 
-        # Validate user is on the clock
+        # Validate user is on the clock OR has a skipped pick
+        pick_to_use = current_pick  # Default: use current pick if on the clock
+
         if current_pick.owner.id != team.id:
-            # TODO: Check for skipped picks
-            embed = await create_pick_illegal_embed(
-                "Not Your Turn",
-                f"{current_pick.owner.sname} is on the clock for {format_pick_display(current_pick.overall)}."
+            # Not on the clock - check for skipped picks
+            skipped_picks = await draft_pick_service.get_skipped_picks_for_team(
+                config.sba_season,
+                team.id,
+                draft_data.currentpick
             )
-            await interaction.followup.send(embed=embed)
-            return
+
+            if not skipped_picks:
+                # No skipped picks - can't draft
+                embed = await create_pick_illegal_embed(
+                    "Not Your Turn",
+                    f"{current_pick.owner.sname} is on the clock for {format_pick_display(current_pick.overall)}."
+                )
+                await interaction.followup.send(embed=embed)
+                return
+
+            # Use the earliest skipped pick
+            pick_to_use = skipped_picks[0]
+            self.logger.info(
+                f"Team {team.abbrev} using skipped pick #{pick_to_use.overall} "
+                f"(current pick is #{current_pick.overall})"
+            )
 
         # Get player
         players = await player_service.get_players_by_name(player_name, config.sba_season)
@@ -225,9 +242,9 @@ class DraftPicksCog(commands.Cog):
             await interaction.followup.send(embed=embed)
             return
 
-        # Execute pick
+        # Execute pick (using pick_to_use which may be current or skipped pick)
         updated_pick = await draft_pick_service.update_pick_selection(
-            current_pick.id,
+            pick_to_use.id,
             player_obj.id
         )
 
@@ -248,31 +265,50 @@ class DraftPicksCog(commands.Cog):
         if not updated_player:
             self.logger.error(f"Failed to update player {player_obj.id} team")
 
+        # Determine if this was a skipped pick
+        is_skipped_pick = pick_to_use.overall != current_pick.overall
+
         # Send success message
         success_embed = await create_pick_success_embed(
             player_obj,
             team,
-            current_pick.overall,
+            pick_to_use.overall,
             projected_total,
             cap_limit
         )
+
+        # Add note if this was a skipped pick
+        if is_skipped_pick:
+            success_embed.set_footer(
+                text=f"📝 Making up skipped pick (current pick is #{current_pick.overall})"
+            )
+
         await interaction.followup.send(embed=success_embed)
 
-        # Post draft card to ping channel
-        if draft_data.ping_channel:
+        # Post draft card to ping channel (only if different from command channel)
+        if draft_data.ping_channel and draft_data.ping_channel != interaction.channel_id:
             guild = interaction.guild
             if guild:
                 ping_channel = guild.get_channel(draft_data.ping_channel)
                 if ping_channel:
-                    draft_card = await create_player_draft_card(player_obj, current_pick)
+                    draft_card = await create_player_draft_card(player_obj, pick_to_use)
+
+                    # Add skipped pick context to draft card
+                    if is_skipped_pick:
+                        draft_card.set_footer(
+                            text=f"📝 Making up skipped pick (current pick is #{current_pick.overall})"
+                        )
+
                     await ping_channel.send(embed=draft_card)
 
-        # Advance to next pick
-        await draft_service.advance_pick(draft_data.id, draft_data.currentpick)
+        # Only advance the draft if this was the current pick (not a skipped pick)
+        if not is_skipped_pick:
+            await draft_service.advance_pick(draft_data.id, draft_data.currentpick)
 
         self.logger.info(
             f"Draft pick completed: {team.abbrev} selected {player_obj.name} "
-            f"(pick #{current_pick.overall})"
+            f"(pick #{pick_to_use.overall})"
+            + (f" [skipped pick makeup]" if is_skipped_pick else "")
         )
 
 

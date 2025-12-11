@@ -208,6 +208,52 @@ class DraftPickService(BaseService[DraftPick]):
             logger.error(f"Error getting available picks: {e}")
             return []
 
+    async def get_skipped_picks_for_team(
+        self,
+        season: int,
+        team_id: int,
+        current_overall: int
+    ) -> List[DraftPick]:
+        """
+        Get skipped picks for a team (picks before current that have no player selected).
+
+        A "skipped" pick is one where:
+        - The pick overall is LESS than the current overall (it has passed)
+        - The pick has no player_id assigned
+        - The pick's current owner is the specified team
+
+        NOT cached - picks change during draft.
+
+        Args:
+            season: Draft season
+            team_id: Team ID to check for skipped picks
+            current_overall: Current overall pick number in the draft
+
+        Returns:
+            List of skipped DraftPick instances owned by team, ordered by overall (ascending)
+        """
+        try:
+            # Get all picks owned by this team that are before the current pick
+            # and have not been selected
+            params = [
+                ('season', str(season)),
+                ('owner_team_id', str(team_id)),
+                ('overall_end', str(current_overall - 1)),  # Before current pick
+                ('player_taken', 'false'),  # No player selected
+                ('sort', 'order-asc')  # Earliest skipped pick first
+            ]
+
+            picks = await self.get_all_items(params=params)
+            logger.debug(
+                f"Found {len(picks)} skipped picks for team {team_id} "
+                f"before pick #{current_overall}"
+            )
+            return picks
+
+        except Exception as e:
+            logger.error(f"Error getting skipped picks for team {team_id}: {e}")
+            return []
+
     async def get_recent_picks(
         self,
         season: int,

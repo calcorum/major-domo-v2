@@ -775,6 +775,89 @@ class TestDraftPickService:
         assert patch_data['player_id'] is None
         assert 'overall' in patch_data  # Full model required
 
+    @pytest.mark.asyncio
+    async def test_get_skipped_picks_for_team_success(self, service, mock_client):
+        """
+        Test retrieving skipped picks for a team.
+
+        Skipped picks are picks before the current overall that have no player selected.
+        Returns picks ordered by overall (ascending) so earliest skipped pick is first.
+        """
+        # Team 5 has two skipped picks (overall 10 and 15) before current pick 25
+        skipped_pick_1 = create_draft_pick_data(
+            pick_id=10, overall=10, round_num=1, player_id=None,
+            owner_team_id=5, include_nested=False
+        )
+        skipped_pick_2 = create_draft_pick_data(
+            pick_id=15, overall=15, round_num=1, player_id=None,
+            owner_team_id=5, include_nested=False
+        )
+
+        mock_client.get.return_value = {
+            'count': 2,
+            'picks': [skipped_pick_1, skipped_pick_2]
+        }
+
+        result = await service.get_skipped_picks_for_team(
+            season=12,
+            team_id=5,
+            current_overall=25
+        )
+
+        # Verify results
+        assert len(result) == 2
+        assert result[0].overall == 10  # Earliest skipped pick first
+        assert result[1].overall == 15
+        assert result[0].player_id is None
+        assert result[1].player_id is None
+
+        # Verify API call
+        mock_client.get.assert_called_once()
+        call_args = mock_client.get.call_args
+        params = call_args[1]['params']
+        # Should request picks before current (overall_end=24), owned by team, with no player
+        assert ('overall_end', '24') in params
+        assert ('owner_team_id', '5') in params
+        assert ('player_taken', 'false') in params
+
+    @pytest.mark.asyncio
+    async def test_get_skipped_picks_for_team_none_found(self, service, mock_client):
+        """
+        Test when team has no skipped picks.
+
+        Returns empty list when all prior picks have been made.
+        """
+        mock_client.get.return_value = {
+            'count': 0,
+            'picks': []
+        }
+
+        result = await service.get_skipped_picks_for_team(
+            season=12,
+            team_id=5,
+            current_overall=25
+        )
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_get_skipped_picks_for_team_api_error(self, service, mock_client):
+        """
+        Test graceful handling of API errors.
+
+        Returns empty list on error rather than raising exception.
+        """
+        mock_client.get.side_effect = Exception("API Error")
+
+        result = await service.get_skipped_picks_for_team(
+            season=12,
+            team_id=5,
+            current_overall=25
+        )
+
+        # Should return empty list on error, not raise
+        assert result == []
+
 
 # =============================================================================
 # DraftListService Tests

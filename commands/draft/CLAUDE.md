@@ -52,6 +52,25 @@ Draft commands are only available in the offseason.
 
 ## Key Features
 
+### Skipped Pick Support
+- **Purpose**: Allow teams to make up picks they missed when not on the clock
+- **Detection**: Checks for picks with `overall < current_overall` and `player_id = None`
+- **Behavior**: If team is not on the clock but has skipped picks, allows drafting with earliest skipped pick
+- **User Experience**: Success message includes footer noting this is a "skipped pick makeup"
+- **Draft Advancement**: Does NOT advance the draft when using a skipped pick
+
+```python
+# Skipped pick detection flow
+if current_pick.owner.id != team.id:
+    skipped_picks = await draft_pick_service.get_skipped_picks_for_team(
+        season, team.id, current_overall
+    )
+    if skipped_picks:
+        pick_to_use = skipped_picks[0]  # Earliest skipped pick
+    else:
+        # Return "Not Your Turn" error
+```
+
 ### Global Pick Lock
 - **Purpose**: Prevent concurrent draft picks that could cause race conditions
 - **Implementation**: `asyncio.Lock()` stored in cog instance
