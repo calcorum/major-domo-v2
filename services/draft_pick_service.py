@@ -325,6 +325,35 @@ class DraftPickService(BaseService[DraftPick]):
             logger.error(f"Error getting upcoming picks: {e}")
             return []
 
+    async def get_picks_with_players(self, season: int) -> List[DraftPick]:
+        """
+        Get all picks for a season with player data included.
+
+        Used for bulk operations like resync-sheet. Returns all picks
+        for the season regardless of whether they have been selected.
+
+        NOT cached - picks change during draft.
+
+        Args:
+            season: Draft season
+
+        Returns:
+            List of all DraftPick instances for the season
+        """
+        try:
+            params = [
+                ('season', str(season)),
+                ('sort', 'order-asc')
+            ]
+
+            picks = await self.get_all_items(params=params)
+            logger.debug(f"Found {len(picks)} picks for season {season}")
+            return picks
+
+        except Exception as e:
+            logger.error(f"Error getting all picks for season {season}: {e}")
+            return []
+
     async def update_pick_selection(
         self,
         pick_id: int,

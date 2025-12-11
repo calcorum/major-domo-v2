@@ -13,6 +13,7 @@ from discord.ext import commands
 from config import get_config
 from services.draft_service import draft_service
 from services.draft_pick_service import draft_pick_service
+from services.draft_sheet_service import get_draft_sheet_service
 from services.player_service import player_service
 from services.team_service import team_service
 from utils.logging import get_contextual_logger
@@ -265,6 +266,15 @@ class DraftPicksCog(commands.Cog):
         if not updated_player:
             self.logger.error(f"Failed to update player {player_obj.id} team")
 
+        # Write pick to Google Sheets (fire-and-forget with notification on failure)
+        await self._write_pick_to_sheets(
+            draft_data=draft_data,
+            pick=pick_to_use,
+            player=player_obj,
+            team=team,
+            guild=interaction.guild
+        )
+
         # Determine if this was a skipped pick
         is_skipped_pick = pick_to_use.overall != current_pick.overall
 
@@ -310,6 +320,90 @@ class DraftPicksCog(commands.Cog):
             f"(pick #{pick_to_use.overall})"
             + (f" [skipped pick makeup]" if is_skipped_pick else "")
         )
+
+    async def _write_pick_to_sheets(
+        self,
+        draft_data,
+        pick,
+        player,
+        team,
+        guild: Optional[discord.Guild]
+    ):
+        """
+        Write pick to Google Sheets (fire-and-forget with ping channel notification on failure).
+
+        Args:
+            draft_data: Current draft configuration
+            pick: The draft pick being used
+            player: Player being drafted
+            team: Team making the pick
+            guild: Discord guild for notification channel
+        """
+        config = get_config()
+
+        try:
+            draft_sheet_service = get_draft_sheet_service()
+            success = await draft_sheet_service.write_pick(
+                season=config.sba_season,
+                overall=pick.overall,
+                orig_owner_abbrev=pick.origowner.abbrev if pick.origowner else team.abbrev,
+                owner_abbrev=team.abbrev,
+                player_name=player.name,
+                swar=player.wara
+            )
+
+            if not success:
+                # Write failed - notify in ping channel
+                await self._notify_sheet_failure(
+                    guild=guild,
+                    channel_id=draft_data.ping_channel,
+                    pick_overall=pick.overall,
+                    player_name=player.name,
+                    reason="Sheet write returned failure"
+                )
+
+        except Exception as e:
+            self.logger.warning(f"Failed to write pick to sheets: {e}")
+            # Notify in ping channel
+            await self._notify_sheet_failure(
+                guild=guild,
+                channel_id=draft_data.ping_channel,
+                pick_overall=pick.overall,
+                player_name=player.name,
+                reason=str(e)
+            )
+
+    async def _notify_sheet_failure(
+        self,
+        guild: Optional[discord.Guild],
+        channel_id: Optional[int],
+        pick_overall: int,
+        player_name: str,
+        reason: str
+    ):
+        """
+        Post notification to ping channel when sheet write fails.
+
+        Args:
+            guild: Discord guild
+            channel_id: Ping channel ID
+            pick_overall: Pick number that failed
+            player_name: Player name
+            reason: Failure reason
+        """
+        if not guild or not channel_id:
+            return
+
+        try:
+            channel = guild.get_channel(channel_id)
+            if channel and hasattr(channel, 'send'):
+                await channel.send(
+                    f"⚠️ **Sheet Sync Failed** - Pick #{pick_overall} ({player_name}) "
+                    f"was not written to the draft sheet. "
+                    f"Use `/draft-admin resync-sheet` to manually sync."
+                )
+        except Exception as e:
+            self.logger.error(f"Failed to send sheet failure notification: {e}")
 
 
 async def setup(bot: commands.Bot):

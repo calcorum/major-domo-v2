@@ -110,7 +110,8 @@ async def create_on_the_clock_embed(
 async def create_draft_status_embed(
     draft_data: DraftData,
     current_pick: DraftPick,
-    lock_status: str = "🔓 No pick in progress"
+    lock_status: str = "🔓 No pick in progress",
+    sheet_url: Optional[str] = None
 ) -> discord.Embed:
     """
     Create draft status embed showing current state.
@@ -119,6 +120,7 @@ async def create_draft_status_embed(
         draft_data: Current draft configuration
         current_pick: Current DraftPick
         lock_status: Lock status message
+        sheet_url: Optional Google Sheets URL for draft tracking
 
     Returns:
         Discord embed with draft status
@@ -165,6 +167,14 @@ async def create_draft_status_embed(
         value=lock_status,
         inline=False
     )
+
+    # Draft Sheet link
+    if sheet_url:
+        embed.add_field(
+            name="Draft Sheet",
+            value=f"[View Sheet]({sheet_url})",
+            inline=False
+        )
 
     return embed
 

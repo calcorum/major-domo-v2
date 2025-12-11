@@ -314,8 +314,30 @@ async with draft_picks_cog.pick_lock:
    - Validate cap space
    - Attempt to draft player
    - Break on success
-5. Advance to next pick
-6. Release lock
+5. Write pick to Google Sheets (fire-and-forget)
+6. Advance to next pick
+7. Release lock
+
+#### Google Sheets Integration
+The monitor writes picks to the draft sheet after successful auto-draft:
+- Uses **fire-and-forget** pattern (non-blocking)
+- Failures logged but don't block draft
+- Same service as manual `/draft` command
+- Sheet write occurs before pick advancement
+
+```python
+# After successful auto-draft execution
+sheet_success = await draft_sheet_service.write_pick(
+    season=config.sba_season,
+    overall=pick.overall,
+    orig_owner_abbrev=original_owner.abbrev,
+    owner_abbrev=team.abbrev,
+    player_name=player.name,
+    swar=player.wara
+)
+if not sheet_success:
+    logger.warning(f"Sheet write failed for auto-draft pick #{pick.overall}")
+```
 
 #### Channel Requirements
 - **ping_channel** - Where warnings and auto-draft announcements post

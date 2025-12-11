@@ -1,6 +1,9 @@
 """
 Configuration management for Discord Bot v2.0
 """
+import os
+from typing import Optional
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Baseball position constants (static, not configurable)
@@ -84,6 +87,12 @@ class BotConfig(BaseSettings):
     # Google Sheets settings
     sheets_credentials_path: str = "/app/data/major-domo-service-creds.json"
 
+    # Draft Sheet settings (for writing picks to Google Sheets)
+    # Sheet IDs can be overridden via environment variables: DRAFT_SHEET_KEY_12, DRAFT_SHEET_KEY_13, etc.
+    draft_sheet_enabled: bool = True  # Feature flag - set DRAFT_SHEET_ENABLED=false to disable
+    draft_sheet_worksheet: str = "Ordered List"  # Worksheet name to write picks to
+    draft_sheet_start_column: str = "D"  # Column where pick data starts (D, E, F, G for 4 columns)
+
     # Giphy API settings
     giphy_api_key: str = "H86xibttEuUcslgmMM6uu74IgLEZ7UOD"
     giphy_translate_url: str = "https://api.giphy.com/v1/gifs/translate"
@@ -112,6 +121,42 @@ class BotConfig(BaseSettings):
     def draft_total_picks(self) -> int:
         """Calculate total picks in draft (derived value)."""
         return self.draft_rounds * self.draft_team_count
+
+    def get_draft_sheet_key(self, season: int) -> Optional[str]:
+        """
+        Get the Google Sheet ID for a given draft season.
+
+        Sheet IDs are configured via environment variables:
+        - DRAFT_SHEET_KEY_12 for season 12
+        - DRAFT_SHEET_KEY_13 for season 13
+        - etc.
+
+        Returns None if no sheet is configured for the season.
+        """
+        # Default sheet IDs (hardcoded as fallback)
+        default_keys = {
+            12: "1OF-sAFykebc_2BrcYCgxCR-4rJo0GaNmTstagV-PMBU",
+            # Season 13+ will be added here as sheets are created
+        }
+
+        # Check environment variable first (allows runtime override)
+        env_key = os.getenv(f"DRAFT_SHEET_KEY_{season}")
+        if env_key:
+            return env_key
+
+        # Fall back to hardcoded default
+        return default_keys.get(season)
+
+    def get_draft_sheet_url(self, season: int) -> Optional[str]:
+        """
+        Get the full Google Sheets URL for a given draft season.
+
+        Returns None if no sheet is configured for the season.
+        """
+        sheet_key = self.get_draft_sheet_key(season)
+        if sheet_key:
+            return f"https://docs.google.com/spreadsheets/d/{sheet_key}"
+        return None
 
 
 # Global configuration instance - lazily initialized to avoid import-time errors

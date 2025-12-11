@@ -377,6 +377,65 @@ class SheetsService:
     async def read_box_score(scorecard: pygsheets.Spreadsheet) -> Dict[str, List[int]]
 ```
 
+#### DraftSheetService Key Methods (NEW - December 2025)
+```python
+class DraftSheetService(SheetsService):
+    """
+    Service for writing draft picks to Google Sheets.
+    Extends SheetsService to reuse authentication and async patterns.
+    """
+    async def write_pick(
+        season: int,
+        overall: int,
+        orig_owner_abbrev: str,
+        owner_abbrev: str,
+        player_name: str,
+        swar: float
+    ) -> bool
+    """Write a single pick to the draft sheet. Returns True on success."""
+
+    async def write_picks_batch(
+        season: int,
+        picks: List[Tuple[int, str, str, str, float]]
+    ) -> Tuple[int, int]
+    """Batch write picks for resync operations. Returns (success_count, failure_count)."""
+
+    async def clear_picks_range(
+        season: int,
+        start_overall: int = 1,
+        end_overall: int = 512
+    ) -> bool
+    """Clear a range of picks from the sheet before resync."""
+
+    def get_sheet_url(season: int) -> Optional[str]
+    """Get the draft sheet URL for display in embeds."""
+```
+
+**Integration Points:**
+- `commands/draft/picks.py` - Writes pick to sheet after successful draft selection
+- `tasks/draft_monitor.py` - Writes pick to sheet after auto-draft
+- `commands/draft/admin.py` - `/draft-admin resync-sheet` for bulk recovery
+
+**Fire-and-Forget Pattern:**
+Draft sheet writes are non-critical (database is source of truth). On failure:
+1. Log the error
+2. Notify ping channel with warning message
+3. Suggest `/draft-admin resync-sheet` for recovery
+4. Never block the draft pick itself
+
+**Configuration:**
+```python
+# config.py settings
+draft_sheet_enabled: bool = True  # Feature flag
+draft_sheet_worksheet: str = "Ordered List"  # Worksheet name
+draft_sheet_start_column: str = "D"  # Starting column
+
+# Season-specific sheet IDs via environment variables
+# DRAFT_SHEET_KEY_12, DRAFT_SHEET_KEY_13, etc.
+config.get_draft_sheet_key(season)  # Returns sheet ID or None
+config.get_draft_sheet_url(season)  # Returns full URL or None
+```
+
 **Transaction Rollback Pattern:**
 The game submission services implement a 3-state transaction rollback pattern:
 1. **PLAYS_POSTED**: Plays submitted → Rollback: Delete plays

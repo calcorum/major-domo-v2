@@ -71,8 +71,11 @@ class DraftStatusCommands(commands.Cog):
             else:
                 lock_status = "🔒 Pick in progress (system)"
 
+        # Get draft sheet URL
+        sheet_url = config.get_draft_sheet_url(config.sba_season)
+
         # Create status embed
-        embed = await create_draft_status_embed(draft_data, current_pick, lock_status)
+        embed = await create_draft_status_embed(draft_data, current_pick, lock_status, sheet_url)
         await interaction.followup.send(embed=embed)
 
     @discord.app_commands.command(

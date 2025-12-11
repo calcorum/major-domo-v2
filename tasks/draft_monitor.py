@@ -14,6 +14,7 @@ from discord.ext import commands, tasks
 from services.draft_service import draft_service
 from services.draft_pick_service import draft_pick_service
 from services.draft_list_service import draft_list_service
+from services.draft_sheet_service import get_draft_sheet_service
 from services.player_service import player_service
 from services.team_service import team_service
 from services.roster_service import roster_service
@@ -328,6 +329,9 @@ class DraftMonitorTask:
                 self.logger.error(f"Failed to update player {player.id} team")
                 return False
 
+            # Write pick to Google Sheets (fire-and-forget)
+            await self._write_pick_to_sheets(draft_pick, player, ping_channel)
+
             # Post to channel
             await ping_channel.send(
                 content=f"🤖 AUTO-DRAFT: {draft_pick.owner.abbrev} selects **{player.name}** "
@@ -469,6 +473,65 @@ class DraftMonitorTask:
 
         except Exception as e:
             self.logger.error("Error sending warnings", error=e)
+
+    async def _write_pick_to_sheets(self, draft_pick, player, ping_channel) -> None:
+        """
+        Write pick to Google Sheets (fire-and-forget with notification on failure).
+
+        Args:
+            draft_pick: The draft pick being used
+            player: Player being drafted
+            ping_channel: Discord channel for failure notification
+        """
+        config = get_config()
+
+        try:
+            draft_sheet_service = get_draft_sheet_service()
+            success = await draft_sheet_service.write_pick(
+                season=config.sba_season,
+                overall=draft_pick.overall,
+                orig_owner_abbrev=draft_pick.origowner.abbrev if draft_pick.origowner else draft_pick.owner.abbrev,
+                owner_abbrev=draft_pick.owner.abbrev,
+                player_name=player.name,
+                swar=player.wara
+            )
+
+            if not success:
+                # Write failed - notify in ping channel
+                await self._notify_sheet_failure(
+                    ping_channel=ping_channel,
+                    pick_overall=draft_pick.overall,
+                    player_name=player.name
+                )
+
+        except Exception as e:
+            self.logger.warning(f"Failed to write pick to sheets: {e}")
+            await self._notify_sheet_failure(
+                ping_channel=ping_channel,
+                pick_overall=draft_pick.overall,
+                player_name=player.name
+            )
+
+    async def _notify_sheet_failure(self, ping_channel, pick_overall: int, player_name: str) -> None:
+        """
+        Post notification to ping channel when sheet write fails.
+
+        Args:
+            ping_channel: Discord channel to notify
+            pick_overall: Pick number that failed
+            player_name: Player name
+        """
+        if not ping_channel:
+            return
+
+        try:
+            await ping_channel.send(
+                f"⚠️ **Sheet Sync Failed** - Pick #{pick_overall} ({player_name}) "
+                f"was not written to the draft sheet. "
+                f"Use `/draft-admin resync-sheet` to manually sync."
+            )
+        except Exception as e:
+            self.logger.error(f"Failed to send sheet failure notification: {e}")
 
 
 # Task factory function

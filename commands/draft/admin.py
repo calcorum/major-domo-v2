@@ -12,6 +12,7 @@ from discord.ext import commands
 from config import get_config
 from services.draft_service import draft_service
 from services.draft_pick_service import draft_pick_service
+from services.draft_sheet_service import get_draft_sheet_service
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command
 from utils.permissions import league_admin_only
@@ -333,6 +334,123 @@ class DraftAdminGroup(app_commands.Group):
         description += f"New deadline: <t:{deadline_timestamp}:F> (<t:{deadline_timestamp}:R>)"
 
         embed = EmbedTemplate.success("Deadline Reset", description)
+        await interaction.followup.send(embed=embed)
+
+    @app_commands.command(name="resync-sheet", description="Resync all picks to Google Sheet")
+    @league_admin_only()
+    @logged_command("/draft-admin resync-sheet")
+    async def draft_admin_resync_sheet(self, interaction: discord.Interaction):
+        """
+        Resync all draft picks from database to Google Sheet.
+
+        Used for recovery if sheet gets corrupted, auth fails, or picks were
+        missed during the draft. Clears existing data and repopulates from database.
+        """
+        await interaction.response.defer()
+
+        config = get_config()
+
+        # Check if sheet integration is enabled
+        if not config.draft_sheet_enabled:
+            embed = EmbedTemplate.warning(
+                "Sheet Disabled",
+                "Draft sheet integration is currently disabled."
+            )
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            return
+
+        # Check if sheet is configured for current season
+        sheet_url = config.get_draft_sheet_url(config.sba_season)
+        if not sheet_url:
+            embed = EmbedTemplate.error(
+                "No Sheet Configured",
+                f"No draft sheet is configured for season {config.sba_season}."
+            )
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            return
+
+        # Get all picks with player data for current season
+        all_picks = await draft_pick_service.get_picks_with_players(config.sba_season)
+
+        if not all_picks:
+            embed = EmbedTemplate.warning(
+                "No Picks Found",
+                "No draft picks found for the current season."
+            )
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            return
+
+        # Filter to only picks that have been made (have a player)
+        completed_picks = [p for p in all_picks if p.player is not None]
+
+        if not completed_picks:
+            embed = EmbedTemplate.warning(
+                "No Completed Picks",
+                "No draft picks have been made yet."
+            )
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            return
+
+        # Prepare pick data for batch write
+        pick_data = []
+        for pick in completed_picks:
+            orig_abbrev = pick.origowner.abbrev if pick.origowner else (pick.owner.abbrev if pick.owner else "???")
+            owner_abbrev = pick.owner.abbrev if pick.owner else "???"
+            player_name = pick.player.name if pick.player else "Unknown"
+            swar = pick.player.wara if pick.player else 0.0
+
+            pick_data.append((
+                pick.overall,
+                orig_abbrev,
+                owner_abbrev,
+                player_name,
+                swar
+            ))
+
+        # Get draft sheet service
+        draft_sheet_service = get_draft_sheet_service()
+
+        # Clear existing sheet data first
+        cleared = await draft_sheet_service.clear_picks_range(
+            config.sba_season,
+            start_overall=1,
+            end_overall=config.draft_total_picks
+        )
+
+        if not cleared:
+            embed = EmbedTemplate.warning(
+                "Clear Failed",
+                "Failed to clear existing sheet data. Attempting to write picks anyway..."
+            )
+            # Don't return - try to write anyway
+
+        # Write all picks in batch
+        success_count, failure_count = await draft_sheet_service.write_picks_batch(
+            config.sba_season,
+            pick_data
+        )
+
+        # Build result message
+        total_picks = len(pick_data)
+        if failure_count == 0:
+            description = (
+                f"Successfully synced **{success_count}** picks to the draft sheet.\n\n"
+                f"[View Draft Sheet]({sheet_url})"
+            )
+            embed = EmbedTemplate.success("Resync Complete", description)
+        elif success_count > 0:
+            description = (
+                f"Synced **{success_count}** picks ({failure_count} failed).\n\n"
+                f"[View Draft Sheet]({sheet_url})"
+            )
+            embed = EmbedTemplate.warning("Partial Resync", description)
+        else:
+            description = (
+                f"Failed to sync any picks. Check logs for details.\n\n"
+                f"[View Draft Sheet]({sheet_url})"
+            )
+            embed = EmbedTemplate.error("Resync Failed", description)
+
         await interaction.followup.send(embed=embed)
 
 
