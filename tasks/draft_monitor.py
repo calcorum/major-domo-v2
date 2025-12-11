@@ -249,7 +249,9 @@ class DraftMonitorTask:
                 success = await self._attempt_draft_player(
                     current_pick,
                     player,
-                    ping_channel
+                    ping_channel,
+                    draft_data,
+                    guild
                 )
 
                 if success:
@@ -285,7 +287,9 @@ class DraftMonitorTask:
         self,
         draft_pick,
         player,
-        ping_channel
+        ping_channel,
+        draft_data,
+        guild
     ) -> bool:
         """
         Attempt to draft a specific player.
@@ -294,6 +298,8 @@ class DraftMonitorTask:
             draft_pick: DraftPick to update
             player: Player to draft
             ping_channel: Discord channel for announcements
+            draft_data: Draft configuration (for result_channel)
+            guild: Discord guild (for channel lookup)
 
         Returns:
             True if draft succeeded
@@ -343,11 +349,22 @@ class DraftMonitorTask:
             # Write pick to Google Sheets (fire-and-forget)
             await self._write_pick_to_sheets(draft_pick, player, ping_channel)
 
-            # Post to channel
+            # Post to ping channel
             await ping_channel.send(
                 content=f"🤖 AUTO-DRAFT: {draft_pick.owner.abbrev} selects **{player.name}** "
                         f"(Pick #{draft_pick.overall})"
             )
+
+            # Post draft card to result channel (same as regular /draft picks)
+            if draft_data.result_channel:
+                result_channel = guild.get_channel(draft_data.result_channel)
+                if result_channel:
+                    from views.draft_views import create_player_draft_card
+                    draft_card = await create_player_draft_card(player, draft_pick)
+                    draft_card.set_footer(text="🤖 Auto-drafted from draft list")
+                    await result_channel.send(embed=draft_card)
+                else:
+                    self.logger.warning(f"Could not find result channel {draft_data.result_channel}")
 
             return True
 
