@@ -336,6 +336,108 @@ class DraftAdminGroup(app_commands.Group):
         embed = EmbedTemplate.success("Deadline Reset", description)
         await interaction.followup.send(embed=embed)
 
+    @app_commands.command(name="pause", description="Pause the draft (block all picks)")
+    @league_admin_only()
+    @logged_command("/draft-admin pause")
+    async def draft_admin_pause(self, interaction: discord.Interaction):
+        """Pause the draft, blocking all manual and auto-draft picks."""
+        await interaction.response.defer()
+
+        # Get draft data
+        draft_data = await draft_service.get_draft_data()
+        if not draft_data:
+            embed = EmbedTemplate.error(
+                "Draft Not Found",
+                "Could not retrieve draft configuration."
+            )
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            return
+
+        # Check if already paused
+        if draft_data.paused:
+            embed = EmbedTemplate.warning(
+                "Already Paused",
+                "The draft is already paused."
+            )
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            return
+
+        # Pause the draft
+        updated = await draft_service.pause_draft(draft_data.id)
+
+        if not updated:
+            embed = EmbedTemplate.error(
+                "Pause Failed",
+                "Failed to pause the draft."
+            )
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            return
+
+        # Success message
+        description = (
+            "The draft has been **paused**.\n\n"
+            "**Effects:**\n"
+            "• All `/draft` picks are blocked\n"
+            "• Auto-draft will not fire\n"
+            "• Timer has been stopped\n\n"
+            "Use `/draft-admin resume` to restart the timer and allow picks."
+        )
+
+        embed = EmbedTemplate.warning("Draft Paused", description)
+        await interaction.followup.send(embed=embed)
+
+    @app_commands.command(name="resume", description="Resume the draft (allow picks)")
+    @league_admin_only()
+    @logged_command("/draft-admin resume")
+    async def draft_admin_resume(self, interaction: discord.Interaction):
+        """Resume the draft, allowing manual and auto-draft picks again."""
+        await interaction.response.defer()
+
+        # Get draft data
+        draft_data = await draft_service.get_draft_data()
+        if not draft_data:
+            embed = EmbedTemplate.error(
+                "Draft Not Found",
+                "Could not retrieve draft configuration."
+            )
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            return
+
+        # Check if already unpaused
+        if not draft_data.paused:
+            embed = EmbedTemplate.warning(
+                "Not Paused",
+                "The draft is not currently paused."
+            )
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            return
+
+        # Resume the draft
+        updated = await draft_service.resume_draft(draft_data.id)
+
+        if not updated:
+            embed = EmbedTemplate.error(
+                "Resume Failed",
+                "Failed to resume the draft."
+            )
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            return
+
+        # Build success message
+        description = "The draft has been **resumed**.\n\nPicks are now allowed."
+
+        # Add timer info if active
+        if updated.timer and updated.pick_deadline:
+            deadline_timestamp = int(updated.pick_deadline.timestamp())
+            description += f"\n\n⏱️ **Timer Active** - Current deadline <t:{deadline_timestamp}:R>"
+
+            # Ensure monitor is running
+            monitor_status = self._ensure_monitor_running()
+            description += monitor_status
+
+        embed = EmbedTemplate.success("Draft Resumed", description)
+        await interaction.followup.send(embed=embed)
+
     @app_commands.command(name="resync-sheet", description="Resync all picks to Google Sheet")
     @league_admin_only()
     @logged_command("/draft-admin resync-sheet")

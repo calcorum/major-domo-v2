@@ -100,6 +100,11 @@ class DraftMonitorTask:
                 self.monitor_loop.cancel()
                 return
 
+            # CRITICAL: Skip auto-draft if paused (but keep monitoring)
+            if draft_data.paused:
+                self.logger.debug("Draft is paused - skipping auto-draft actions")
+                return
+
             # Check if we need to take action
             now = datetime.now()
             deadline = draft_data.pick_deadline

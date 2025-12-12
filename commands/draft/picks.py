@@ -160,6 +160,15 @@ class DraftPicksCog(commands.Cog):
             await interaction.followup.send(embed=embed)
             return
 
+        # Check if draft is paused
+        if draft_data.paused:
+            embed = await create_pick_illegal_embed(
+                "Draft Paused",
+                "The draft is currently paused. Please wait for an administrator to resume."
+            )
+            await interaction.followup.send(embed=embed)
+            return
+
         # Get current pick
         current_pick = await draft_pick_service.get_pick(
             config.sba_season,

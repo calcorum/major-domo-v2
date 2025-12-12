@@ -39,13 +39,14 @@ def create_draft_data(**overrides) -> dict:
     """
     Create complete draft data matching API response format.
 
-    API returns: id, currentpick, timer, pick_deadline, result_channel,
+    API returns: id, currentpick, timer, paused, pick_deadline, result_channel,
                  ping_channel, pick_minutes
     """
     base_data = {
         'id': 1,
         'currentpick': 25,
         'timer': True,
+        'paused': False,  # New field for draft pause feature
         'pick_deadline': (datetime.now() + timedelta(minutes=10)).isoformat(),
         'result_channel': '123456789012345678',  # API returns as string
         'ping_channel': '987654321098765432',    # API returns as string
@@ -449,6 +450,160 @@ class TestDraftService:
         patch_call = mock_client.patch.call_args
         assert patch_call[0][1]['ping_channel'] == 111111111111111111
         assert patch_call[0][1]['result_channel'] == 222222222222222222
+
+    # -------------------------------------------------------------------------
+    # pause_draft() tests
+    # -------------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_pause_draft_success(self, service, mock_client):
+        """
+        Test successfully pausing the draft.
+
+        Verifies:
+        - PATCH is called with paused=True, timer=False, and far-future deadline
+        - Updated draft data with paused=True is returned
+        - Timer is stopped when draft is paused (prevents deadline expiry during pause)
+        """
+        updated_data = create_draft_data(paused=True, timer=False)
+        mock_client.patch.return_value = updated_data
+
+        result = await service.pause_draft(draft_id=1)
+
+        assert result is not None
+        assert result.paused is True
+        assert result.timer is False
+
+        # Verify PATCH was called with all pause-related updates
+        patch_call = mock_client.patch.call_args
+        patch_data = patch_call[0][1]
+        assert patch_data['paused'] is True
+        assert patch_data['timer'] is False
+        assert 'pick_deadline' in patch_data  # Far-future deadline set
+
+    @pytest.mark.asyncio
+    async def test_pause_draft_failure(self, service, mock_client):
+        """
+        Test handling of failed pause operation.
+
+        Verifies service returns None when PATCH fails.
+        """
+        mock_client.patch.return_value = None
+
+        result = await service.pause_draft(draft_id=1)
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_pause_draft_api_error(self, service, mock_client):
+        """
+        Test error handling when pause API call fails.
+
+        Verifies service returns None on exception rather than crashing.
+        """
+        mock_client.patch.side_effect = Exception("API unavailable")
+
+        result = await service.pause_draft(draft_id=1)
+
+        assert result is None
+
+    # -------------------------------------------------------------------------
+    # resume_draft() tests
+    # -------------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_resume_draft_success(self, service, mock_client):
+        """
+        Test successfully resuming the draft.
+
+        Verifies:
+        - Current draft data is fetched to get pick_minutes
+        - PATCH is called with paused=False, timer=True, and fresh deadline
+        - Timer is restarted when draft is resumed
+        """
+        # First call: get_draft_data to fetch pick_minutes
+        current_data = create_draft_data(paused=True, timer=False, pick_minutes=5)
+        mock_client.get.return_value = {'count': 1, 'draftdata': [current_data]}
+
+        # Second call: patch returns updated data
+        updated_data = create_draft_data(paused=False, timer=True, pick_minutes=5)
+        mock_client.patch.return_value = updated_data
+
+        result = await service.resume_draft(draft_id=1)
+
+        assert result is not None
+        assert result.paused is False
+        assert result.timer is True
+
+        # Verify PATCH was called with all resume-related updates
+        patch_call = mock_client.patch.call_args
+        patch_data = patch_call[0][1]
+        assert patch_data['paused'] is False
+        assert patch_data['timer'] is True
+        assert 'pick_deadline' in patch_data  # Fresh deadline set
+
+    @pytest.mark.asyncio
+    async def test_resume_draft_failure(self, service, mock_client):
+        """
+        Test handling of failed resume operation.
+
+        Verifies service returns None when PATCH fails.
+        """
+        # First call: get_draft_data succeeds
+        current_data = create_draft_data(paused=True, timer=False)
+        mock_client.get.return_value = {'count': 1, 'draftdata': [current_data]}
+
+        # PATCH fails
+        mock_client.patch.return_value = None
+
+        result = await service.resume_draft(draft_id=1)
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_resume_draft_api_error(self, service, mock_client):
+        """
+        Test error handling when resume API call fails.
+
+        Verifies service returns None on exception rather than crashing.
+        """
+        # First call: get_draft_data succeeds
+        current_data = create_draft_data(paused=True, timer=False)
+        mock_client.get.return_value = {'count': 1, 'draftdata': [current_data]}
+
+        # PATCH fails with exception
+        mock_client.patch.side_effect = Exception("API unavailable")
+
+        result = await service.resume_draft(draft_id=1)
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_pause_resume_roundtrip(self, service, mock_client):
+        """
+        Test pausing and then resuming the draft.
+
+        Verifies the complete pause/resume workflow:
+        1. Pause stops the timer
+        2. Resume restarts the timer with fresh deadline
+        """
+        # First pause - timer should be stopped
+        paused_data = create_draft_data(paused=True, timer=False)
+        mock_client.patch.return_value = paused_data
+
+        pause_result = await service.pause_draft(draft_id=1)
+        assert pause_result.paused is True
+        assert pause_result.timer is False
+
+        # Then resume - timer should be restarted
+        # resume_draft first fetches current data to get pick_minutes
+        mock_client.get.return_value = {'count': 1, 'draftdata': [paused_data]}
+        resumed_data = create_draft_data(paused=False, timer=True)
+        mock_client.patch.return_value = resumed_data
+
+        resume_result = await service.resume_draft(draft_id=1)
+        assert resume_result.paused is False
+        assert resume_result.timer is True
 
 
 # =============================================================================
@@ -1361,6 +1516,72 @@ class TestDraftDataModel:
 
         assert active.is_draft_active is True
         assert inactive.is_draft_active is False
+
+    def test_is_draft_active_when_paused(self):
+        """
+        Test that is_draft_active returns False when draft is paused.
+
+        Even if timer is True, is_draft_active should be False when paused
+        because no picks should be processed.
+        """
+        paused_with_timer = DraftData(
+            id=1, currentpick=1, timer=True, paused=True, pick_minutes=2
+        )
+        paused_no_timer = DraftData(
+            id=1, currentpick=1, timer=False, paused=True, pick_minutes=2
+        )
+        active_not_paused = DraftData(
+            id=1, currentpick=1, timer=True, paused=False, pick_minutes=2
+        )
+
+        assert paused_with_timer.is_draft_active is False
+        assert paused_no_timer.is_draft_active is False
+        assert active_not_paused.is_draft_active is True
+
+    def test_can_make_picks_property(self):
+        """
+        Test can_make_picks property correctly reflects pause state.
+
+        can_make_picks should be True only when not paused,
+        regardless of timer state.
+        """
+        # Not paused - can make picks
+        not_paused = DraftData(
+            id=1, currentpick=1, timer=True, paused=False, pick_minutes=2
+        )
+        assert not_paused.can_make_picks is True
+
+        # Paused - cannot make picks
+        paused = DraftData(
+            id=1, currentpick=1, timer=True, paused=True, pick_minutes=2
+        )
+        assert paused.can_make_picks is False
+
+        # Not paused, timer off - can still make picks (manual draft)
+        manual_draft = DraftData(
+            id=1, currentpick=1, timer=False, paused=False, pick_minutes=2
+        )
+        assert manual_draft.can_make_picks is True
+
+    def test_draft_data_str_shows_paused_status(self):
+        """
+        Test that __str__ displays paused status when draft is paused.
+
+        Users should clearly see when the draft is paused.
+        """
+        paused = DraftData(
+            id=1, currentpick=25, timer=True, paused=True, pick_minutes=2
+        )
+        active = DraftData(
+            id=1, currentpick=25, timer=True, paused=False, pick_minutes=2
+        )
+        inactive = DraftData(
+            id=1, currentpick=25, timer=False, paused=False, pick_minutes=2
+        )
+
+        assert "PAUSED" in str(paused)
+        assert "Active" in str(active)
+        assert "Inactive" in str(inactive)
 
     def test_is_pick_expired_property(self):
         """Test is_pick_expired property."""

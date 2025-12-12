@@ -125,10 +125,17 @@ async def create_draft_status_embed(
     Returns:
         Discord embed with draft status
     """
-    embed = EmbedTemplate.info(
-        title="Draft Status",
-        description=f"Currently on {format_pick_display(draft_data.currentpick)}"
-    )
+    # Use warning color if paused
+    if draft_data.paused:
+        embed = EmbedTemplate.warning(
+            title="Draft Status - PAUSED",
+            description=f"Currently on {format_pick_display(draft_data.currentpick)}"
+        )
+    else:
+        embed = EmbedTemplate.info(
+            title="Draft Status",
+            description=f"Currently on {format_pick_display(draft_data.currentpick)}"
+        )
 
     # On the clock
     if current_pick.owner:
@@ -138,8 +145,13 @@ async def create_draft_status_embed(
             inline=True
         )
 
-    # Timer status
-    timer_status = "✅ Active" if draft_data.timer else "⏹️ Inactive"
+    # Timer status (show paused state prominently)
+    if draft_data.paused:
+        timer_status = "⏸️ PAUSED"
+    elif draft_data.timer:
+        timer_status = "✅ Active"
+    else:
+        timer_status = "⏹️ Inactive"
     embed.add_field(
         name="Timer",
         value=f"{timer_status} ({draft_data.pick_minutes} min)",
@@ -159,6 +171,14 @@ async def create_draft_status_embed(
             name="Deadline",
             value="None",
             inline=True
+        )
+
+    # Pause status (if paused, show prominent warning)
+    if draft_data.paused:
+        embed.add_field(
+            name="Pause Status",
+            value="🚫 **Draft is paused** - No picks allowed until admin resumes",
+            inline=False
         )
 
     # Lock status
@@ -427,11 +447,19 @@ async def create_admin_draft_info_embed(
     Returns:
         Discord embed with admin information
     """
-    embed = EmbedTemplate.create_base_embed(
-        title="⚙️ Draft Administration",
-        description="Current draft configuration and state",
-        color=EmbedColors.INFO
-    )
+    # Use warning color if paused
+    if draft_data.paused:
+        embed = EmbedTemplate.create_base_embed(
+            title="⚙️ Draft Administration - PAUSED",
+            description="Current draft configuration and state",
+            color=EmbedColors.WARNING
+        )
+    else:
+        embed = EmbedTemplate.create_base_embed(
+            title="⚙️ Draft Administration",
+            description="Current draft configuration and state",
+            color=EmbedColors.INFO
+        )
 
     # Current pick
     embed.add_field(
@@ -440,11 +468,20 @@ async def create_admin_draft_info_embed(
         inline=True
     )
 
-    # Timer status
-    timer_emoji = "✅" if draft_data.timer else "⏹️"
+    # Timer status (show paused prominently)
+    if draft_data.paused:
+        timer_emoji = "⏸️"
+        timer_text = "PAUSED"
+    elif draft_data.timer:
+        timer_emoji = "✅"
+        timer_text = "Active"
+    else:
+        timer_emoji = "⏹️"
+        timer_text = "Inactive"
+
     embed.add_field(
         name="Timer Status",
-        value=f"{timer_emoji} {'Active' if draft_data.timer else 'Inactive'}",
+        value=f"{timer_emoji} {timer_text}",
         inline=True
     )
 
@@ -454,6 +491,14 @@ async def create_admin_draft_info_embed(
         value=f"{draft_data.pick_minutes} minutes",
         inline=True
     )
+
+    # Pause status (prominent if paused)
+    if draft_data.paused:
+        embed.add_field(
+            name="Pause Status",
+            value="🚫 **PAUSED** - No picks allowed\nUse `/draft-admin resume` to allow picks",
+            inline=False
+        )
 
     # Channels
     ping_channel_value = f"<#{draft_data.ping_channel}>" if draft_data.ping_channel else "Not configured"
