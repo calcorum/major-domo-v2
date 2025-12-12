@@ -474,6 +474,68 @@ class TestDraftListModel:
         assert top_pick.is_top_ranked is True
         assert lower_pick.is_top_ranked is False
 
+    def test_draft_list_from_api_data_extracts_player_team_id(self):
+        """
+        Test that DraftList.from_api_data() properly extracts player.team_id from nested team object.
+
+        This is critical for auto-draft functionality. The API returns player data with a nested
+        team object (not a flat team_id). Without the custom from_api_data(), Pydantic's default
+        construction doesn't call Player.from_api_data(), leaving player.team_id as None.
+
+        Bug fixed: Auto-draft was failing because player.team_id was None, causing all players
+        to be incorrectly marked as "not available" (None != 547 always True).
+        """
+        # Simulate API response format - nested objects, NOT flat IDs
+        api_response = {
+            'id': 303,
+            'season': 13,
+            'rank': 1,
+            'team': {
+                'id': 548,
+                'abbrev': 'WV',
+                'sname': 'Black Bears',
+                'lname': 'West Virginia Black Bears',
+                'season': 13
+            },
+            'player': {
+                'id': 12843,
+                'name': 'George Springer',
+                'wara': 0.31,
+                'image': 'https://example.com/springer.png',
+                'season': 13,
+                'pos_1': 'CF',
+                # Note: NO flat team_id here - it's nested in 'team' below
+                'team': {
+                    'id': 547,  # Free Agent team
+                    'abbrev': 'FA',
+                    'sname': 'Free Agents',
+                    'lname': 'Free Agents',
+                    'season': 13
+                }
+            }
+        }
+
+        # Create DraftList using from_api_data (what BaseService calls)
+        draft_entry = DraftList.from_api_data(api_response)
+
+        # Verify nested objects are created
+        assert draft_entry.team is not None
+        assert draft_entry.player is not None
+
+        # CRITICAL: player.team_id must be extracted from nested team object
+        assert draft_entry.player.team_id == 547, \
+            f"player.team_id should be 547 (FA), got {draft_entry.player.team_id}"
+
+        # Verify the nested team object is also populated
+        assert draft_entry.player.team is not None
+        assert draft_entry.player.team.id == 547
+        assert draft_entry.player.team.abbrev == 'FA'
+
+        # Verify DraftList's own team data
+        assert draft_entry.team.id == 548
+        assert draft_entry.team.abbrev == 'WV'
+        assert draft_entry.team_id == 548  # Property from nested team
+
 
 class TestModelCoverageExtras:
     """Additional model coverage tests."""

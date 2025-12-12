@@ -71,8 +71,11 @@ class DraftBoardCommands(commands.Cog):
             await interaction.followup.send(embed=embed, ephemeral=True)
             return
 
+        # Get sheet URL
+        sheet_url = config.get_draft_sheet_url(config.sba_season)
+
         # Create draft board embed
-        embed = await create_draft_board_embed(round_number, picks)
+        embed = await create_draft_board_embed(round_number, picks, sheet_url)
         await interaction.followup.send(embed=embed)
 
 

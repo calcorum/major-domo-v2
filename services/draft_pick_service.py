@@ -33,6 +33,33 @@ class DraftPickService(BaseService[DraftPick]):
         super().__init__(DraftPick, 'draftpicks')
         logger.debug("DraftPickService initialized")
 
+    def _extract_items_and_count_from_response(self, data):
+        """
+        Override to handle API quirk: GET returns 'picks' instead of 'draftpicks'.
+
+        Args:
+            data: API response data
+
+        Returns:
+            Tuple of (items list, total count)
+        """
+        if isinstance(data, list):
+            return data, len(data)
+
+        if not isinstance(data, dict):
+            logger.warning(f"Unexpected response format: {type(data)}")
+            return [], 0
+
+        # Get count
+        count = data.get('count', 0)
+
+        # API returns items under 'picks' key (not 'draftpicks')
+        if 'picks' in data and isinstance(data['picks'], list):
+            return data['picks'], count or len(data['picks'])
+
+        # Fallback to standard extraction
+        return super()._extract_items_and_count_from_response(data)
+
     async def get_pick(self, season: int, overall: int) -> Optional[DraftPick]:
         """
         Get specific pick by season and overall number.
@@ -181,6 +208,52 @@ class DraftPickService(BaseService[DraftPick]):
             logger.error(f"Error getting available picks: {e}")
             return []
 
+    async def get_skipped_picks_for_team(
+        self,
+        season: int,
+        team_id: int,
+        current_overall: int
+    ) -> List[DraftPick]:
+        """
+        Get skipped picks for a team (picks before current that have no player selected).
+
+        A "skipped" pick is one where:
+        - The pick overall is LESS than the current overall (it has passed)
+        - The pick has no player_id assigned
+        - The pick's current owner is the specified team
+
+        NOT cached - picks change during draft.
+
+        Args:
+            season: Draft season
+            team_id: Team ID to check for skipped picks
+            current_overall: Current overall pick number in the draft
+
+        Returns:
+            List of skipped DraftPick instances owned by team, ordered by overall (ascending)
+        """
+        try:
+            # Get all picks owned by this team that are before the current pick
+            # and have not been selected
+            params = [
+                ('season', str(season)),
+                ('owner_team_id', str(team_id)),
+                ('overall_end', str(current_overall - 1)),  # Before current pick
+                ('player_taken', 'false'),  # No player selected
+                ('sort', 'order-asc')  # Earliest skipped pick first
+            ]
+
+            picks = await self.get_all_items(params=params)
+            logger.debug(
+                f"Found {len(picks)} skipped picks for team {team_id} "
+                f"before pick #{current_overall}"
+            )
+            return picks
+
+        except Exception as e:
+            logger.error(f"Error getting skipped picks for team {team_id}: {e}")
+            return []
+
     async def get_recent_picks(
         self,
         season: int,
@@ -250,6 +323,35 @@ class DraftPickService(BaseService[DraftPick]):
 
         except Exception as e:
             logger.error(f"Error getting upcoming picks: {e}")
+            return []
+
+    async def get_picks_with_players(self, season: int) -> List[DraftPick]:
+        """
+        Get all picks for a season with player data included.
+
+        Used for bulk operations like resync-sheet. Returns all picks
+        for the season regardless of whether they have been selected.
+
+        NOT cached - picks change during draft.
+
+        Args:
+            season: Draft season
+
+        Returns:
+            List of all DraftPick instances for the season
+        """
+        try:
+            params = [
+                ('season', str(season)),
+                ('sort', 'order-asc')
+            ]
+
+            picks = await self.get_all_items(params=params)
+            logger.debug(f"Found {len(picks)} picks for season {season}")
+            return picks
+
+        except Exception as e:
+            logger.error(f"Error getting all picks for season {season}: {e}")
             return []
 
     async def update_pick_selection(

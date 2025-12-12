@@ -15,6 +15,7 @@ class DraftData(SBABaseModel):
 
     currentpick: int = Field(0, description="Current pick number in progress")
     timer: bool = Field(False, description="Whether draft timer is active")
+    paused: bool = Field(False, description="Whether draft is paused (blocks all picks)")
     pick_deadline: Optional[datetime] = Field(None, description="Deadline for current pick")
     result_channel: Optional[int] = Field(None, description="Discord channel ID for draft results")
     ping_channel: Optional[int] = Field(None, description="Discord channel ID for draft pings")
@@ -32,16 +33,26 @@ class DraftData(SBABaseModel):
     
     @property
     def is_draft_active(self) -> bool:
-        """Check if the draft is currently active."""
-        return self.timer
-    
+        """Check if the draft is currently active (timer running and not paused)."""
+        return self.timer and not self.paused
+
     @property
     def is_pick_expired(self) -> bool:
         """Check if the current pick deadline has passed."""
         if not self.pick_deadline:
             return False
         return datetime.now() > self.pick_deadline
-    
+
+    @property
+    def can_make_picks(self) -> bool:
+        """Check if picks are allowed (not paused)."""
+        return not self.paused
+
     def __str__(self):
-        status = "Active" if self.is_draft_active else "Inactive"
+        if self.paused:
+            status = "PAUSED"
+        elif self.timer:
+            status = "Active"
+        else:
+            status = "Inactive"
         return f"Draft {status}: Pick {self.currentpick} ({self.pick_minutes}min timer)"

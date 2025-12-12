@@ -338,6 +338,82 @@ class DraftService(BaseService[DraftData]):
             logger.error(f"Error resetting draft deadline: {e}")
             return None
 
+    async def pause_draft(self, draft_id: int) -> Optional[DraftData]:
+        """
+        Pause the draft, blocking all picks (manual and auto) and stopping the timer.
+
+        When paused:
+        - /draft command will reject picks with "Draft is paused" message
+        - Auto-draft monitor will skip auto-drafting
+        - Timer is stopped (deadline set far in future)
+        - On resume, timer will restart with fresh deadline
+
+        Args:
+            draft_id: DraftData database ID
+
+        Returns:
+            Updated DraftData with paused=True and timer stopped
+        """
+        try:
+            # Pause the draft AND stop the timer
+            # Set deadline far in future so it doesn't expire while paused
+            updates = {
+                'paused': True,
+                'timer': False,
+                'pick_deadline': datetime.now() + timedelta(days=690)
+            }
+            updated = await self.update_draft_data(draft_id, updates)
+
+            if updated:
+                logger.info("Draft paused - all picks blocked and timer stopped")
+            else:
+                logger.error("Failed to pause draft")
+
+            return updated
+
+        except Exception as e:
+            logger.error(f"Error pausing draft: {e}")
+            return None
+
+    async def resume_draft(self, draft_id: int) -> Optional[DraftData]:
+        """
+        Resume the draft, allowing picks again and restarting the timer.
+
+        When resumed:
+        - Timer is restarted with fresh deadline based on pick_minutes
+        - All picks (manual and auto) are allowed again
+
+        Args:
+            draft_id: DraftData database ID
+
+        Returns:
+            Updated DraftData with paused=False and timer restarted
+        """
+        try:
+            # Get current draft data to get pick_minutes setting
+            current_data = await self.get_draft_data()
+            pick_minutes = current_data.pick_minutes if current_data else 2
+
+            # Resume the draft AND restart the timer with fresh deadline
+            new_deadline = datetime.now() + timedelta(minutes=pick_minutes)
+            updates = {
+                'paused': False,
+                'timer': True,
+                'pick_deadline': new_deadline
+            }
+            updated = await self.update_draft_data(draft_id, updates)
+
+            if updated:
+                logger.info(f"Draft resumed - timer restarted with {pick_minutes}min deadline")
+            else:
+                logger.error("Failed to resume draft")
+
+            return updated
+
+        except Exception as e:
+            logger.error(f"Error resuming draft: {e}")
+            return None
+
 
 # Global service instance
 draft_service = DraftService()

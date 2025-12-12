@@ -245,15 +245,35 @@ class PlayerService(BaseService[Player]):
     async def is_free_agent(self, player: Player) -> bool:
         """
         Check if a player is a free agent.
-        
+
         Args:
             player: Player instance to check
-            
+
         Returns:
             True if player is a free agent
         """
         return player.team_id == get_config().free_agent_team_id
-    
+
+    async def get_top_free_agents(self, season: int, limit: int = 5) -> List[Player]:
+        """
+        Get top free agents sorted by sWAR (wara) descending.
+
+        Args:
+            season: Season number (required)
+            limit: Maximum number of players to return (default 5)
+
+        Returns:
+            List of top free agent players sorted by sWAR
+        """
+        try:
+            free_agents = await self.get_free_agents(season)
+            # Sort by wara descending and take top N
+            sorted_fa = sorted(free_agents, key=lambda p: p.wara if p.wara else 0.0, reverse=True)
+            return sorted_fa[:limit]
+        except Exception as e:
+            logger.error(f"Failed to get top free agents: {e}")
+            return []
+
     async def get_players_by_position(self, position: str, season: int) -> List[Player]:
         """
         Get players by position.

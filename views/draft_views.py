@@ -23,7 +23,8 @@ async def create_on_the_clock_embed(
     draft_data: DraftData,
     recent_picks: List[DraftPick],
     upcoming_picks: List[DraftPick],
-    team_roster_swar: Optional[float] = None
+    team_roster_swar: Optional[float] = None,
+    sheet_url: Optional[str] = None
 ) -> discord.Embed:
     """
     Create "on the clock" embed showing current pick info.
@@ -34,6 +35,7 @@ async def create_on_the_clock_embed(
         recent_picks: List of recent draft picks
         upcoming_picks: List of upcoming draft picks
         team_roster_swar: Current team sWAR (optional)
+        sheet_url: Optional Google Sheets URL for draft tracking
 
     Returns:
         Discord embed with pick information
@@ -67,10 +69,11 @@ async def create_on_the_clock_embed(
 
     # Add team sWAR if provided
     if team_roster_swar is not None:
-        config = get_config()
+        from utils.helpers import get_team_salary_cap
+        cap_limit = get_team_salary_cap(current_pick.owner)
         embed.add_field(
             name="Current sWAR",
-            value=f"{team_roster_swar:.2f} / {config.swar_cap_limit:.2f}",
+            value=f"{team_roster_swar:.2f} / {cap_limit:.2f}",
             inline=True
         )
 
@@ -99,6 +102,14 @@ async def create_on_the_clock_embed(
                 inline=False
             )
 
+    # Draft Sheet link
+    if sheet_url:
+        embed.add_field(
+            name="📊 Draft Sheet",
+            value=f"[View Full Board]({sheet_url})",
+            inline=False
+        )
+
     # Add footer
     if current_pick.is_traded:
         embed.set_footer(text="📝 This pick was traded")
@@ -109,7 +120,8 @@ async def create_on_the_clock_embed(
 async def create_draft_status_embed(
     draft_data: DraftData,
     current_pick: DraftPick,
-    lock_status: str = "🔓 No pick in progress"
+    lock_status: str = "🔓 No pick in progress",
+    sheet_url: Optional[str] = None
 ) -> discord.Embed:
     """
     Create draft status embed showing current state.
@@ -118,14 +130,22 @@ async def create_draft_status_embed(
         draft_data: Current draft configuration
         current_pick: Current DraftPick
         lock_status: Lock status message
+        sheet_url: Optional Google Sheets URL for draft tracking
 
     Returns:
         Discord embed with draft status
     """
-    embed = EmbedTemplate.info(
-        title="Draft Status",
-        description=f"Currently on {format_pick_display(draft_data.currentpick)}"
-    )
+    # Use warning color if paused
+    if draft_data.paused:
+        embed = EmbedTemplate.warning(
+            title="Draft Status - PAUSED",
+            description=f"Currently on {format_pick_display(draft_data.currentpick)}"
+        )
+    else:
+        embed = EmbedTemplate.info(
+            title="Draft Status",
+            description=f"Currently on {format_pick_display(draft_data.currentpick)}"
+        )
 
     # On the clock
     if current_pick.owner:
@@ -135,8 +155,13 @@ async def create_draft_status_embed(
             inline=True
         )
 
-    # Timer status
-    timer_status = "✅ Active" if draft_data.timer else "⏹️ Inactive"
+    # Timer status (show paused state prominently)
+    if draft_data.paused:
+        timer_status = "⏸️ PAUSED"
+    elif draft_data.timer:
+        timer_status = "✅ Active"
+    else:
+        timer_status = "⏹️ Inactive"
     embed.add_field(
         name="Timer",
         value=f"{timer_status} ({draft_data.pick_minutes} min)",
@@ -158,12 +183,28 @@ async def create_draft_status_embed(
             inline=True
         )
 
+    # Pause status (if paused, show prominent warning)
+    if draft_data.paused:
+        embed.add_field(
+            name="Pause Status",
+            value="🚫 **Draft is paused** - No picks allowed until admin resumes",
+            inline=False
+        )
+
     # Lock status
     embed.add_field(
         name="Lock Status",
         value=lock_status,
         inline=False
     )
+
+    # Draft Sheet link
+    if sheet_url:
+        embed.add_field(
+            name="Draft Sheet",
+            value=f"[View Sheet]({sheet_url})",
+            inline=False
+        )
 
     return embed
 
@@ -258,14 +299,15 @@ async def create_draft_list_embed(
             inline=False
         )
 
-    embed.set_footer(text="Use /draft-list to manage your auto-draft queue")
+    embed.set_footer(text="Commands: /draft-list-add, /draft-list-remove, /draft-list-clear")
 
     return embed
 
 
 async def create_draft_board_embed(
     round_num: int,
-    picks: List[DraftPick]
+    picks: List[DraftPick],
+    sheet_url: Optional[str] = None
 ) -> discord.Embed:
     """
     Create draft board embed showing all picks in a round.
@@ -273,6 +315,7 @@ async def create_draft_board_embed(
     Args:
         round_num: Round number
         picks: List of DraftPick for this round
+        sheet_url: Optional Google Sheets URL for draft tracking
 
     Returns:
         Discord embed with draft board
@@ -299,11 +342,22 @@ async def create_draft_board_embed(
                 player_display = "TBD"
 
             team_display = pick.owner.abbrev if pick.owner else "???"
-            picks_str += f"**Pick {pick.overall % 16 or 16}:** {team_display} - {player_display}\n"
+            round_pick = pick.overall % 16 or 16
+            # Format: `RR.PP (#OOO)` - padded for alignment (rounds 1-99, picks 1-16, overall 1-999)
+            pick_info = f"{round_num:>2}.{round_pick:<2} (#{pick.overall:>3})"
+            picks_str += f"`{pick_info}` {team_display} - {player_display}\n"
 
         embed.add_field(
             name="Picks",
             value=picks_str,
+            inline=False
+        )
+
+    # Draft Sheet link
+    if sheet_url:
+        embed.add_field(
+            name="Draft Sheet",
+            value=f"[View Full Board]({sheet_url})",
             inline=False
         )
 
@@ -345,7 +399,8 @@ async def create_pick_success_embed(
     player: Player,
     team: Team,
     pick_overall: int,
-    projected_swar: float
+    projected_swar: float,
+    cap_limit: float | None = None
 ) -> discord.Embed:
     """
     Create embed for successful pick.
@@ -355,33 +410,44 @@ async def create_pick_success_embed(
         team: Team that drafted player
         pick_overall: Overall pick number
         projected_swar: Projected team sWAR after pick
+        cap_limit: Team's salary cap limit (optional, uses helper if not provided)
 
     Returns:
         Discord success embed
     """
+    from utils.helpers import get_team_salary_cap
+
     embed = EmbedTemplate.success(
-        title="Pick Confirmed",
-        description=f"{team.abbrev} selects **{player.name}**"
+        title=f"{team.sname} select **{player.name}**",
+        description=format_pick_display(pick_overall)
     )
 
+    if team.thumbnail is not None:
+        embed.set_thumbnail(url=team.thumbnail)
+    
+    embed.set_image(url=player.image)
+
     embed.add_field(
-        name="Pick",
-        value=format_pick_display(pick_overall),
+        name="Player ID",
+        value=f"{player.id}",
         inline=True
     )
 
     if hasattr(player, 'wara') and player.wara is not None:
         embed.add_field(
-            name="Player sWAR",
+            name="sWAR",
             value=f"{player.wara:.2f}",
             inline=True
         )
 
-    config = get_config()
+    # Use provided cap_limit or get from team
+    if cap_limit is None:
+        cap_limit = get_team_salary_cap(team)
+
     embed.add_field(
         name="Projected Team sWAR",
-        value=f"{projected_swar:.2f} / {config.swar_cap_limit:.2f}",
-        inline=True
+        value=f"{projected_swar:.2f} / {cap_limit:.2f}",
+        inline=False
     )
 
     return embed
@@ -389,7 +455,8 @@ async def create_pick_success_embed(
 
 async def create_admin_draft_info_embed(
     draft_data: DraftData,
-    current_pick: Optional[DraftPick] = None
+    current_pick: Optional[DraftPick] = None,
+    sheet_url: Optional[str] = None
 ) -> discord.Embed:
     """
     Create detailed admin view of draft status.
@@ -397,14 +464,24 @@ async def create_admin_draft_info_embed(
     Args:
         draft_data: Current draft configuration
         current_pick: Current DraftPick (optional)
+        sheet_url: Optional Google Sheets URL for draft tracking
 
     Returns:
         Discord embed with admin information
     """
-    embed = EmbedTemplate.info(
-        title="⚙️ Draft Administration",
-        description="Current draft configuration and state"
-    )
+    # Use warning color if paused
+    if draft_data.paused:
+        embed = EmbedTemplate.create_base_embed(
+            title="⚙️ Draft Administration - PAUSED",
+            description="Current draft configuration and state",
+            color=EmbedColors.WARNING
+        )
+    else:
+        embed = EmbedTemplate.create_base_embed(
+            title="⚙️ Draft Administration",
+            description="Current draft configuration and state",
+            color=EmbedColors.INFO
+        )
 
     # Current pick
     embed.add_field(
@@ -413,11 +490,20 @@ async def create_admin_draft_info_embed(
         inline=True
     )
 
-    # Timer status
-    timer_emoji = "✅" if draft_data.timer else "⏹️"
+    # Timer status (show paused prominently)
+    if draft_data.paused:
+        timer_emoji = "⏸️"
+        timer_text = "PAUSED"
+    elif draft_data.timer:
+        timer_emoji = "✅"
+        timer_text = "Active"
+    else:
+        timer_emoji = "⏹️"
+        timer_text = "Inactive"
+
     embed.add_field(
         name="Timer Status",
-        value=f"{timer_emoji} {'Active' if draft_data.timer else 'Inactive'}",
+        value=f"{timer_emoji} {timer_text}",
         inline=True
     )
 
@@ -427,6 +513,14 @@ async def create_admin_draft_info_embed(
         value=f"{draft_data.pick_minutes} minutes",
         inline=True
     )
+
+    # Pause status (prominent if paused)
+    if draft_data.paused:
+        embed.add_field(
+            name="Pause Status",
+            value="🚫 **PAUSED** - No picks allowed\nUse `/draft-admin resume` to allow picks",
+            inline=False
+        )
 
     # Channels
     ping_channel_value = f"<#{draft_data.ping_channel}>" if draft_data.ping_channel else "Not configured"
@@ -460,6 +554,124 @@ async def create_admin_draft_info_embed(
             inline=False
         )
 
+    # Draft Sheet link
+    if sheet_url:
+        embed.add_field(
+            name="Draft Sheet",
+            value=f"[View Sheet]({sheet_url})",
+            inline=False
+        )
+
     embed.set_footer(text="Use /draft-admin to modify draft settings")
+
+    return embed
+
+
+async def create_on_clock_announcement_embed(
+    current_pick: DraftPick,
+    draft_data: DraftData,
+    recent_picks: List[DraftPick],
+    roster_swar: float,
+    cap_limit: float,
+    top_roster_players: List[Player],
+    sheet_url: Optional[str] = None
+) -> discord.Embed:
+    """
+    Create announcement embed for when a team is on the clock.
+
+    Used to post in the ping channel when:
+    - Timer is enabled and pick advances
+    - Auto-draft completes
+    - Pick is skipped
+
+    Args:
+        current_pick: The current DraftPick (team now on the clock)
+        draft_data: Current draft configuration (for timer/deadline info)
+        recent_picks: Last 5 completed picks
+        roster_swar: Team's current total sWAR
+        cap_limit: Team's salary cap limit
+        top_roster_players: Top 5 most expensive players on the team's roster
+        sheet_url: Optional Google Sheets URL for draft tracking
+
+    Returns:
+        Discord embed announcing team is on the clock
+    """
+    if not current_pick.owner:
+        raise ValueError("Pick must have owner")
+
+    team = current_pick.owner
+
+    # Create embed with team color if available
+    team_color = int(team.color, 16) if team.color else EmbedColors.PRIMARY
+    embed = EmbedTemplate.create_base_embed(
+        title=f"⏰ {team.lname} On The Clock",
+        description=format_pick_display(current_pick.overall),
+        color=team_color
+    )
+
+    # Set team thumbnail
+    if team.thumbnail:
+        embed.set_thumbnail(url=team.thumbnail)
+
+    # Deadline field (if timer active)
+    if draft_data.timer and draft_data.pick_deadline:
+        deadline_timestamp = int(draft_data.pick_deadline.timestamp())
+        embed.add_field(
+            name="⏱️ Deadline",
+            value=f"<t:{deadline_timestamp}:T> (<t:{deadline_timestamp}:R>)",
+            inline=True
+        )
+
+    # Team sWAR
+    embed.add_field(
+        name="💰 Team sWAR",
+        value=f"{roster_swar:.2f} / {cap_limit:.2f}",
+        inline=True
+    )
+
+    # Cap space remaining
+    cap_remaining = cap_limit - roster_swar
+    embed.add_field(
+        name="📊 Cap Space",
+        value=f"{cap_remaining:.2f}",
+        inline=True
+    )
+
+    # Last 5 picks
+    if recent_picks:
+        recent_str = ""
+        for pick in recent_picks[:5]:
+            if pick.player and pick.owner:
+                recent_str += f"**#{pick.overall}** {pick.owner.abbrev} - {pick.player.name}\n"
+        if recent_str:
+            embed.add_field(
+                name="📋 Last 5 Picks",
+                value=recent_str,
+                inline=False
+            )
+
+    # Top 5 most expensive players on team roster
+    if top_roster_players:
+        expensive_str = ""
+        for player in top_roster_players[:5]:
+            pos = player.pos_1 if hasattr(player, 'pos_1') and player.pos_1 else "?"
+            expensive_str += f"**{player.name}** ({pos}) - {player.wara:.2f}\n"
+        embed.add_field(
+            name="🌟 Top Roster sWAR",
+            value=expensive_str,
+            inline=False
+        )
+
+    # Draft Sheet link
+    if sheet_url:
+        embed.add_field(
+            name="📊 Draft Sheet",
+            value=f"[View Full Board]({sheet_url})",
+            inline=False
+        )
+
+    # Footer with pick info
+    if current_pick.is_traded:
+        embed.set_footer(text="📝 This pick was acquired via trade")
 
     return embed

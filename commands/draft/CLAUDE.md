@@ -49,8 +49,28 @@ Draft commands are only available in the offseason.
   - `player_service.get_players_by_name()`
   - `player_service.update_player_team()`
   - `league_service.get_current_state()` (for period check)
+  - `draft_sheet_service.write_pick()` (Google Sheets integration)
 
 ## Key Features
+
+### Skipped Pick Support
+- **Purpose**: Allow teams to make up picks they missed when not on the clock
+- **Detection**: Checks for picks with `overall < current_overall` and `player_id = None`
+- **Behavior**: If team is not on the clock but has skipped picks, allows drafting with earliest skipped pick
+- **User Experience**: Success message includes footer noting this is a "skipped pick makeup"
+- **Draft Advancement**: Does NOT advance the draft when using a skipped pick
+
+```python
+# Skipped pick detection flow
+if current_pick.owner.id != team.id:
+    skipped_picks = await draft_pick_service.get_skipped_picks_for_team(
+        season, team.id, current_overall
+    )
+    if skipped_picks:
+        pick_to_use = skipped_picks[0]  # Earliest skipped pick
+    else:
+        # Return "Not Your Turn" error
+```
 
 ### Global Pick Lock
 - **Purpose**: Prevent concurrent draft picks that could cause race conditions
@@ -87,7 +107,8 @@ async with self.pick_lock:
 5. **Player Validation**: Verify player is FA (team_id = 498)
 6. **Cap Space**: Validate 32 sWAR limit won't be exceeded
 7. **Execution**: Update pick, update player team, advance draft
-8. **Announcements**: Post success message and player card
+8. **Sheet Write**: Write pick to Google Sheets (fire-and-forget)
+9. **Announcements**: Post success message and player card
 
 ### FA Player Autocomplete
 The autocomplete function filters to FA players only:
@@ -121,6 +142,93 @@ async def validate_cap_space(roster: dict, new_player_wara: float):
     # Check against limit (with tiny float tolerance)
     return projected_total <= 32.00001, projected_total
 ```
+
+## Google Sheets Integration
+
+### Overview
+Draft picks are automatically written to a shared Google Sheet for easy tracking. This feature:
+- Writes pick data to configured sheet after each successful pick
+- Uses **fire-and-forget** pattern (non-blocking, doesn't fail the pick)
+- Supports manual resync via `/draft-admin resync-sheet`
+- Shows sheet link in `/draft-status` embed
+
+### Sheet Structure
+Each pick writes 4 columns starting at column D:
+| Column | Content |
+|--------|---------|
+| D | Original owner abbreviation |
+| E | Current owner abbreviation |
+| F | Player name |
+| G | Player sWAR |
+
+Row calculation: `overall + 1` (pick 1 → row 2, leaving row 1 for headers)
+
+### Fire-and-Forget Pattern
+```python
+# After successful pick execution
+try:
+    sheet_success = await draft_sheet_service.write_pick(
+        season=config.sba_season,
+        overall=pick.overall,
+        orig_owner_abbrev=original_owner.abbrev,
+        owner_abbrev=team.abbrev,
+        player_name=player.name,
+        swar=player.wara
+    )
+    if not sheet_success:
+        self.logger.warning(f"Draft sheet write failed for pick #{pick.overall}")
+        # Post notification to ping channel
+except Exception as e:
+    self.logger.error(f"Draft sheet write error: {e}")
+    # Non-critical - don't fail the draft pick
+```
+
+### Configuration
+Environment variables (optional, defaults in config):
+- `DRAFT_SHEET_KEY_12` - Sheet ID for season 12
+- `DRAFT_SHEET_KEY_13` - Sheet ID for season 13
+- `DRAFT_SHEET_ENABLED` - Feature flag (default: True)
+
+Config file defaults in `config.py`:
+```python
+draft_sheet_keys: dict[int, str] = {
+    12: "1OF-sAFykebc_2BrcYCgxCR-4rJo0GaNmTstagV-PMBU",
+    # Add new seasons as needed
+}
+draft_sheet_worksheet: str = "Ordered List"
+draft_sheet_start_column: str = "D"
+draft_sheet_enabled: bool = True
+```
+
+### `/draft-admin resync-sheet` Command
+Bulk resync all picks from database to sheet:
+1. Fetches all picks for current season with player data
+2. Clears existing sheet data (columns D-G, rows 2+)
+3. Batch writes all completed picks
+4. Reports success/failure count
+
+Use cases:
+- Sheet corruption recovery
+- Credential issues during draft
+- Manual corrections needed
+
+### `/draft-status` Sheet Link
+The draft status embed includes a clickable link to the sheet:
+```python
+sheet_url = config.get_draft_sheet_url(config.sba_season)
+embed = await create_draft_status_embed(draft_data, current_pick, lock_status, sheet_url)
+```
+
+### Service Dependencies
+- `services.draft_sheet_service` - Google Sheets operations
+- `config.get_draft_sheet_key()` - Sheet ID lookup by season
+- `config.get_draft_sheet_url()` - Sheet URL generation
+
+### Failure Handling
+- Sheet write failures don't block draft picks
+- Failures logged with warning level
+- Optional: Post failure notice to ping channel
+- Admins can use resync-sheet for recovery
 
 ## Architecture Notes
 
@@ -217,36 +325,49 @@ The draft monitor task (`tasks/draft_monitor.py`) integrates with this command:
 3. **Draft List**: Monitor tries players from team's draft list in order
 4. **Pick Advancement**: Monitor calls same `draft_service.advance_pick()`
 
-## Future Commands
+## Implemented Commands
 
-### `/draft-status` (Pending Implementation)
+### `/draft-status`
 Display current draft state, timer, lock status
 
-### `/draft-admin` (Pending Implementation)
+### `/draft-admin` (Administrator Only)
 Admin controls:
-- Timer on/off
-- Set current pick
-- Configure channels
-- Wipe picks
-- Clear stale locks
-- Set keepers
+- `/draft-admin timer` - Enable/disable timer (auto-starts monitor task)
+- `/draft-admin set-pick` - Set current pick (auto-starts monitor if timer active)
+- `/draft-admin channels` - Configure ping/result channels
+- `/draft-admin wipe` - Clear all picks for season
+- `/draft-admin info` - View detailed draft configuration
+- `/draft-admin resync-sheet` - Resync all picks to Google Sheet
 
-### `/draft-list` (Pending Implementation)
-Manage auto-draft queue:
-- View current list
-- Add players
-- Remove players
-- Reorder players
-- Clear list
+### `/draft-list`
+View auto-draft queue for your team
 
-### `/draft-board` (Pending Implementation)
+### `/draft-list-add`
+Add player to auto-draft queue
+
+### `/draft-list-remove`
+Remove player from auto-draft queue
+
+### `/draft-list-clear`
+Clear entire auto-draft queue
+
+### `/draft-board`
 View draft board by round with pagination
+
+### `/draft-on-clock`
+View detailed on-the-clock information including:
+- Current team on the clock
+- Deadline with relative timestamp
+- Team's current sWAR and cap space
+- Last 5 picks
+- Top 5 roster players by sWAR
 
 ## Dependencies
 
 - `config.get_config()`
 - `services.draft_service`
 - `services.draft_pick_service`
+- `services.draft_sheet_service` (Google Sheets integration)
 - `services.player_service`
 - `services.team_service` (with caching)
 - `utils.decorators.logged_command`
@@ -288,6 +409,6 @@ Test scenarios:
 
 ---
 
-**Last Updated:** October 2025
-**Status:** Core `/draft` command implemented and tested
-**Next:** Implement `/draft-status`, `/draft-admin`, `/draft-list` commands
+**Last Updated:** December 2025
+**Status:** All draft commands implemented and tested
+**Recent:** Google Sheets integration for automatic pick tracking, `/draft-admin resync-sheet` command, sheet link in `/draft-status`

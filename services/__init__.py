@@ -9,6 +9,7 @@ from .player_service import PlayerService, player_service
 from .league_service import LeagueService, league_service
 from .schedule_service import ScheduleService, schedule_service
 from .giphy_service import GiphyService
+from .draft_sheet_service import DraftSheetService, get_draft_sheet_service
 
 # Wire services together for dependency injection
 player_service._team_service = team_service
@@ -21,5 +22,6 @@ __all__ = [
     'PlayerService', 'player_service',
     'LeagueService', 'league_service',
     'ScheduleService', 'schedule_service',
-    'GiphyService', 'giphy_service'
+    'GiphyService', 'giphy_service',
+    'DraftSheetService', 'get_draft_sheet_service'
 ]

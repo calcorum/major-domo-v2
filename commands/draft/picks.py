@@ -13,6 +13,7 @@ from discord.ext import commands
 from config import get_config
 from services.draft_service import draft_service
 from services.draft_pick_service import draft_pick_service
+from services.draft_sheet_service import get_draft_sheet_service
 from services.player_service import player_service
 from services.team_service import team_service
 from utils.logging import get_contextual_logger
@@ -159,6 +160,15 @@ class DraftPicksCog(commands.Cog):
             await interaction.followup.send(embed=embed)
             return
 
+        # Check if draft is paused
+        if draft_data.paused:
+            embed = await create_pick_illegal_embed(
+                "Draft Paused",
+                "The draft is currently paused. Please wait for an administrator to resume."
+            )
+            await interaction.followup.send(embed=embed)
+            return
+
         # Get current pick
         current_pick = await draft_pick_service.get_pick(
             config.sba_season,
@@ -173,15 +183,32 @@ class DraftPicksCog(commands.Cog):
             await interaction.followup.send(embed=embed)
             return
 
-        # Validate user is on the clock
+        # Validate user is on the clock OR has a skipped pick
+        pick_to_use = current_pick  # Default: use current pick if on the clock
+
         if current_pick.owner.id != team.id:
-            # TODO: Check for skipped picks
-            embed = await create_pick_illegal_embed(
-                "Not Your Turn",
-                f"{current_pick.owner.sname} is on the clock for {format_pick_display(current_pick.overall)}."
+            # Not on the clock - check for skipped picks
+            skipped_picks = await draft_pick_service.get_skipped_picks_for_team(
+                config.sba_season,
+                team.id,
+                draft_data.currentpick
             )
-            await interaction.followup.send(embed=embed)
-            return
+
+            if not skipped_picks:
+                # No skipped picks - can't draft
+                embed = await create_pick_illegal_embed(
+                    "Not Your Turn",
+                    f"{current_pick.owner.sname} is on the clock for {format_pick_display(current_pick.overall)}."
+                )
+                await interaction.followup.send(embed=embed)
+                return
+
+            # Use the earliest skipped pick
+            pick_to_use = skipped_picks[0]
+            self.logger.info(
+                f"Team {team.abbrev} using skipped pick #{pick_to_use.overall} "
+                f"(current pick is #{current_pick.overall})"
+            )
 
         # Get player
         players = await player_service.get_players_by_name(player_name, config.sba_season)
@@ -215,19 +242,19 @@ class DraftPicksCog(commands.Cog):
             await interaction.followup.send(embed=embed)
             return
 
-        is_valid, projected_total = await validate_cap_space(roster, player_obj.wara)
+        is_valid, projected_total, cap_limit = await validate_cap_space(roster, player_obj.wara, team)
 
         if not is_valid:
             embed = await create_pick_illegal_embed(
                 "Cap Space Exceeded",
-                f"Drafting {player_obj.name} would put you at {projected_total:.2f} sWAR (limit: {config.swar_cap_limit:.2f})."
+                f"Drafting {player_obj.name} would put you at {projected_total:.2f} sWAR (limit: {cap_limit:.2f})."
             )
             await interaction.followup.send(embed=embed)
             return
 
-        # Execute pick
+        # Execute pick (using pick_to_use which may be current or skipped pick)
         updated_pick = await draft_pick_service.update_pick_selection(
-            current_pick.id,
+            pick_to_use.id,
             player_obj.id
         )
 
@@ -248,31 +275,144 @@ class DraftPicksCog(commands.Cog):
         if not updated_player:
             self.logger.error(f"Failed to update player {player_obj.id} team")
 
+        # Write pick to Google Sheets (fire-and-forget with notification on failure)
+        await self._write_pick_to_sheets(
+            draft_data=draft_data,
+            pick=pick_to_use,
+            player=player_obj,
+            team=team,
+            guild=interaction.guild
+        )
+
+        # Determine if this was a skipped pick
+        is_skipped_pick = pick_to_use.overall != current_pick.overall
+
         # Send success message
         success_embed = await create_pick_success_embed(
             player_obj,
             team,
-            current_pick.overall,
-            projected_total
+            pick_to_use.overall,
+            projected_total,
+            cap_limit
         )
+
+        # Add note if this was a skipped pick
+        if is_skipped_pick:
+            success_embed.set_footer(
+                text=f"📝 Making up skipped pick (current pick is #{current_pick.overall})"
+            )
+
         await interaction.followup.send(embed=success_embed)
 
-        # Post draft card to ping channel
-        if draft_data.ping_channel:
+        # Post draft card to ping channel (only if different from command channel)
+        if draft_data.ping_channel and draft_data.ping_channel != interaction.channel_id:
             guild = interaction.guild
             if guild:
                 ping_channel = guild.get_channel(draft_data.ping_channel)
                 if ping_channel:
-                    draft_card = await create_player_draft_card(player_obj, current_pick)
+                    draft_card = await create_player_draft_card(player_obj, pick_to_use)
+
+                    # Add skipped pick context to draft card
+                    if is_skipped_pick:
+                        draft_card.set_footer(
+                            text=f"📝 Making up skipped pick (current pick is #{current_pick.overall})"
+                        )
+
                     await ping_channel.send(embed=draft_card)
 
-        # Advance to next pick
-        await draft_service.advance_pick(draft_data.id, draft_data.currentpick)
+        # Only advance the draft if this was the current pick (not a skipped pick)
+        if not is_skipped_pick:
+            await draft_service.advance_pick(draft_data.id, draft_data.currentpick)
 
         self.logger.info(
             f"Draft pick completed: {team.abbrev} selected {player_obj.name} "
-            f"(pick #{current_pick.overall})"
+            f"(pick #{pick_to_use.overall})"
+            + (f" [skipped pick makeup]" if is_skipped_pick else "")
         )
+
+    async def _write_pick_to_sheets(
+        self,
+        draft_data,
+        pick,
+        player,
+        team,
+        guild: Optional[discord.Guild]
+    ):
+        """
+        Write pick to Google Sheets (fire-and-forget with ping channel notification on failure).
+
+        Args:
+            draft_data: Current draft configuration
+            pick: The draft pick being used
+            player: Player being drafted
+            team: Team making the pick
+            guild: Discord guild for notification channel
+        """
+        config = get_config()
+
+        try:
+            draft_sheet_service = get_draft_sheet_service()
+            success = await draft_sheet_service.write_pick(
+                season=config.sba_season,
+                overall=pick.overall,
+                orig_owner_abbrev=pick.origowner.abbrev if pick.origowner else team.abbrev,
+                owner_abbrev=team.abbrev,
+                player_name=player.name,
+                swar=player.wara
+            )
+
+            if not success:
+                # Write failed - notify in ping channel
+                await self._notify_sheet_failure(
+                    guild=guild,
+                    channel_id=draft_data.ping_channel,
+                    pick_overall=pick.overall,
+                    player_name=player.name,
+                    reason="Sheet write returned failure"
+                )
+
+        except Exception as e:
+            self.logger.warning(f"Failed to write pick to sheets: {e}")
+            # Notify in ping channel
+            await self._notify_sheet_failure(
+                guild=guild,
+                channel_id=draft_data.ping_channel,
+                pick_overall=pick.overall,
+                player_name=player.name,
+                reason=str(e)
+            )
+
+    async def _notify_sheet_failure(
+        self,
+        guild: Optional[discord.Guild],
+        channel_id: Optional[int],
+        pick_overall: int,
+        player_name: str,
+        reason: str
+    ):
+        """
+        Post notification to ping channel when sheet write fails.
+
+        Args:
+            guild: Discord guild
+            channel_id: Ping channel ID
+            pick_overall: Pick number that failed
+            player_name: Player name
+            reason: Failure reason
+        """
+        if not guild or not channel_id:
+            return
+
+        try:
+            channel = guild.get_channel(channel_id)
+            if channel and hasattr(channel, 'send'):
+                await channel.send(
+                    f"⚠️ **Sheet Sync Failed** - Pick #{pick_overall} ({player_name}) "
+                    f"was not written to the draft sheet. "
+                    f"Use `/draft-admin resync-sheet` to manually sync."
+                )
+        except Exception as e:
+            self.logger.error(f"Failed to send sheet failure notification: {e}")
 
 
 async def setup(bot: commands.Bot):
