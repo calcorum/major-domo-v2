@@ -136,7 +136,7 @@ class BotConfig(BaseSettings):
         # Default sheet IDs (hardcoded as fallback)
         default_keys = {
             12: "1OF-sAFykebc_2BrcYCgxCR-4rJo0GaNmTstagV-PMBU",
-            # Season 13+ will be added here as sheets are created
+            13: "1vWJfvuz9jN5BU2ZR0X0oC9BAVr_R8o-dWZsF2KXQMsE"
         }
 
         # Check environment variable first (allows runtime override)

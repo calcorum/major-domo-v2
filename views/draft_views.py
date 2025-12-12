@@ -23,7 +23,8 @@ async def create_on_the_clock_embed(
     draft_data: DraftData,
     recent_picks: List[DraftPick],
     upcoming_picks: List[DraftPick],
-    team_roster_swar: Optional[float] = None
+    team_roster_swar: Optional[float] = None,
+    sheet_url: Optional[str] = None
 ) -> discord.Embed:
     """
     Create "on the clock" embed showing current pick info.
@@ -34,6 +35,7 @@ async def create_on_the_clock_embed(
         recent_picks: List of recent draft picks
         upcoming_picks: List of upcoming draft picks
         team_roster_swar: Current team sWAR (optional)
+        sheet_url: Optional Google Sheets URL for draft tracking
 
     Returns:
         Discord embed with pick information
@@ -99,6 +101,14 @@ async def create_on_the_clock_embed(
                 value=upcoming_str,
                 inline=False
             )
+
+    # Draft Sheet link
+    if sheet_url:
+        embed.add_field(
+            name="📊 Draft Sheet",
+            value=f"[View Full Board]({sheet_url})",
+            inline=False
+        )
 
     # Add footer
     if current_pick.is_traded:
@@ -296,7 +306,8 @@ async def create_draft_list_embed(
 
 async def create_draft_board_embed(
     round_num: int,
-    picks: List[DraftPick]
+    picks: List[DraftPick],
+    sheet_url: Optional[str] = None
 ) -> discord.Embed:
     """
     Create draft board embed showing all picks in a round.
@@ -304,6 +315,7 @@ async def create_draft_board_embed(
     Args:
         round_num: Round number
         picks: List of DraftPick for this round
+        sheet_url: Optional Google Sheets URL for draft tracking
 
     Returns:
         Discord embed with draft board
@@ -338,6 +350,14 @@ async def create_draft_board_embed(
         embed.add_field(
             name="Picks",
             value=picks_str,
+            inline=False
+        )
+
+    # Draft Sheet link
+    if sheet_url:
+        embed.add_field(
+            name="Draft Sheet",
+            value=f"[View Full Board]({sheet_url})",
             inline=False
         )
 
@@ -435,7 +455,8 @@ async def create_pick_success_embed(
 
 async def create_admin_draft_info_embed(
     draft_data: DraftData,
-    current_pick: Optional[DraftPick] = None
+    current_pick: Optional[DraftPick] = None,
+    sheet_url: Optional[str] = None
 ) -> discord.Embed:
     """
     Create detailed admin view of draft status.
@@ -443,6 +464,7 @@ async def create_admin_draft_info_embed(
     Args:
         draft_data: Current draft configuration
         current_pick: Current DraftPick (optional)
+        sheet_url: Optional Google Sheets URL for draft tracking
 
     Returns:
         Discord embed with admin information
@@ -532,6 +554,14 @@ async def create_admin_draft_info_embed(
             inline=False
         )
 
+    # Draft Sheet link
+    if sheet_url:
+        embed.add_field(
+            name="Draft Sheet",
+            value=f"[View Sheet]({sheet_url})",
+            inline=False
+        )
+
     embed.set_footer(text="Use /draft-admin to modify draft settings")
 
     return embed
@@ -543,7 +573,8 @@ async def create_on_clock_announcement_embed(
     recent_picks: List[DraftPick],
     roster_swar: float,
     cap_limit: float,
-    top_roster_players: List[Player]
+    top_roster_players: List[Player],
+    sheet_url: Optional[str] = None
 ) -> discord.Embed:
     """
     Create announcement embed for when a team is on the clock.
@@ -560,6 +591,7 @@ async def create_on_clock_announcement_embed(
         roster_swar: Team's current total sWAR
         cap_limit: Team's salary cap limit
         top_roster_players: Top 5 most expensive players on the team's roster
+        sheet_url: Optional Google Sheets URL for draft tracking
 
     Returns:
         Discord embed announcing team is on the clock
@@ -627,6 +659,14 @@ async def create_on_clock_announcement_embed(
         embed.add_field(
             name="🌟 Top Roster sWAR",
             value=expensive_str,
+            inline=False
+        )
+
+    # Draft Sheet link
+    if sheet_url:
+        embed.add_field(
+            name="📊 Draft Sheet",
+            value=f"[View Full Board]({sheet_url})",
             inline=False
         )
 

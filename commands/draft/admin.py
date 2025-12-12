@@ -76,8 +76,11 @@ class DraftAdminGroup(app_commands.Group):
             draft_data.currentpick
         )
 
+        # Get sheet URL
+        sheet_url = config.get_draft_sheet_url(config.sba_season)
+
         # Create admin info embed
-        embed = await create_admin_draft_info_embed(draft_data, current_pick)
+        embed = await create_admin_draft_info_embed(draft_data, current_pick, sheet_url)
         await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="timer", description="Enable or disable draft timer")

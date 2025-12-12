@@ -425,6 +425,9 @@ class DraftMonitorTask:
                 sorted_players = sorted(all_players, key=lambda p: p.wara if p.wara else 0.0, reverse=True)
                 top_roster_players = sorted_players[:5]
 
+            # Get sheet URL
+            sheet_url = config.get_draft_sheet_url(config.sba_season)
+
             # Create and send the embed
             embed = await create_on_clock_announcement_embed(
                 current_pick=next_pick,
@@ -432,7 +435,8 @@ class DraftMonitorTask:
                 recent_picks=recent_picks if recent_picks else [],
                 roster_swar=roster_swar,
                 cap_limit=cap_limit,
-                top_roster_players=top_roster_players
+                top_roster_players=top_roster_players,
+                sheet_url=sheet_url
             )
 
             # Mention the team's GM if available
