@@ -129,6 +129,8 @@ class DraftSheetService(SheetsService):
         Write multiple draft picks to the sheet in a single batch operation.
 
         Used for resync operations to repopulate the entire sheet from database.
+        Uses true batch updates to write all picks in a single API call,
+        avoiding rate limiting issues.
 
         Args:
             season: Draft season number
@@ -169,41 +171,51 @@ class DraftSheetService(SheetsService):
                 self._config.draft_sheet_worksheet
             )
 
-            # Sort picks by overall to write in order
+            # Sort picks by overall to find range bounds
             sorted_picks = sorted(picks, key=lambda p: p[0])
 
-            # Build batch data - each pick goes to its calculated row
-            # We'll write one row at a time to handle non-contiguous picks
-            success_count = 0
-            failure_count = 0
+            # Find min and max overall to determine row range
+            min_overall = sorted_picks[0][0]
+            max_overall = sorted_picks[-1][0]
 
+            # Build a 2D array for the entire range (sparse - empty rows for missing picks)
+            # Row index 0 = min_overall, row index N = max_overall
+            num_rows = max_overall - min_overall + 1
+            batch_data: List[List[str]] = [['', '', '', ''] for _ in range(num_rows)]
+
+            # Populate the batch data array
             for overall, orig_owner, owner, player_name, swar in sorted_picks:
-                try:
-                    pick_data = [[orig_owner, owner, player_name, swar]]
-                    row = overall + 1
-                    start_column = self._config.draft_sheet_start_column
-                    cell_range = f'{start_column}{row}'
+                row_index = overall - min_overall
+                batch_data[row_index] = [orig_owner, owner, player_name, str(swar)]
 
-                    await loop.run_in_executor(
-                        None,
-                        lambda cr=cell_range, pd=pick_data: worksheet.update_values(
-                            crange=cr, values=pd
-                        )
-                    )
-                    success_count += 1
-                except Exception as e:
-                    self.logger.error(f"Failed to write pick {overall}: {e}")
-                    failure_count += 1
+            # Calculate the cell range for the batch write
+            start_row = min_overall + 1  # +1 for header row
+            start_column = self._config.draft_sheet_start_column
+            end_column = chr(ord(start_column) + 3)  # 4 columns: D -> G
+            end_row = max_overall + 1
+
+            cell_range = f'{start_column}{start_row}:{end_column}{end_row}'
 
             self.logger.info(
-                f"Batch write complete: {success_count} succeeded, {failure_count} failed",
+                f"Writing {len(picks)} picks in single batch to range {cell_range}",
+                season=season
+            )
+
+            # Write all picks in a single API call
+            await loop.run_in_executor(
+                None,
+                lambda: worksheet.update_values(crange=cell_range, values=batch_data)
+            )
+
+            self.logger.info(
+                f"Batch write complete: {len(picks)} picks written successfully",
                 season=season,
                 total_picks=len(picks)
             )
-            return (success_count, failure_count)
+            return (len(picks), 0)
 
         except Exception as e:
-            self.logger.error(f"Failed to initialize batch write: {e}", season=season)
+            self.logger.error(f"Failed batch write: {e}", season=season)
             return (0, len(picks))
 
     async def clear_picks_range(
