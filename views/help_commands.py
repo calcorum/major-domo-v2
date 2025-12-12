@@ -59,12 +59,44 @@ class HelpCommandCreateModal(BaseModal):
 
     async def on_submit(self, interaction: discord.Interaction):
         """Handle form submission."""
+        import re
+
+        # Validate topic name format
+        name = self.topic_name.value.strip().lower()
+        if not re.match(r'^[a-z0-9_-]+$', name):
+            embed = EmbedTemplate.error(
+                title="Invalid Topic Name",
+                description=(
+                    f"Topic name `{self.topic_name.value}` contains invalid characters.\n\n"
+                    "**Allowed:** lowercase letters, numbers, dashes, and underscores only.\n"
+                    "**Examples:** `trading-rules`, `how_to_draft`, `faq1`\n\n"
+                    "Please try again with a valid name."
+                )
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
+        # Validate category format if provided
+        category = self.topic_category.value.strip().lower() if self.topic_category.value else None
+        if category and not re.match(r'^[a-z0-9_-]+$', category):
+            embed = EmbedTemplate.error(
+                title="Invalid Category",
+                description=(
+                    f"Category `{self.topic_category.value}` contains invalid characters.\n\n"
+                    "**Allowed:** lowercase letters, numbers, dashes, and underscores only.\n"
+                    "**Examples:** `rules`, `guides`, `faq`\n\n"
+                    "Please try again with a valid category."
+                )
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
         # Store results
         self.result = {
-            'name': self.topic_name.value.strip(),
+            'name': name,
             'title': self.topic_title.value.strip(),
             'content': self.topic_content.value.strip(),
-            'category': self.topic_category.value.strip() if self.topic_category.value else None
+            'category': category
         }
 
         self.is_submitted = True
