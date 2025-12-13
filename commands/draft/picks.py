@@ -16,14 +16,17 @@ from services.draft_pick_service import draft_pick_service
 from services.draft_sheet_service import get_draft_sheet_service
 from services.player_service import player_service
 from services.team_service import team_service
+from services.roster_service import roster_service
 from utils.logging import get_contextual_logger
 from utils.decorators import logged_command, requires_draft_period
 from utils.draft_helpers import validate_cap_space, format_pick_display
+from utils.helpers import get_team_salary_cap
 from utils.permissions import requires_team
 from views.draft_views import (
     create_player_draft_card,
     create_pick_illegal_embed,
-    create_pick_success_embed
+    create_pick_success_embed,
+    create_on_clock_announcement_embed
 )
 
 
@@ -324,6 +327,16 @@ class DraftPicksCog(commands.Cog):
         if not is_skipped_pick:
             await draft_service.advance_pick(draft_data.id, draft_data.currentpick)
 
+            # Post on-clock announcement for next team
+            guild = interaction.guild
+            if guild and draft_data.ping_channel:
+                ping_channel = guild.get_channel(draft_data.ping_channel)
+                if ping_channel:
+                    await self._post_on_clock_announcement(
+                        ping_channel=ping_channel,
+                        guild=guild
+                    )
+
         self.logger.info(
             f"Draft pick completed: {team.abbrev} selected {player_obj.name} "
             f"(pick #{pick_to_use.overall})"
@@ -413,6 +426,86 @@ class DraftPicksCog(commands.Cog):
                 )
         except Exception as e:
             self.logger.error(f"Failed to send sheet failure notification: {e}")
+
+    async def _post_on_clock_announcement(
+        self,
+        ping_channel,
+        guild: discord.Guild
+    ) -> None:
+        """
+        Post the on-clock announcement embed for the next team with role ping.
+
+        Called after advance_pick() to announce who is now on the clock.
+
+        Args:
+            ping_channel: Discord channel to post in
+            guild: Discord guild for role lookup
+        """
+        try:
+            config = get_config()
+
+            # Refresh draft data to get updated currentpick and deadline
+            updated_draft_data = await draft_service.get_draft_data()
+            if not updated_draft_data:
+                self.logger.error("Could not refresh draft data for announcement")
+                return
+
+            # Get the new current pick
+            next_pick = await draft_pick_service.get_pick(
+                config.sba_season,
+                updated_draft_data.currentpick
+            )
+
+            if not next_pick or not next_pick.owner:
+                self.logger.error(f"Could not get pick #{updated_draft_data.currentpick} for announcement")
+                return
+
+            # Get recent picks (last 5 completed)
+            recent_picks = await draft_pick_service.get_recent_picks(
+                config.sba_season,
+                updated_draft_data.currentpick - 1,  # Start from previous pick
+                limit=5
+            )
+
+            # Get team roster for sWAR calculation
+            team_roster = await roster_service.get_team_roster(next_pick.owner.id, "current")
+            roster_swar = team_roster.total_wara if team_roster else 0.0
+            cap_limit = get_team_salary_cap(next_pick.owner)
+
+            # Get top 5 most expensive players on team roster
+            top_roster_players = []
+            if team_roster:
+                all_players = team_roster.all_players
+                sorted_players = sorted(all_players, key=lambda p: p.wara if p.wara else 0.0, reverse=True)
+                top_roster_players = sorted_players[:5]
+
+            # Get sheet URL
+            sheet_url = config.get_draft_sheet_url(config.sba_season)
+
+            # Create and send the embed
+            embed = await create_on_clock_announcement_embed(
+                current_pick=next_pick,
+                draft_data=updated_draft_data,
+                recent_picks=recent_picks if recent_picks else [],
+                roster_swar=roster_swar,
+                cap_limit=cap_limit,
+                top_roster_players=top_roster_players,
+                sheet_url=sheet_url
+            )
+
+            # Mention the team's role (using team.lname)
+            team_mention = ""
+            team_role = discord.utils.get(guild.roles, name=next_pick.owner.lname)
+            if team_role:
+                team_mention = f"{team_role.mention} "
+            else:
+                self.logger.warning(f"Could not find role for team {next_pick.owner.lname}")
+
+            await ping_channel.send(content=team_mention, embed=embed)
+            self.logger.info(f"Posted on-clock announcement for pick #{updated_draft_data.currentpick}")
+
+        except Exception as e:
+            self.logger.error("Error posting on-clock announcement", error=e)
 
 
 async def setup(bot: commands.Bot):
