@@ -4,6 +4,7 @@ Draft Pick Commands
 Implements slash commands for making draft picks with global lock protection.
 """
 import asyncio
+import re
 from typing import List, Optional
 from datetime import datetime
 
@@ -28,6 +29,36 @@ from views.draft_views import (
     create_pick_success_embed,
     create_on_clock_announcement_embed
 )
+
+
+def _parse_player_name(raw_input: str) -> str:
+    """
+    Parse player name from raw input, handling autocomplete display format.
+
+    Discord sometimes sends the autocomplete display text instead of the value
+    when users type quickly. This function strips the position and sWAR info.
+
+    Examples:
+        "Mason Miller" -> "Mason Miller"
+        "Mason Miller (RP) - 2.50 sWAR" -> "Mason Miller"
+        "Geraldo Perdomo (SS) - 1.23 sWAR" -> "Geraldo Perdomo"
+        "Player Name (1B) - 0.00 sWAR" -> "Player Name"
+
+    Args:
+        raw_input: Raw player name input from command
+
+    Returns:
+        Cleaned player name
+    """
+    # Pattern: "Player Name (POS) - X.XX sWAR"
+    # Position can be letters or numbers (e.g., SS, RP, 1B, 2B, 3B, OF)
+    # Extract just the player name before the opening parenthesis
+    match = re.match(r'^(.+?)\s*\([A-Z0-9]+\)\s*-\s*[\d.]+\s*sWAR$', raw_input)
+    if match:
+        return match.group(1).strip()
+
+    # No match - return original input (already clean)
+    return raw_input.strip()
 
 
 async def fa_player_autocomplete(
@@ -135,9 +166,13 @@ class DraftPicksCog(commands.Cog):
 
         Args:
             interaction: Discord interaction
-            player_name: Player name to draft
+            player_name: Player name to draft (may include autocomplete display format)
         """
         config = get_config()
+
+        # Parse player name in case it includes autocomplete display format
+        # e.g., "Mason Miller (RP) - 2.50 sWAR" -> "Mason Miller"
+        player_name = _parse_player_name(player_name)
 
         # Get user's team (CACHED via @cached_single_item)
         team = await team_service.get_team_by_owner(
