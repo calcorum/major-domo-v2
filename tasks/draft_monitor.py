@@ -389,6 +389,11 @@ class DraftMonitorTask:
         """
         try:
             config = get_config()
+            guild = self.bot.get_guild(config.guild_id)
+
+            if not guild:
+                self.logger.error("Could not find guild for on-clock announcement")
+                return
 
             # Refresh draft data to get updated currentpick and deadline
             updated_draft_data = await draft_service.get_draft_data()
