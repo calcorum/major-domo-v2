@@ -452,7 +452,7 @@ class TransactionCommands(commands.Cog):
         if current_roster and current_validation:
             current_lines = []
             current_lines.append(f"**Players:** {current_validation.active_players} active, {current_validation.il_players} IL")
-            current_lines.append(f"**sWAR:** {current_validation.total_sWAR:.1f}")
+            current_lines.append(f"**sWAR:** {current_validation.total_sWAR:.2f}")
             
             if current_validation.errors:
                 current_lines.append(f"**❌ Errors:** {len(current_validation.errors)}")
@@ -480,7 +480,7 @@ class TransactionCommands(commands.Cog):
         if next_roster and next_validation:
             next_lines = []
             next_lines.append(f"**Players:** {next_validation.active_players} active, {next_validation.il_players} IL")
-            next_lines.append(f"**sWAR:** {next_validation.total_sWAR:.1f}")
+            next_lines.append(f"**sWAR:** {next_validation.total_sWAR:.2f}")
             
             if next_validation.errors:
                 next_lines.append(f"**❌ Errors:** {len(next_validation.errors)}")

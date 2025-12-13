@@ -151,7 +151,7 @@ class SBAEmbedTemplate(EmbedTemplate):
             embed.add_field(name="Team", value=team_abbrev, inline=True)
         
         if wara is not None:
-            embed.add_field(name="WARA", value=f"{wara:.1f}", inline=True)
+            embed.add_field(name="WARA", value=f"{wara:.2f}", inline=True)
         
         embed.add_field(
             name="Season", 

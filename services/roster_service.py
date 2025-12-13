@@ -124,9 +124,9 @@ class RosterService:
             
             # WARA validation (if there are limits)
             if validation.total_wara > 100:  # Adjust based on league rules
-                validation.warnings.append(f"High WARA total: {validation.total_wara:.1f}")
+                validation.warnings.append(f"High WARA total: {validation.total_wara:.2f}")
             elif validation.total_wara < 20:
-                validation.warnings.append(f"Low WARA total: {validation.total_wara:.1f}")
+                validation.warnings.append(f"Low WARA total: {validation.total_wara:.2f}")
             
             logger.debug(f"Validated roster: legal={validation.is_legal}, {len(validation.errors)} errors, {len(validation.warnings)} warnings")
             return validation

@@ -179,7 +179,7 @@ class TeamInfoCommands(commands.Cog):
                     # Format: Position - Name (WARA)
                     position = getattr(player, 'pos_1', 'N/A') or 'N/A'
                     wara = getattr(player, 'wara', 0.0) or 0.0
-                    core_text += f"{i}. {position} - {player.name} ({wara:.1f})\n"
+                    core_text += f"{i}. {position} - {player.name} ({wara:.2f})\n"
 
                 if core_text:
                     embed.add_field(name="Core Players", value=core_text, inline=False)

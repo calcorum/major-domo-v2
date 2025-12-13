@@ -212,7 +212,7 @@ class PlayerStatsView(BaseView):
 
         embed.add_field(
             name="sWAR",
-            value=f"{player.wara:.1f}",
+            value=f"{player.wara:.2f}",
             inline=True
         )
 

@@ -113,7 +113,7 @@ class EnhancedPlayerCommands(commands.Cog):
         for player in players:
             results.append({
                 'name': player.name,
-                'detail': f"{player.primary_position} • WARA: {player.wara:.1f}",
+                'detail': f"{player.primary_position} • WARA: {player.wara:.2f}",
                 'player_obj': player
             })
         

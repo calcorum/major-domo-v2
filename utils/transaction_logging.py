@@ -216,7 +216,7 @@ async def post_trade_to_log(
                 sending_abbrev = txn.oldteam.abbrev
 
             moves_by_receiver[receiving_abbrev].append(
-                f"**{txn.player.name}** ({txn.player.wara:.1f}) from {sending_abbrev}"
+                f"**{txn.player.name}** ({txn.player.wara:.2f}) from {sending_abbrev}"
             )
 
         # Add a field for each team receiving players

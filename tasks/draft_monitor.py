@@ -439,12 +439,15 @@ class DraftMonitorTask:
                 sheet_url=sheet_url
             )
 
-            # Mention the team's GM if available
-            gm_mention = ""
-            if next_pick.owner.gmid:
-                gm_mention = f"<@{next_pick.owner.gmid}> "
+            # Mention the team's role (using team.lname)
+            team_mention = ""
+            team_role = discord.utils.get(guild.roles, name=next_pick.owner.lname)
+            if team_role:
+                team_mention = f"{team_role.mention} "
+            else:
+                self.logger.warning(f"Could not find role for team {next_pick.owner.lname}")
 
-            await ping_channel.send(content=gm_mention, embed=embed)
+            await ping_channel.send(content=team_mention, embed=embed)
             self.logger.info(f"Posted on-clock announcement for pick #{updated_draft_data.currentpick}")
 
             # Reset poll interval to 30s for new pick

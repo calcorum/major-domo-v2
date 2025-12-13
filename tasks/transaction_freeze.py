@@ -707,7 +707,7 @@ class TransactionFreezeTask:
 
             for move in moves:
                 move_string += (
-                    f'**{move.player.name}** ({move.player.wara:.1f}) '
+                    f'**{move.player.name}** ({move.player.wara:.2f}) '
                     f'from {move.oldteam.abbrev} to {move.newteam.abbrev}\n'
                 )
 

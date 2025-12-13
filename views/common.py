@@ -94,7 +94,7 @@ class PlayerSelectionView(SelectMenuView):
             
             # Add WARA if available
             if player.wara is not None:
-                description += f" • WARA: {player.wara:.1f}"
+                description += f" • WARA: {player.wara:.2f}"
             
             options.append(discord.SelectOption(
                 label=label,
