@@ -154,18 +154,28 @@ async def validate_cap_space(
     current_roster_size = len(current_players)
     projected_roster_size = current_roster_size + 1
 
-    # Cap counting rules:
-    # - The 26 CHEAPEST (lowest WAR) players on the roster count toward the cap
-    # - If roster has fewer than 26 players, all of them count
-    # - If roster has 26+ players, only the bottom 26 by WAR count
-    # - This allows expensive stars to be "excluded" if you have enough cheap depth
-    players_counted = min(projected_roster_size, cap_player_count)
+    # Cap counting rules for draft:
+    # - Teams draft up to 32 players total, then drop down to 26
+    # - During draft, we calculate how many "zeroes" (future picks) team can still add
+    # - max_zeroes = 32 - projected_roster_size (remaining draft slots)
+    # - players_counted = 26 - max_zeroes (current players that count toward cap)
+    # - This allows teams to draft expensive players knowing they'll drop cheap ones later
+    #
+    # Example: Team has 18 players, drafting 19th:
+    # - projected_roster_size = 19
+    # - max_zeroes = 32 - 19 = 13 (can still draft 13 more)
+    # - players_counted = 26 - 13 = 13 (only 13 cheapest current players count)
+    #
+    # Post-draft (32 players): max_zeroes = 0, players_counted = 26 (normal cap rules)
+    max_roster_size = 32  # Maximum players during draft
+    max_zeroes = max(0, max_roster_size - projected_roster_size)
+    players_counted = max(0, cap_player_count - max_zeroes)
 
     # Sort all players (including new) by sWAR ASCENDING (cheapest first)
     all_players_wara = [p['wara'] for p in current_players] + [new_player_wara]
     sorted_wara = sorted(all_players_wara)  # Ascending order
 
-    # Sum bottom N players (the cheapest ones)
+    # Sum bottom N players (the cheapest ones that count toward cap)
     projected_total = sum(sorted_wara[:players_counted])
 
     # Allow tiny floating point tolerance

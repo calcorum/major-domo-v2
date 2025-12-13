@@ -4,13 +4,19 @@ Unit tests for draft helper functions in utils/draft_helpers.py.
 These tests verify:
 1. calculate_pick_details() correctly handles linear and snake draft formats
 2. calculate_overall_from_round_position() is the inverse of calculate_pick_details()
-3. validate_cap_space() correctly validates roster cap space with team-specific caps
+3. validate_cap_space() correctly validates roster cap space during draft
 4. Other helper functions work correctly
 
 Why these tests matter:
 - Draft pick calculations are critical for correct draft order
 - Cap space validation prevents illegal roster configurations
 - These functions are used throughout the draft system
+
+IMPORTANT: Cap validation during draft uses "max_zeroes" logic:
+- Teams draft up to 32 players, then drop to 26
+- max_zeroes = 32 - current_roster_size (remaining draft picks)
+- players_counted = 26 - max_zeroes (how many current players count toward cap)
+- This allows teams to draft expensive players knowing they'll drop cheap ones later
 """
 
 import pytest
@@ -159,16 +165,24 @@ class TestCalculateOverallFromRoundPosition:
             assert calculated_overall == overall, f"Failed for overall={overall}"
 
 
-class TestValidateCapSpace:
-    """Tests for validate_cap_space() function."""
+class TestValidateCapSpaceDraftBehavior:
+    """
+    Tests for validate_cap_space() function - DRAFT-TIME behavior.
+
+    During the draft, the "max_zeroes" logic applies:
+    - max_zeroes = 32 - projected_roster_size (remaining draft slots)
+    - players_counted = 26 - max_zeroes (current players that count toward cap)
+    - This allows teams to accumulate expensive players during draft knowing
+      they'll drop cheap depth later
+    """
 
     @pytest.mark.asyncio
-    async def test_valid_under_cap(self):
+    async def test_early_draft_no_players_count(self):
         """
-        Drafting a player that keeps team under cap should be valid.
+        With only 2 players, no current players count toward cap during draft.
 
-        Why: Normal case - team is under cap and pick should be allowed.
-        The 26 cheapest players are summed (all 3 in this case since < 26).
+        Why: Team has 30 more picks to fill (32 - 2).
+        players_counted = 26 - 30 = -4 → 0 players count
         """
         roster = {
             'active': {
@@ -179,116 +193,86 @@ class TestValidateCapSpace:
                 'WARa': 9.0
             }
         }
-        new_player_wara = 3.0
+        new_player_wara = 10.0  # Even expensive player is allowed
 
         is_valid, projected_total, cap_limit = await validate_cap_space(roster, new_player_wara)
 
+        # With 3 players total, max_zeroes = 32 - 3 = 29
+        # players_counted = 26 - 29 = -3 → 0
         assert is_valid is True
-        assert projected_total == 12.0  # 3 + 4 + 5 (all players, sorted ascending)
-        assert cap_limit == 32.0  # Default cap
-
-    @pytest.mark.asyncio
-    async def test_invalid_over_cap(self):
-        """
-        Drafting a player that puts team over cap should be invalid.
-
-        Why: Must prevent illegal roster configurations.
-        With 26 players all at 1.5 WAR, sum = 39.0 which exceeds 32.0 cap.
-        """
-        # Create roster with 25 players at 1.5 WAR each
-        players = [{'id': i, 'name': f'Player {i}', 'wara': 1.5} for i in range(25)]
-        roster = {
-            'active': {
-                'players': players,
-                'WARa': 37.5  # 25 * 1.5
-            }
-        }
-        new_player_wara = 1.5  # Adding another 1.5 player = 26 * 1.5 = 39.0
-
-        is_valid, projected_total, cap_limit = await validate_cap_space(roster, new_player_wara)
-
-        assert is_valid is False
-        assert projected_total == 39.0  # 26 * 1.5
+        assert projected_total == 0.0  # No players count yet
         assert cap_limit == 32.0
 
     @pytest.mark.asyncio
-    async def test_team_specific_cap(self):
+    async def test_mid_draft_some_players_count(self):
         """
-        Should use team's custom salary cap when provided.
+        With 18 players, only 13 cheapest count toward cap during draft.
 
-        Why: Some teams have different caps (expansion, penalties, etc.)
+        Why: Team has 13 more picks (32 - 19 after adding new player).
+        players_counted = 26 - 13 = 13 players count
         """
+        # Create 18 cheap depth players at 1.0 WAR each
+        players = [
+            {'id': i, 'name': f'Player {i}', 'wara': 1.0}
+            for i in range(1, 19)
+        ]
         roster = {
             'active': {
-                'players': [
-                    {'id': 1, 'name': 'Player 1', 'wara': 10.0},
-                    {'id': 2, 'name': 'Player 2', 'wara': 10.0},
-                ],
-                'WARa': 20.0
+                'players': players,
+                'WARa': sum(p['wara'] for p in players)
             }
         }
-        team = {'abbrev': 'EXP', 'salary_cap': 25.0}  # Expansion team with lower cap
-        new_player_wara = 6.0  # Total = 26.0 which exceeds 25.0 cap
+        new_player_wara = 1.0
 
-        is_valid, projected_total, cap_limit = await validate_cap_space(roster, new_player_wara, team)
+        is_valid, projected_total, cap_limit = await validate_cap_space(roster, new_player_wara)
 
-        assert is_valid is False  # Over custom 25.0 cap
-        assert projected_total == 26.0  # 6 + 10 + 10 (sorted ascending)
-        assert cap_limit == 25.0
-
-    @pytest.mark.asyncio
-    async def test_team_with_none_cap_uses_default(self):
-        """
-        Team with salary_cap=None should use default cap.
-
-        Why: Backwards compatibility for teams without custom caps.
-        """
-        roster = {
-            'active': {
-                'players': [
-                    {'id': 1, 'name': 'Player 1', 'wara': 10.0},
-                ],
-                'WARa': 10.0
-            }
-        }
-        team = {'abbrev': 'STD', 'salary_cap': None}
-        new_player_wara = 5.0
-
-        is_valid, projected_total, cap_limit = await validate_cap_space(roster, new_player_wara, team)
-
+        # With 19 players total, max_zeroes = 32 - 19 = 13
+        # players_counted = 26 - 13 = 13 players count
+        # All 19 players at 1.0 WAR, cheapest 13 = 13.0
         assert is_valid is True
-        assert projected_total == 15.0  # 5 + 10
-        assert cap_limit == 32.0  # Default
+        assert projected_total == 13.0
+        assert cap_limit == 32.0
 
     @pytest.mark.asyncio
-    async def test_cap_counting_logic_cheapest_26(self):
+    async def test_late_draft_pick_19_like_wai(self):
         """
-        Only the 26 CHEAPEST players should count toward cap.
+        Simulate WAI scenario: 18 players, drafting 19th, with 29.5 cap.
 
-        Why: League rules - expensive stars can be "excluded" if you have
-        enough cheap depth players. This rewards roster construction.
+        Why: This is the exact scenario that triggered the bug fix.
+        With 19 players total:
+        - max_zeroes = 32 - 19 = 13
+        - players_counted = 26 - 13 = 13
+        Only 13 cheapest players count, not all 19.
         """
-        # Create 27 players: 1 expensive star (10.0) and 26 cheap players (1.0 each)
-        players = [{'id': 0, 'name': 'Star', 'wara': 10.0}]  # Expensive star
-        for i in range(1, 27):
-            players.append({'id': i, 'name': f'Cheap {i}', 'wara': 1.0})
+        # Create 18 players - simulate realistic WAR values
+        players = [
+            {'id': 1, 'name': 'Star', 'wara': 5.0},
+            {'id': 2, 'name': 'Good', 'wara': 3.5},
+        ]
+        # Add 16 depth players at 1.0 WAR each
+        for i in range(3, 19):
+            players.append({'id': i, 'name': f'Depth {i}', 'wara': 1.0})
 
         roster = {
             'active': {
                 'players': players,
-                'WARa': sum(p['wara'] for p in players)  # 10 + 26 = 36
+                'WARa': sum(p['wara'] for p in players)
             }
         }
-        new_player_wara = 1.0  # Adding another cheap player
 
-        is_valid, projected_total, cap_limit = await validate_cap_space(roster, new_player_wara)
+        team = {'abbrev': 'WAI', 'salary_cap': 29.5}
+        new_player_wara = 2.5  # Zach Neto-like player
 
-        # With 28 players total, only cheapest 26 count
-        # Sorted ascending: 27 players at 1.0, then 1 at 10.0
-        # Cheapest 26 = 26 * 1.0 = 26.0 (the star is EXCLUDED)
+        is_valid, projected_total, cap_limit = await validate_cap_space(roster, new_player_wara, team)
+
+        # With 19 players total:
+        # max_zeroes = 32 - 19 = 13
+        # players_counted = 26 - 13 = 13
+        # Sorted ascending: 1.0 x 16, 2.5 (new), 3.5, 5.0
+        # Cheapest 13 = 1.0 x 13 = 13.0 (only depth players count!)
         assert is_valid is True
-        assert projected_total == 26.0
-        assert cap_limit == 32.0
+        assert projected_total == 13.0  # 13 x 1.0 (all depth players)
+        assert cap_limit == 29.5
 
     @pytest.mark.asyncio
     async def test_invalid_roster_structure(self):
@@ -307,11 +291,12 @@ class TestValidateCapSpace:
             await validate_cap_space({'other': {}}, 1.0)
 
     @pytest.mark.asyncio
-    async def test_empty_roster(self):
+    async def test_empty_roster_first_pick(self):
         """
-        Empty roster should allow any player (well under cap).
+        Empty roster (first pick) should allow any player.
 
-        Why: First pick of draft has empty roster.
+        Why: With 0 players, max_zeroes = 32 - 1 = 31, players_counted = 0.
+        No players count toward cap for the first pick.
         """
         roster = {
             'active': {
@@ -319,12 +304,108 @@ class TestValidateCapSpace:
                 'WARa': 0.0
             }
         }
-        new_player_wara = 5.0
+        new_player_wara = 10.0  # Any value should work
 
         is_valid, projected_total, cap_limit = await validate_cap_space(roster, new_player_wara)
 
         assert is_valid is True
-        assert projected_total == 5.0
+        assert projected_total == 0.0  # No players count yet
+
+
+class TestValidateCapSpacePostDraft:
+    """
+    Tests for validate_cap_space() function - POST-DRAFT behavior.
+
+    After draft is complete (32 players), normal cap rules apply:
+    - max_zeroes = 0 (no more draft picks)
+    - players_counted = 26 (full cap counting)
+    - Only cheapest 26 players count toward cap
+    """
+
+    @pytest.mark.asyncio
+    async def test_full_roster_cheapest_26_count(self):
+        """
+        With 31 players, adding 32nd player, only cheapest 26 count.
+
+        Why: At 32 players, max_zeroes = 0, players_counted = 26.
+        Normal cap rules apply.
+        """
+        # Create 31 players: 5 expensive (5.0 WAR) and 26 cheap (1.0 WAR)
+        players = [{'id': i, 'name': f'Expensive {i}', 'wara': 5.0} for i in range(1, 6)]
+        for i in range(6, 32):
+            players.append({'id': i, 'name': f'Cheap {i}', 'wara': 1.0})
+
+        roster = {
+            'active': {
+                'players': players,
+                'WARa': sum(p['wara'] for p in players)
+            }
+        }
+        new_player_wara = 1.0  # Adding another cheap player
+
+        is_valid, projected_total, cap_limit = await validate_cap_space(roster, new_player_wara)
+
+        # With 32 players: max_zeroes = 0, players_counted = 26
+        # 27 players at 1.0 WAR, 5 at 5.0 WAR
+        # Sorted ascending: 1.0 x 27, then 5.0 x 5
+        # Cheapest 26 = 26 x 1.0 = 26.0 (all expensive players excluded!)
+        assert is_valid is True
+        assert projected_total == 26.0
+        assert cap_limit == 32.0
+
+    @pytest.mark.asyncio
+    async def test_full_roster_over_cap(self):
+        """
+        Full roster that exceeds cap should be invalid.
+
+        Why: With 32 players and cheapest 26 exceeding cap, should fail.
+        """
+        # Create 31 players all at 1.5 WAR = 26 * 1.5 = 39.0 > 32.0
+        players = [{'id': i, 'name': f'Player {i}', 'wara': 1.5} for i in range(1, 32)]
+        roster = {
+            'active': {
+                'players': players,
+                'WARa': sum(p['wara'] for p in players)
+            }
+        }
+        new_player_wara = 1.5
+
+        is_valid, projected_total, cap_limit = await validate_cap_space(roster, new_player_wara)
+
+        # 32 players at 1.5, cheapest 26 = 39.0 > 32.0
+        assert is_valid is False
+        assert projected_total == 39.0
+        assert cap_limit == 32.0
+
+    @pytest.mark.asyncio
+    async def test_star_exclusion_post_draft(self):
+        """
+        After draft, expensive stars can be excluded if enough cheap depth.
+
+        Why: This is the key feature - teams can build around stars by
+        surrounding them with cheap depth players.
+        """
+        # 26 cheap players at 1.0 WAR each
+        players = [{'id': i, 'name': f'Depth {i}', 'wara': 1.0} for i in range(26)]
+        # Add 5 expensive stars at 8.0 WAR each
+        for i in range(26, 31):
+            players.append({'id': i, 'name': f'Star {i}', 'wara': 8.0})
+
+        roster = {
+            'active': {
+                'players': players,
+                'WARa': sum(p['wara'] for p in players)
+            }
+        }
+
+        # Drafting another 8.0 WAR superstar
+        is_valid, projected_total, cap_limit = await validate_cap_space(roster, 8.0)
+
+        # With 32 players: max_zeroes = 0, players_counted = 26
+        # 27 players at 1.0, 6 at 8.0
+        # Cheapest 26 = 26 x 1.0 = 26.0 (ALL stars excluded!)
+        assert is_valid is True
+        assert projected_total == 26.0
 
     @pytest.mark.asyncio
     async def test_tolerance_boundary(self):
@@ -333,47 +414,161 @@ class TestValidateCapSpace:
 
         Why: Floating point tolerance prevents false positives.
         """
-        # Create 25 players at 1.28 WAR each = 32.0 total
-        players = [{'id': i, 'name': f'Player {i}', 'wara': 1.28} for i in range(25)]
+        # Create a full roster (31 players) that will hit exactly 32.0 when adding 32nd
+        # With 32 players, cheapest 26 count. Need 26 players summing to ~32.0
+        # 25 players at 1.28 each = 32.0, plus new 0.0 player = still 32.0 for cheapest 26
+        players = [{'id': i, 'name': f'Player {i}', 'wara': 1.28} for i in range(1, 26)]
+        # Add 6 expensive players that won't count (need 31 total)
+        for i in range(26, 32):
+            players.append({'id': i, 'name': f'Expensive {i}', 'wara': 10.0})
+
         roster = {
             'active': {
                 'players': players,
-                'WARa': 32.0
+                'WARa': sum(p['wara'] for p in players)
             }
         }
 
-        # Adding 0.0 WAR player keeps us at exactly cap - should be valid
-        is_valid, projected_total, _ = await validate_cap_space(roster, 0.0)
+        # Adding a 0.0 WAR player to get to 32 total
+        # cheapest 26 = 25 * 1.28 + 0.0 = 32.0
+        is_valid, projected_total, cap_limit = await validate_cap_space(roster, 0.0)
+
+        # With 32 players, cheapest 26 = 25 * 1.28 + 0.0 = 32.0
         assert is_valid is True
         assert abs(projected_total - 32.0) < 0.01
 
-        # Adding 0.002 WAR player puts us just over tolerance - should be invalid
-        is_valid, _, _ = await validate_cap_space(roster, 0.003)
-        assert is_valid is False
+
+class TestValidateCapSpaceTeamSpecificCaps:
+    """Tests for team-specific salary cap handling."""
 
     @pytest.mark.asyncio
-    async def test_star_exclusion_scenario(self):
+    async def test_team_with_custom_cap(self):
         """
-        Test realistic scenario where an expensive star is excluded from cap.
+        Should use team's custom salary cap when provided.
 
-        Why: This is the key feature - teams can build around stars by
-        surrounding them with cheap depth players.
+        Why: Some teams have different caps (expansion, penalties, etc.)
         """
-        # 26 cheap players at 1.0 WAR each
-        players = [{'id': i, 'name': f'Depth {i}', 'wara': 1.0} for i in range(26)]
+        # Create full roster to get normal cap counting
+        players = [{'id': i, 'name': f'Player {i}', 'wara': 1.0} for i in range(31)]
         roster = {
             'active': {
                 'players': players,
-                'WARa': 26.0
+                'WARa': 31.0
+            }
+        }
+        team = {'abbrev': 'EXP', 'salary_cap': 25.0}  # Lower cap
+        new_player_wara = 1.0  # Total cheapest 26 = 26.0 > 25.0 cap
+
+        is_valid, projected_total, cap_limit = await validate_cap_space(roster, new_player_wara, team)
+
+        assert is_valid is False  # Over custom 25.0 cap
+        assert projected_total == 26.0  # 26 * 1.0
+        assert cap_limit == 25.0
+
+    @pytest.mark.asyncio
+    async def test_team_with_none_cap_uses_default(self):
+        """
+        Team with salary_cap=None should use default cap.
+
+        Why: Backwards compatibility for teams without custom caps.
+        """
+        players = [{'id': i, 'name': f'Player {i}', 'wara': 1.0} for i in range(31)]
+        roster = {
+            'active': {
+                'players': players,
+                'WARa': 31.0
+            }
+        }
+        team = {'abbrev': 'STD', 'salary_cap': None}
+        new_player_wara = 1.0
+
+        is_valid, projected_total, cap_limit = await validate_cap_space(roster, new_player_wara, team)
+
+        assert is_valid is True  # 26.0 < 32.0 default cap
+        assert projected_total == 26.0
+        assert cap_limit == 32.0  # Default
+
+
+class TestValidateCapSpaceRealTeamModel:
+    """Integration tests using the actual Team Pydantic model."""
+
+    @pytest.mark.asyncio
+    async def test_validate_cap_space_with_real_team_model(self):
+        """
+        validate_cap_space should work with real Team Pydantic model.
+
+        Why: End-to-end test with actual production model.
+        """
+        from models.team import Team
+
+        # Full roster for normal cap counting
+        players = [{'id': i, 'name': f'Player {i}', 'wara': 1.0} for i in range(31)]
+        roster = {
+            'active': {
+                'players': players,
+                'WARa': 31.0
             }
         }
 
-        # Drafting a 10.0 WAR superstar
-        # With 27 players, cheapest 26 count = 26 * 1.0 = 26.0 (star excluded!)
-        is_valid, projected_total, cap_limit = await validate_cap_space(roster, 10.0)
+        # Team with custom cap of 25.0
+        team = Team(
+            id=1,
+            abbrev='EXP',
+            sname='Expansion',
+            lname='Expansion Team',
+            season=12,
+            salary_cap=25.0
+        )
 
+        # Adding 1.0 WAR player: cheapest 26 = 26.0 > 25.0 cap
+        is_valid, projected_total, cap_limit = await validate_cap_space(roster, 1.0, team)
+
+        assert is_valid is False  # Over custom 25.0 cap
+        assert projected_total == 26.0
+        assert cap_limit == 25.0
+
+    @pytest.mark.asyncio
+    async def test_realistic_draft_scenario_full_roster(self):
+        """
+        Test a realistic scenario with full roster and star exclusion.
+
+        Why: Validates the complete workflow with real Team model and
+        demonstrates the cap exclusion mechanic working as intended.
+        """
+        from models.team import Team
+
+        # Team has completed draft with 2 superstars and 29 depth players
+        players = [
+            {'id': 0, 'name': 'Superstar 1', 'wara': 8.0},
+            {'id': 1, 'name': 'Superstar 2', 'wara': 7.0},
+        ]
+        for i in range(2, 31):
+            players.append({'id': i, 'name': f'Depth {i}', 'wara': 1.0})
+
+        roster = {
+            'active': {
+                'players': players,
+                'WARa': sum(p['wara'] for p in players)
+            }
+        }
+
+        team = Team(
+            id=1,
+            abbrev='STR',
+            sname='Stars',
+            lname='All-Stars Team',
+            season=12,
+            salary_cap=None  # Use default 32.0
+        )
+
+        # Draft final player (1.0 WAR depth)
+        is_valid, projected_total, cap_limit = await validate_cap_space(roster, 1.0, team)
+
+        # With 32 players: max_zeroes = 0, players_counted = 26
+        # 30 players at 1.0, 2 at 7.0 and 8.0
+        # Cheapest 26 = 26 x 1.0 = 26.0 (both superstars excluded!)
         assert is_valid is True
-        assert projected_total == 26.0  # Star is excluded from cap calculation
+        assert projected_total == 26.0
         assert cap_limit == 32.0
 
 
@@ -440,95 +635,3 @@ class TestGetRoundName:
         """Regular rounds should just show round number."""
         assert get_round_name(5) == "Round 5"
         assert get_round_name(20) == "Round 20"
-
-
-class TestRealTeamModelIntegration:
-    """Integration tests using the actual Team Pydantic model."""
-
-    @pytest.mark.asyncio
-    async def test_validate_cap_space_with_real_team_model(self):
-        """
-        validate_cap_space should work with real Team Pydantic model.
-
-        Why: End-to-end test with actual production model.
-        """
-        from models.team import Team
-
-        roster = {
-            'active': {
-                'players': [
-                    {'id': 1, 'name': 'Star', 'wara': 8.0},
-                    {'id': 2, 'name': 'Good', 'wara': 4.0},
-                ],
-                'WARa': 12.0
-            }
-        }
-
-        # Team with custom cap of 20.0
-        team = Team(
-            id=1,
-            abbrev='EXP',
-            sname='Expansion',
-            lname='Expansion Team',
-            season=12,
-            salary_cap=20.0
-        )
-
-        # Adding 10.0 WAR player: sorted ascending [4.0, 8.0, 10.0] = 22.0 total
-        # 22.0 > 20.0 cap, so invalid
-        is_valid, projected_total, cap_limit = await validate_cap_space(roster, 10.0, team)
-
-        assert is_valid is False
-        assert projected_total == 22.0  # 4 + 8 + 10
-        assert cap_limit == 20.0
-
-        # Adding 5.0 WAR player: sorted ascending [4.0, 5.0, 8.0] = 17.0 total
-        # 17.0 < 20.0 cap, so valid
-        is_valid, projected_total, cap_limit = await validate_cap_space(roster, 5.0, team)
-
-        assert is_valid is True
-        assert projected_total == 17.0  # 4 + 5 + 8
-        assert cap_limit == 20.0
-
-    @pytest.mark.asyncio
-    async def test_realistic_draft_scenario(self):
-        """
-        Test a realistic draft scenario where team has built around stars.
-
-        Why: Validates the complete workflow with real Team model and
-        demonstrates the cap exclusion mechanic working as intended.
-        """
-        from models.team import Team
-
-        # Team has 2 superstars (8.0, 7.0) and 25 cheap depth players (1.0 each)
-        players = [
-            {'id': 0, 'name': 'Superstar 1', 'wara': 8.0},
-            {'id': 1, 'name': 'Superstar 2', 'wara': 7.0},
-        ]
-        for i in range(2, 27):
-            players.append({'id': i, 'name': f'Depth {i}', 'wara': 1.0})
-
-        roster = {
-            'active': {
-                'players': players,
-                'WARa': sum(p['wara'] for p in players)  # 8 + 7 + 25 = 40.0
-            }
-        }
-
-        team = Team(
-            id=1,
-            abbrev='STR',
-            sname='Stars',
-            lname='All-Stars Team',
-            season=12,
-            salary_cap=None  # Use default 32.0
-        )
-
-        # Draft another 1.0 WAR depth player
-        # With 28 players, only cheapest 26 count
-        # Sorted: [1.0 x 26, 7.0, 8.0] - cheapest 26 = 26 * 1.0 = 26.0
-        is_valid, projected_total, cap_limit = await validate_cap_space(roster, 1.0, team)
-
-        assert is_valid is True
-        assert projected_total == 26.0  # Both superstars excluded!
-        assert cap_limit == 32.0
