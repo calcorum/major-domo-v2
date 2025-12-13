@@ -358,6 +358,24 @@ class DraftPicksCog(commands.Cog):
 
                     await ping_channel.send(embed=draft_card)
 
+        # Post draft card to result channel (separate from ping channel)
+        if draft_data.result_channel:
+            guild = interaction.guild
+            if guild:
+                result_channel = guild.get_channel(draft_data.result_channel)
+                if result_channel:
+                    result_card = await create_player_draft_card(player_obj, pick_to_use)
+
+                    # Add skipped pick context to result card
+                    if is_skipped_pick:
+                        result_card.set_footer(
+                            text=f"📝 Making up skipped pick (current pick is #{current_pick.overall})"
+                        )
+
+                    await result_channel.send(embed=result_card)
+                else:
+                    self.logger.warning(f"Could not find result channel {draft_data.result_channel}")
+
         # Only advance the draft if this was the current pick (not a skipped pick)
         if not is_skipped_pick:
             await draft_service.advance_pick(draft_data.id, draft_data.currentpick)
