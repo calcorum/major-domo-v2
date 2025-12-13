@@ -276,7 +276,7 @@ class DraftPickService(BaseService[DraftPick]):
         try:
             params = [
                 ('season', str(season)),
-                ('overall_end', str(overall_end - 1)),  # Exclude current pick
+                ('overall_end', str(overall_end)),  # overall_end is already exclusive (caller passes currentpick - 1)
                 ('player_taken', 'true'),  # Only taken picks
                 ('sort', 'order-desc'),  # Most recent first
                 ('limit', str(limit))

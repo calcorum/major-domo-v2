@@ -794,7 +794,7 @@ class TestDraftPickService:
         Test retrieving recently made picks.
 
         Verifies:
-        - overall_end is set to current-1 (exclude current pick)
+        - overall_end is passed through directly (caller handles exclusivity)
         - player_taken=true (only filled picks)
         - sort=order-desc (most recent first)
         - limit is applied
@@ -810,7 +810,7 @@ class TestDraftPickService:
         assert len(result) == 5
 
         call_params = mock_client.get.call_args[1]['params']
-        assert ('overall_end', '49') in call_params  # 50 - 1
+        assert ('overall_end', '50') in call_params  # Passed through directly
         assert ('player_taken', 'true') in call_params
         assert ('sort', 'order-desc') in call_params
         assert ('limit', '5') in call_params
