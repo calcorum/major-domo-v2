@@ -247,9 +247,11 @@ class SubmitConfirmationModal(discord.ui.Modal):
                 # POST transactions to database
                 created_transactions = await transaction_service.create_transaction_batch(transactions)
 
-                # Post to #transaction-log channel
-                bot = interaction.client
-                await post_transaction_to_log(bot, created_transactions, team=self.builder.team)
+                # Post to #transaction-log channel (only when league is NOT frozen)
+                # During freeze period, transactions are hidden until Saturday processing
+                if not current_state.freeze:
+                    bot = interaction.client
+                    await post_transaction_to_log(bot, created_transactions, team=self.builder.team)
 
                 # Create success message
                 success_msg = f"✅ **Transaction Submitted Successfully!**\n\n"
@@ -261,7 +263,10 @@ class SubmitConfirmationModal(discord.ui.Modal):
                 for move in self.builder.moves:
                     success_msg += f"• {move.description}\n"
 
-                success_msg += f"\n💡 Use `/mymoves` to check transaction status"
+                if current_state.freeze:
+                    success_msg += f"\n🔒 Transaction saved during freeze period - will be revealed Saturday"
+                else:
+                    success_msg += f"\n💡 Use `/mymoves` to check transaction status"
 
                 await interaction.followup.send(success_msg, ephemeral=True)
 
@@ -286,9 +291,11 @@ class SubmitConfirmationModal(discord.ui.Modal):
                     )
                     player_updates.append(updated_player)
 
-                # Post to #transaction-log channel
-                bot = interaction.client
-                await post_transaction_to_log(bot, created_transactions, team=self.builder.team)
+                # Post to #transaction-log channel (only when league is NOT frozen)
+                # During freeze period, IL moves are hidden until Saturday processing
+                if not current_state.freeze:
+                    bot = interaction.client
+                    await post_transaction_to_log(bot, created_transactions, team=self.builder.team)
 
                 # Create success message
                 success_msg = f"✅ **IL Move Executed Successfully!**\n\n"
@@ -301,6 +308,9 @@ class SubmitConfirmationModal(discord.ui.Modal):
                     success_msg += f"• {txn.move_description}\n"
 
                 success_msg += f"\n✅ **All players have been moved to their new teams immediately**"
+
+                if current_state.freeze:
+                    success_msg += f"\n🔒 Move logged but hidden during freeze period - will be revealed Saturday"
 
                 await interaction.followup.send(success_msg, ephemeral=True)
 
