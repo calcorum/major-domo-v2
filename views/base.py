@@ -32,18 +32,33 @@ class BaseView(discord.ui.View):
         self.created_at = datetime.now(timezone.utc)
         
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        """Check if user is authorized to interact with this view."""
+        """Check if user is authorized to interact with this view.
+
+        Authorization logic:
+        - If no restrictions set (user_id and responders both None), allow all
+        - If user_id is set, the original command user can interact
+        - If responders is set, anyone in the responders list can interact
+        - User only needs to match ONE condition to be authorized
+        """
+        # No restrictions - allow everyone
         if self.user_id is None and self.responders is None:
             return True
-            
-        if (self.user_id is not None and interaction.user.id != self.user_id) or (self.responders is not None and interaction.user.id not in self.responders):
-            await interaction.response.send_message(
-                "❌ You cannot interact with this menu.",
-                ephemeral=True
-            )
-            return False
-            
-        return True
+
+        # Check if user is authorized by either condition
+        is_command_user = self.user_id is not None and interaction.user.id == self.user_id
+        is_authorized_responder = (
+            self.responders is not None and
+            interaction.user.id in [r for r in self.responders if r is not None]
+        )
+
+        if is_command_user or is_authorized_responder:
+            return True
+
+        await interaction.response.send_message(
+            "❌ You cannot interact with this menu.",
+            ephemeral=True
+        )
+        return False
     
     async def on_timeout(self) -> None:
         """Handle view timeout."""

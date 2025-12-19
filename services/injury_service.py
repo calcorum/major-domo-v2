@@ -201,6 +201,40 @@ class InjuryService(BaseService[Injury]):
             logger.error(f"Error clearing injury {injury_id}: {e}")
             return False
 
+    async def get_all_active_injuries_raw(self, season: int) -> list[dict]:
+        """
+        Get all active injuries for a season with raw API response data.
+
+        This method returns the raw API response which includes nested player
+        objects with team information, needed for injury log displays.
+
+        Args:
+            season: Season number
+
+        Returns:
+            List of raw injury dictionaries from API with nested player/team data
+        """
+        try:
+            client = await self.get_client()
+            params = [
+                ('season', str(season)),
+                ('is_active', 'true'),
+                ('sort', 'return-asc')
+            ]
+
+            response = await client.get(self.endpoint, params=params)
+
+            if response and 'injuries' in response:
+                logger.debug(f"Retrieved {len(response['injuries'])} active injuries for season {season}")
+                return response['injuries']
+
+            logger.debug(f"No active injuries found for season {season}")
+            return []
+
+        except Exception as e:
+            logger.error(f"Error getting all active injuries for season {season}: {e}")
+            return []
+
 
 # Global service instance
 injury_service = InjuryService()

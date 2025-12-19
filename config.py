@@ -70,7 +70,7 @@ class BotConfig(BaseSettings):
 
     # Role Names
     help_editor_role_name: str = "Help Editor"
-    sba_players_role_name: str = "Season 12 Players"
+    sba_players_role_name: str = "Season 13 Players"
 
     # Channel Names
     sba_network_news_channel: str = "sba-network-news"

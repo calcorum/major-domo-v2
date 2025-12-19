@@ -477,6 +477,56 @@ REDIS_URL=redis://localhost:6379    # Empty disables caching
 REDIS_CACHE_TTL=300                 # Default TTL in seconds
 ```
 
+## 🐳 Docker Hub Configuration
+
+### 🚨 CRITICAL: Correct Repository Name
+
+**Discord Bot v2.0 Docker Hub Repository:**
+```
+manticorum67/major-domo-discordapp
+```
+
+**⚠️ IMPORTANT: There is NO DASH between "discord" and "app"**
+
+### Common Mistakes to Avoid
+```bash
+# ❌ WRONG - Has extra dash
+manticorum67/major-domo-discord-app
+
+# ❌ WRONG - Uses v2 suffix
+manticorum67/major-domo-discordapp-v2
+
+# ❌ WRONG - Different project name pattern
+manticorum67/major-domo-discord-app-v2
+
+# ✅ CORRECT - Use this exact name
+manticorum67/major-domo-discordapp
+```
+
+### Build and Push Commands
+```bash
+# Build with version tag
+docker build -t manticorum67/major-domo-discordapp:X.Y.Z .
+
+# Tag as latest
+docker tag manticorum67/major-domo-discordapp:X.Y.Z manticorum67/major-domo-discordapp:latest
+
+# Push both tags
+docker push manticorum67/major-domo-discordapp:X.Y.Z
+docker push manticorum67/major-domo-discordapp:latest
+```
+
+### Version Tagging Convention
+- **Version tags**: `manticorum67/major-domo-discordapp:2.24.0`
+- **Latest tag**: `manticorum67/major-domo-discordapp:latest`
+- **Development tag**: `manticorum67/major-domo-discordapp:dev`
+
+### Related Repositories
+| Component | Docker Hub Repository |
+|-----------|----------------------|
+| Discord Bot v2 | `manticorum67/major-domo-discordapp` |
+| Database API | `manticorum67/major-domo-database` |
+
 ## 📊 Monitoring and Logs
 
 ### Log Files
@@ -687,7 +737,7 @@ creator_id: Optional[int] = Field(None, description="ID of the creator (may be m
 
 ---
 
-**Last Updated:** October 2025
+**Last Updated:** December 2025
 **Maintenance:** Keep this file synchronized with CLAUDE.md files when making significant architectural changes
 **Next Review:** When major new features or patterns are added
 

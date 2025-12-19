@@ -652,6 +652,22 @@ class BatterInjuryModal(BaseModal):
 
             await interaction.response.send_message(embed=embed)
 
+            # Post injury news and update injury log channel
+            try:
+                from utils.injury_log import post_injury_and_update_log
+                await post_injury_and_update_log(
+                    bot=interaction.client,
+                    player=self.player,
+                    injury_games=self.injury_games,
+                    return_date=return_date,
+                    season=self.season
+                )
+            except Exception as log_error:
+                self.logger.warning(
+                    f"Failed to post injury to channels (injury was still logged): {log_error}",
+                    player_id=self.player.id
+                )
+
         except Exception as e:
             self.logger.error("Failed to create batter injury", error=e, player_id=self.player.id)
             embed = EmbedTemplate.error(
@@ -863,6 +879,22 @@ class PitcherRestModal(BaseModal):
             }
 
             await interaction.response.send_message(embed=embed)
+
+            # Post injury news and update injury log channel
+            try:
+                from utils.injury_log import post_injury_and_update_log
+                await post_injury_and_update_log(
+                    bot=interaction.client,
+                    player=self.player,
+                    injury_games=total_injury_games,
+                    return_date=return_date,
+                    season=self.season
+                )
+            except Exception as log_error:
+                self.logger.warning(
+                    f"Failed to post injury to channels (injury was still logged): {log_error}",
+                    player_id=self.player.id
+                )
 
         except Exception as e:
             self.logger.error("Failed to create pitcher injury", error=e, player_id=self.player.id)
