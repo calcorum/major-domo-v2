@@ -205,8 +205,8 @@ class InjuryGroup(app_commands.Group):
                 injury_callback = batter_confirm_callback
 
             # Create confirmation view with appropriate callback
+            # Only the player's team GM(s) can log the injury
             view = ConfirmationView(
-                user_id=interaction.user.id,
                 timeout=180.0,  # 3 minutes for confirmation
                 responders=[player.team.gmid, player.team.gmid2] if player.team else None,
                 confirm_callback=injury_callback,
