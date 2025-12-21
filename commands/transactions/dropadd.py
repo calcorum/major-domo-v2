@@ -234,7 +234,7 @@ class DropAddCommands(commands.Cog):
                 to_team=None if to_roster == RosterType.FREE_AGENCY else builder.team
             )
             
-            success, error_message = builder.add_move(move)
+            success, error_message = await builder.add_move(move)
             if not success:
                 self.logger.warning(f"Failed to add quick move: {error_message}")
                 return False, error_message

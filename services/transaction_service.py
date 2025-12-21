@@ -434,10 +434,60 @@ class TransactionService(BaseService[Transaction]):
             
             logger.debug(f"Found {len(result)} potentially contested transactions for week {week}")
             return result
-            
+
         except Exception as e:
             logger.error(f"Error getting contested transactions: {e}")
             return []
+
+    async def is_player_in_pending_transaction(
+        self,
+        player_id: int,
+        week: int,
+        season: int
+    ) -> tuple[bool, Optional[str]]:
+        """
+        Check if a player is already in a pending transaction for a specific week.
+
+        This checks ALL teams' pending transactions (frozen=false, cancelled=false)
+        to prevent duplicate claims on the same player.
+
+        Args:
+            player_id: Player ID to check
+            week: Week number to check
+            season: Season number
+
+        Returns:
+            Tuple of (is_in_pending_transaction, claiming_team_abbrev or None)
+        """
+        try:
+            # Get all pending transactions for the week (all teams)
+            params = [
+                ('season', str(season)),
+                ('week', str(week)),
+                ('cancelled', 'false'),
+                ('frozen', 'false')
+            ]
+
+            transactions = await self.get_all_items(params=params)
+
+            # Check if the player is in any of these transactions
+            for transaction in transactions:
+                if transaction.player and transaction.player.id == player_id:
+                    # Found the player in a pending transaction
+                    claiming_team = transaction.newteam.abbrev if transaction.newteam else "Unknown"
+                    logger.info(
+                        f"Player {player_id} already in pending transaction for week {week} "
+                        f"(claimed by {claiming_team})"
+                    )
+                    return True, claiming_team
+
+            return False, None
+
+        except Exception as e:
+            logger.error(f"Error checking pending transactions for player {player_id}: {e}")
+            # On error, allow the transaction (fail open) but log the issue
+            # The freeze task will still catch duplicates if they occur
+            return False, None
 
 
 # Global service instance

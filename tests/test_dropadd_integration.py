@@ -182,6 +182,8 @@ class TestDropAddIntegration:
                         mock_player_service.search_players = AsyncMock(return_value=[mock_players[0]])  # Mike Trout
                         mock_roster_service.get_current_roster = AsyncMock(return_value=mock_roster)
                         mock_tx_service.get_team_transactions = AsyncMock(return_value=[])
+                        # Mock the new pending transaction check
+                        mock_tx_service.is_player_in_pending_transaction = AsyncMock(return_value=(False, None))
 
                         # Execute /dropadd command with quick move
                         await commands_cog.dropadd.callback(commands_cog,
@@ -246,8 +248,8 @@ class TestDropAddIntegration:
                         from_team=mock_team
                     )
 
-                    builder.add_move(add_move)
-                    builder.add_move(drop_move)
+                    await builder.add_move(add_move, check_pending_transactions=False)
+                    await builder.add_move(drop_move, check_pending_transactions=False)
 
                     # Verify multi-move transaction
                     assert builder.move_count == 2
@@ -278,7 +280,7 @@ class TestDropAddIntegration:
                     to_roster=RosterType.MAJOR_LEAGUE,
                     to_team=mock_team
                 )
-                builder.add_move(move)
+                await builder.add_move(move, check_pending_transactions=False)
 
                 # Test submission
                 transactions = await builder.submit_transaction(week=11)
@@ -329,7 +331,7 @@ class TestDropAddIntegration:
                                 to_roster=RosterType.MAJOR_LEAGUE,
                                 to_team=mock_team
                             )
-                            builder.add_move(move)
+                            await builder.add_move(move, check_pending_transactions=False)
 
                             # Submit transactions first to get move IDs
                             transactions = await builder.submit_transaction(week=mock_current_state.week + 1)
@@ -338,7 +340,7 @@ class TestDropAddIntegration:
                             # Reset the builder and add move again for modal test
                             clear_transaction_builder(mock_interaction.user.id)
                             builder = get_transaction_builder(mock_interaction.user.id, mock_team)
-                            builder.add_move(move)
+                            await builder.add_move(move, check_pending_transactions=False)
 
                             # Create the modal
                             modal = SubmitConfirmationModal(builder)
@@ -445,7 +447,7 @@ class TestDropAddIntegration:
                     to_roster=RosterType.MAJOR_LEAGUE,
                     to_team=mock_team
                 )
-                builder.add_move(move)
+                await builder.add_move(move, check_pending_transactions=False)
 
                 # Test validation
                 validation = await builder.validate_transaction()
@@ -483,7 +485,7 @@ class TestDropAddIntegration:
                         to_roster=RosterType.MAJOR_LEAGUE,
                         to_team=mock_team
                     )
-                    builder1.add_move(move)
+                    await builder1.add_move(move, check_pending_transactions=False)
                     assert builder1.move_count == 1
 
                     # Second command call should get same builder

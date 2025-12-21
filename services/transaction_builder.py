@@ -194,17 +194,25 @@ class TransactionBuilder:
             self._existing_transactions = []
             self._existing_transactions_loaded = True
     
-    def add_move(self, move: TransactionMove) -> tuple[bool, str]:
+    async def add_move(
+        self,
+        move: TransactionMove,
+        next_week: Optional[int] = None,
+        check_pending_transactions: bool = True
+    ) -> tuple[bool, str]:
         """
         Add a move to the transaction.
 
         Args:
             move: TransactionMove to add
+            next_week: Week number for pending transaction check (optional, will be fetched if not provided)
+            check_pending_transactions: Whether to check if player is in another team's pending
+                transaction. Set to True for /dropadd (scheduled moves), False for /ilmove (immediate).
 
         Returns:
             Tuple of (success: bool, error_message: str). If success is True, error_message is empty.
         """
-        # Check if player is already in a move
+        # Check if player is already in a move in this transaction builder
         existing_move = self.get_move_for_player(move.player.id)
         if existing_move:
             error_msg = f"Player {move.player.name} already has a move in this transaction"
@@ -218,6 +226,29 @@ class TransactionBuilder:
             error_msg = f"Cannot move {move.player.name} from {move.from_team.abbrev} ({move.from_roster.value.upper()}) to {move.to_team.abbrev} ({move.to_roster.value.upper()}) - player is already in that location"
             logger.warning(error_msg)
             return False, error_msg
+
+        # Check if player is already in another team's pending transaction for next week
+        # This prevents duplicate claims that would need to be resolved at freeze time
+        # Only applies to /dropadd (scheduled moves), not /ilmove (immediate moves)
+        if check_pending_transactions:
+            if next_week is None:
+                try:
+                    current_state = await league_service.get_current_state()
+                    next_week = (current_state.week + 1) if current_state else 1
+                except Exception as e:
+                    logger.warning(f"Could not get current week for pending transaction check: {e}")
+                    next_week = 1
+
+            is_pending, claiming_team = await transaction_service.is_player_in_pending_transaction(
+                player_id=move.player.id,
+                week=next_week,
+                season=self.season
+            )
+
+            if is_pending:
+                error_msg = f"{move.player.name} is already in a pending transaction for week {next_week} (claimed by {claiming_team})"
+                logger.warning(error_msg)
+                return False, error_msg
 
         self.moves.append(move)
         logger.info(f"Added move: {move.description}")

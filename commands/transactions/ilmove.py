@@ -29,6 +29,7 @@ from services.transaction_builder import (
 )
 from services.player_service import player_service
 from services.team_service import team_service
+from services.league_service import league_service
 from views.transaction_embed import TransactionEmbedView, create_transaction_embed
 
 
@@ -255,7 +256,8 @@ class ILMoveCommands(commands.Cog):
                 to_team=to_team
             )
 
-            success, error_message = builder.add_move(move)
+            # For /ilmove, skip pending transaction check (immediate moves don't need it)
+            success, error_message = await builder.add_move(move, check_pending_transactions=False)
             if not success:
                 self.logger.warning(f"Failed to add quick move: {error_message}")
                 return False, error_message

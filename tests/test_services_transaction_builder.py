@@ -124,7 +124,8 @@ class TestTransactionBuilder:
         assert builder.move_count == 0
         assert len(builder.moves) == 0
     
-    def test_add_move_success(self, builder, mock_player):
+    @pytest.mark.asyncio
+    async def test_add_move_success(self, builder, mock_player):
         """Test successfully adding a move."""
         move = TransactionMove(
             player=mock_player,
@@ -133,15 +134,17 @@ class TestTransactionBuilder:
             to_team=builder.team
         )
 
-        success, error_message = builder.add_move(move)
+        # Skip pending transaction check for unit tests
+        success, error_message = await builder.add_move(move, check_pending_transactions=False)
 
         assert success is True
         assert error_message == ""
         assert builder.move_count == 1
         assert builder.is_empty is False
         assert move in builder.moves
-    
-    def test_add_duplicate_move_fails(self, builder, mock_player):
+
+    @pytest.mark.asyncio
+    async def test_add_duplicate_move_fails(self, builder, mock_player):
         """Test that adding duplicate moves for same player fails."""
         move1 = TransactionMove(
             player=mock_player,
@@ -157,8 +160,8 @@ class TestTransactionBuilder:
             from_team=builder.team
         )
 
-        success1, error_message1 = builder.add_move(move1)
-        success2, error_message2 = builder.add_move(move2)
+        success1, error_message1 = await builder.add_move(move1, check_pending_transactions=False)
+        success2, error_message2 = await builder.add_move(move2, check_pending_transactions=False)
 
         assert success1 is True
         assert error_message1 == ""
@@ -166,7 +169,8 @@ class TestTransactionBuilder:
         assert "already has a move" in error_message2
         assert builder.move_count == 1
 
-    def test_add_move_same_team_same_roster_fails(self, builder, mock_player):
+    @pytest.mark.asyncio
+    async def test_add_move_same_team_same_roster_fails(self, builder, mock_player):
         """Test that adding a move where from_team, to_team, from_roster, and to_roster are all the same fails."""
         move = TransactionMove(
             player=mock_player,
@@ -176,14 +180,15 @@ class TestTransactionBuilder:
             to_team=builder.team  # Same team - should fail when roster is also same
         )
 
-        success, error_message = builder.add_move(move)
+        success, error_message = await builder.add_move(move, check_pending_transactions=False)
 
         assert success is False
         assert "already in that location" in error_message
         assert builder.move_count == 0
         assert builder.is_empty is True
 
-    def test_add_move_same_team_different_roster_succeeds(self, builder, mock_player):
+    @pytest.mark.asyncio
+    async def test_add_move_same_team_different_roster_succeeds(self, builder, mock_player):
         """Test that adding a move where teams are same but rosters are different succeeds."""
         move = TransactionMove(
             player=mock_player,
@@ -193,14 +198,15 @@ class TestTransactionBuilder:
             to_team=builder.team  # Same team - should succeed when rosters differ
         )
 
-        success, error_message = builder.add_move(move)
+        success, error_message = await builder.add_move(move, check_pending_transactions=False)
 
         assert success is True
         assert error_message == ""
         assert builder.move_count == 1
         assert builder.is_empty is False
 
-    def test_add_move_different_teams_succeeds(self, builder, mock_player):
+    @pytest.mark.asyncio
+    async def test_add_move_different_teams_succeeds(self, builder, mock_player):
         """Test that adding a move where from_team and to_team are different succeeds."""
         other_team = Team(
             id=500,
@@ -218,14 +224,15 @@ class TestTransactionBuilder:
             to_team=builder.team
         )
 
-        success, error_message = builder.add_move(move)
+        success, error_message = await builder.add_move(move, check_pending_transactions=False)
 
         assert success is True
         assert error_message == ""
         assert builder.move_count == 1
         assert builder.is_empty is False
 
-    def test_add_move_none_teams_succeeds(self, builder, mock_player):
+    @pytest.mark.asyncio
+    async def test_add_move_none_teams_succeeds(self, builder, mock_player):
         """Test that adding a move where one or both teams are None succeeds."""
         # From FA to team (from_team=None)
         move1 = TransactionMove(
@@ -236,7 +243,7 @@ class TestTransactionBuilder:
             to_team=builder.team
         )
 
-        success1, error_message1 = builder.add_move(move1)
+        success1, error_message1 = await builder.add_move(move1, check_pending_transactions=False)
         assert success1 is True
         assert error_message1 == ""
 
@@ -260,11 +267,12 @@ class TestTransactionBuilder:
             to_team=None
         )
 
-        success2, error_message2 = builder.add_move(move2)
+        success2, error_message2 = await builder.add_move(move2, check_pending_transactions=False)
         assert success2 is True
         assert error_message2 == ""
-    
-    def test_remove_move_success(self, builder, mock_player):
+
+    @pytest.mark.asyncio
+    async def test_remove_move_success(self, builder, mock_player):
         """Test successfully removing a move."""
         move = TransactionMove(
             player=mock_player,
@@ -273,7 +281,7 @@ class TestTransactionBuilder:
             to_team=builder.team
         )
 
-        success, _ = builder.add_move(move)
+        success, _ = await builder.add_move(move, check_pending_transactions=False)
         assert success
         assert builder.move_count == 1
 
@@ -290,7 +298,8 @@ class TestTransactionBuilder:
         assert removed is False
         assert builder.move_count == 0
     
-    def test_get_move_for_player(self, builder, mock_player):
+    @pytest.mark.asyncio
+    async def test_get_move_for_player(self, builder, mock_player):
         """Test getting move for a specific player."""
         move = TransactionMove(
             player=mock_player,
@@ -299,15 +308,16 @@ class TestTransactionBuilder:
             to_team=builder.team
         )
 
-        builder.add_move(move)
+        await builder.add_move(move, check_pending_transactions=False)
 
         found_move = builder.get_move_for_player(mock_player.id)
         not_found = builder.get_move_for_player(99999)
 
         assert found_move == move
         assert not_found is None
-    
-    def test_clear_moves(self, builder, mock_player):
+
+    @pytest.mark.asyncio
+    async def test_clear_moves(self, builder, mock_player):
         """Test clearing all moves."""
         move = TransactionMove(
             player=mock_player,
@@ -316,7 +326,7 @@ class TestTransactionBuilder:
             to_team=builder.team
         )
 
-        success, _ = builder.add_move(move)
+        success, _ = await builder.add_move(move, check_pending_transactions=False)
         assert success
         assert builder.move_count == 1
 
@@ -324,18 +334,18 @@ class TestTransactionBuilder:
 
         assert builder.move_count == 0
         assert builder.is_empty is True
-    
+
     @pytest.mark.asyncio
     async def test_validate_transaction_no_roster(self, builder):
         """Test validation when roster data cannot be loaded."""
         with patch.object(builder, '_current_roster', None):
             with patch.object(builder, '_roster_loaded', True):
                 validation = await builder.validate_transaction()
-                
+
                 assert validation.is_legal is False
                 assert len(validation.errors) == 1
                 assert "Could not load current roster data" in validation.errors[0]
-    
+
     @pytest.mark.asyncio
     async def test_validate_transaction_legal(self, builder, mock_roster, mock_player):
         """Test validation of a legal transaction."""
@@ -348,15 +358,15 @@ class TestTransactionBuilder:
                     to_roster=RosterType.MAJOR_LEAGUE,
                     to_team=builder.team
                 )
-                success, _ = builder.add_move(move)
+                success, _ = await builder.add_move(move, check_pending_transactions=False)
                 assert success
-                
+
                 validation = await builder.validate_transaction()
-                
+
                 assert validation.is_legal is True
                 assert validation.major_league_count == 25  # 24 + 1
                 assert len(validation.errors) == 0
-    
+
     @pytest.mark.asyncio
     async def test_validate_transaction_over_limit(self, builder, mock_roster):
         """Test validation when transaction would exceed roster limit."""
@@ -377,9 +387,9 @@ class TestTransactionBuilder:
                         to_roster=RosterType.MAJOR_LEAGUE,
                         to_team=builder.team
                     )
-                    success, _ = builder.add_move(move)
+                    success, _ = await builder.add_move(move, check_pending_transactions=False)
                 assert success
-                
+
                 validation = await builder.validate_transaction()
                 
                 assert validation.is_legal is False
@@ -427,12 +437,12 @@ class TestTransactionBuilder:
                         to_roster=RosterType.MAJOR_LEAGUE,
                         to_team=builder.team
                     )
-                    success, _ = builder.add_move(move)
+                    success, _ = await builder.add_move(move, check_pending_transactions=False)
                 assert success
-                
+
                 with pytest.raises(ValueError, match="Cannot submit illegal transaction"):
                     await builder.submit_transaction(week=11)
-    
+
     @pytest.mark.asyncio
     async def test_submit_transaction_success(self, builder, mock_roster, mock_player):
         """Test successful transaction submission."""
@@ -445,11 +455,11 @@ class TestTransactionBuilder:
                     to_roster=RosterType.MAJOR_LEAGUE,
                     to_team=builder.team
                 )
-                success, _ = builder.add_move(move)
+                success, _ = await builder.add_move(move, check_pending_transactions=False)
                 assert success
-                
+
                 transactions = await builder.submit_transaction(week=11)
-                
+
                 assert len(transactions) == 1
                 transaction = transactions[0]
                 assert isinstance(transaction, Transaction)
@@ -458,7 +468,7 @@ class TestTransactionBuilder:
                 assert transaction.player == mock_player
                 assert transaction.newteam == builder.team
                 assert "Season-012-Week-11-" in transaction.moveid
-    
+
     @pytest.mark.asyncio
     async def test_submit_complex_transaction(self, builder, mock_roster):
         """Test submitting transaction with multiple moves."""
@@ -467,7 +477,7 @@ class TestTransactionBuilder:
                 # Add one player and drop one player (net zero)
                 add_player = Player(id=5001, name='Add Player', wara=2.0, season=12, pos_1='OF')
                 drop_player = Player(id=5002, name='Drop Player', wara=1.0, season=12, pos_1='OF')
-                
+
                 add_move = TransactionMove(
                     player=add_player,
                     from_roster=RosterType.FREE_AGENCY,
@@ -481,13 +491,13 @@ class TestTransactionBuilder:
                     to_roster=RosterType.FREE_AGENCY,
                     from_team=builder.team
                 )
-                
-                success1, _ = builder.add_move(add_move)
-                success2, _ = builder.add_move(drop_move)
+
+                success1, _ = await builder.add_move(add_move, check_pending_transactions=False)
+                success2, _ = await builder.add_move(drop_move, check_pending_transactions=False)
                 assert success1 and success2
-                
+
                 transactions = await builder.submit_transaction(week=11)
-                
+
                 assert len(transactions) == 2
                 # Both transactions should have the same move_id
                 assert transactions[0].moveid == transactions[1].moveid
@@ -656,3 +666,165 @@ class TestTransactionBuilderGlobalFunctions:
         """Test clearing non-existent builder doesn't error."""
         # Should not raise any exception
         clear_transaction_builder(user_id=99999)
+
+
+class TestPendingTransactionValidation:
+    """
+    Test pending transaction validation in add_move.
+
+    This validates that players who are already in a pending transaction
+    for the next week cannot be added to another transaction.
+    """
+
+    @pytest.fixture
+    def mock_team(self):
+        """Create a mock team for testing."""
+        return Team(
+            id=499,
+            abbrev='WV',
+            sname='Black Bears',
+            lname='West Virginia Black Bears',
+            season=12
+        )
+
+    @pytest.fixture
+    def mock_player(self):
+        """Create a mock player for testing."""
+        return Player(
+            id=12472,
+            name='Test Player',
+            wara=2.5,
+            season=12,
+            pos_1='OF'
+        )
+
+    @pytest.fixture
+    def builder(self, mock_team):
+        """Create a TransactionBuilder for testing."""
+        return TransactionBuilder(mock_team, user_id=123, season=12)
+
+    @pytest.mark.asyncio
+    async def test_add_move_player_in_pending_transaction_fails(self, builder, mock_player):
+        """
+        Test that adding a player who is already in a pending transaction fails.
+
+        When a player is claimed by another team in a pending (unfrozen) transaction
+        for the next week, they should not be able to be added to another transaction.
+        """
+        move = TransactionMove(
+            player=mock_player,
+            from_roster=RosterType.FREE_AGENCY,
+            to_roster=RosterType.MAJOR_LEAGUE,
+            to_team=builder.team
+        )
+
+        with patch('services.transaction_builder.transaction_service') as mock_tx_service:
+            with patch('services.transaction_builder.league_service') as mock_league_service:
+                # Mock that player IS in a pending transaction (claimed by LAA)
+                mock_tx_service.is_player_in_pending_transaction = AsyncMock(
+                    return_value=(True, "LAA")
+                )
+                # Mock current state to provide next week
+                mock_league_service.get_current_state = AsyncMock(
+                    return_value=MagicMock(week=10)
+                )
+
+                success, error_message = await builder.add_move(move)
+
+                assert success is False
+                assert "already in a pending transaction" in error_message
+                assert "week 11" in error_message
+                assert "LAA" in error_message
+                assert builder.move_count == 0
+
+    @pytest.mark.asyncio
+    async def test_add_move_player_not_in_pending_transaction_succeeds(self, builder, mock_player):
+        """
+        Test that adding a player who is NOT in a pending transaction succeeds.
+
+        When a player is available (not claimed in any pending transaction),
+        they should be able to be added to the transaction builder.
+        """
+        move = TransactionMove(
+            player=mock_player,
+            from_roster=RosterType.FREE_AGENCY,
+            to_roster=RosterType.MAJOR_LEAGUE,
+            to_team=builder.team
+        )
+
+        with patch('services.transaction_builder.transaction_service') as mock_tx_service:
+            with patch('services.transaction_builder.league_service') as mock_league_service:
+                # Mock that player is NOT in a pending transaction
+                mock_tx_service.is_player_in_pending_transaction = AsyncMock(
+                    return_value=(False, None)
+                )
+                # Mock current state to provide next week
+                mock_league_service.get_current_state = AsyncMock(
+                    return_value=MagicMock(week=10)
+                )
+
+                success, error_message = await builder.add_move(move)
+
+                assert success is True
+                assert error_message == ""
+                assert builder.move_count == 1
+
+    @pytest.mark.asyncio
+    async def test_add_move_skip_pending_check_with_flag(self, builder, mock_player):
+        """
+        Test that check_pending_transactions=False skips the validation.
+
+        This is used for IL moves and trade moves where the pending transaction
+        check should not apply.
+        """
+        move = TransactionMove(
+            player=mock_player,
+            from_roster=RosterType.FREE_AGENCY,
+            to_roster=RosterType.MAJOR_LEAGUE,
+            to_team=builder.team
+        )
+
+        # Even if the service would return True, the check should be skipped
+        with patch('services.transaction_builder.transaction_service') as mock_tx_service:
+            # This mock should NOT be called when check_pending_transactions=False
+            mock_tx_service.is_player_in_pending_transaction = AsyncMock(
+                return_value=(True, "LAA")
+            )
+
+            success, error_message = await builder.add_move(
+                move, check_pending_transactions=False
+            )
+
+            assert success is True
+            assert error_message == ""
+            assert builder.move_count == 1
+            # Verify the service method was NOT called
+            mock_tx_service.is_player_in_pending_transaction.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_add_move_with_explicit_next_week(self, builder, mock_player):
+        """
+        Test that providing next_week parameter uses that value.
+
+        The next_week parameter allows the caller to specify which week
+        to check for pending transactions.
+        """
+        move = TransactionMove(
+            player=mock_player,
+            from_roster=RosterType.FREE_AGENCY,
+            to_roster=RosterType.MAJOR_LEAGUE,
+            to_team=builder.team
+        )
+
+        with patch('services.transaction_builder.transaction_service') as mock_tx_service:
+            mock_tx_service.is_player_in_pending_transaction = AsyncMock(
+                return_value=(False, None)
+            )
+
+            success, error_message = await builder.add_move(move, next_week=15)
+
+            assert success is True
+            # Verify the check was called with the explicit week
+            mock_tx_service.is_player_in_pending_transaction.assert_called_once()
+            call_args = mock_tx_service.is_player_in_pending_transaction.call_args
+            assert call_args.kwargs['week'] == 15

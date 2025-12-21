@@ -411,8 +411,9 @@ class TestTradeBuilder:
             mock_builder2.validate_transaction = AsyncMock(return_value=valid_result)
 
             # Configure add_move methods to return expected tuple (success, error_message)
-            mock_builder1.add_move.return_value = (True, "")
-            mock_builder2.add_move.return_value = (True, "")
+            # add_move is now async, so use AsyncMock
+            mock_builder1.add_move = AsyncMock(return_value=(True, ""))
+            mock_builder2.add_move = AsyncMock(return_value=(True, ""))
 
             def get_builder_side_effect(team):
                 if team.id == self.team1.id:

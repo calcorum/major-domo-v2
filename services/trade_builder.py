@@ -318,14 +318,15 @@ class TradeBuilder:
         )
 
         # Add moves to respective builders
-        from_success, from_error = from_builder.add_move(from_move)
+        # Skip pending transaction check for trades - they have their own validation workflow
+        from_success, from_error = await from_builder.add_move(from_move, check_pending_transactions=False)
         if not from_success:
             # Remove from trade if builder failed
             from_participant.moves_giving.remove(trade_move)
             to_participant.moves_receiving.remove(trade_move)
             return False, f"Error adding move to {from_team.abbrev}: {from_error}"
 
-        to_success, to_error = to_builder.add_move(to_move)
+        to_success, to_error = await to_builder.add_move(to_move, check_pending_transactions=False)
         if not to_success:
             # Rollback both if second failed
             from_builder.remove_move(player.id)
@@ -383,7 +384,8 @@ class TradeBuilder:
             to_team=team
         )
 
-        success, error = builder.add_move(trans_move)
+        # Skip pending transaction check for trade supplementary moves
+        success, error = await builder.add_move(trans_move, check_pending_transactions=False)
         if not success:
             participant.supplementary_moves.remove(supp_move)
             return False, error

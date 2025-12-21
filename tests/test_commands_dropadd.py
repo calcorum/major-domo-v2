@@ -178,7 +178,7 @@ class TestDropAddCommands:
         """Test successful quick move addition."""
         mock_builder = MagicMock()
         mock_builder.team = mock_team
-        mock_builder.add_move.return_value = (True, "")
+        mock_builder.add_move = AsyncMock(return_value=(True, ""))  # Now async
         mock_builder.load_roster_data = AsyncMock()
         mock_builder._current_roster = MagicMock()
         mock_builder._current_roster.active_players = []
@@ -262,7 +262,7 @@ class TestDropAddCommands:
 
         mock_builder = MagicMock()
         mock_builder.team = mock_team
-        mock_builder.add_move.return_value = (True, "")
+        mock_builder.add_move = AsyncMock(return_value=(True, ""))  # Now async
         mock_builder.load_roster_data = AsyncMock()
         mock_builder._current_roster = MagicMock()
         mock_builder._current_roster.active_players = []
