@@ -461,9 +461,10 @@ class TransactionService(BaseService[Transaction]):
         """
         try:
             # Get all pending transactions for the week (all teams)
+            # Use week_start to filter out keepers (week=0) and earlier transactions
             params = [
                 ('season', str(season)),
-                ('week', str(week)),
+                ('week_start', str(week)),
                 ('cancelled', 'false'),
                 ('frozen', 'false')
             ]
