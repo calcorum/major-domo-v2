@@ -85,17 +85,24 @@ class LeagueService(BaseService[Current]):
                 logger.warning("update_current_state called with no updates")
                 return await self.get_current_state()
 
-            # Current state always has ID of 1 (single record)
-            current_id = 1
+            # Get the current state to find its actual ID
+            # (Current table has one row per season, NOT a single row with id=1)
+            current = await self.get_current_state()
+            if not current:
+                logger.error("Cannot update current state - unable to fetch current state")
+                return None
+
+            current_id = current.id
+            logger.debug(f"Updating current state id={current_id} (season {current.season})")
 
             # Use BaseService patch method
             updated_current = await self.patch(current_id, update_data)
 
             if updated_current:
-                logger.info(f"Updated current state: {update_data}")
+                logger.info(f"Updated current state id={current_id}: {update_data}")
                 return updated_current
             else:
-                logger.error("Failed to update current state - patch returned None")
+                logger.error(f"Failed to update current state id={current_id} - patch returned None")
                 return None
 
         except Exception as e:

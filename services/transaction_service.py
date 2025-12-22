@@ -384,6 +384,43 @@ class TransactionService(BaseService[Transaction]):
             logger.error(f"Error getting frozen transactions for weeks {week_start}-{week_end}: {e}")
             return []
 
+    async def get_regular_transactions_by_week(
+        self,
+        season: int,
+        week: int
+    ) -> List[Transaction]:
+        """
+        Get non-frozen, non-cancelled transactions for a specific week.
+
+        This is used during freeze begin to process regular transactions
+        that were submitted during the non-freeze period and should take
+        effect immediately when the new week starts.
+
+        Args:
+            season: Season number
+            week: Week number to get transactions for
+
+        Returns:
+            List of regular (non-frozen, non-cancelled) transactions for the week
+        """
+        try:
+            params = [
+                ('season', str(season)),
+                ('week_start', str(week)),
+                ('week_end', str(week)),
+                ('frozen', 'false'),
+                ('cancelled', 'false')
+            ]
+
+            transactions = await self.get_all_items(params=params)
+
+            logger.debug(f"Retrieved {len(transactions)} regular transactions for week {week}")
+            return transactions
+
+        except Exception as e:
+            logger.error(f"Error getting regular transactions for week {week}: {e}")
+            return []
+
     async def get_contested_transactions(self, season: int, week: int) -> List[Transaction]:
         """
         Get transactions that may be contested (multiple teams want same player).

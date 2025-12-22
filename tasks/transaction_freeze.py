@@ -213,9 +213,10 @@ class TransactionFreezeTask:
                 # Only run if we haven't already frozen this week
                 # Track the week we're freezing FROM (before increment)
                 if self.last_freeze_week != current.week:
+                    freeze_from_week = current.week  # Save BEFORE _begin_freeze modifies it
                     self.logger.info("Triggering freeze begin", current_week=current.week)
                     await self._begin_freeze(current)
-                    self.last_freeze_week = current.week  # Track the week we froze (before increment)
+                    self.last_freeze_week = freeze_from_week  # Track the week we froze FROM
                     self.error_notification_sent = False  # Reset error flag for new cycle
                 else:
                     self.logger.debug("Freeze already executed for week", week=current.week)
@@ -341,26 +342,22 @@ class TransactionFreezeTask:
 
     async def _run_transactions(self, current: Current):
         """
-        Process regular (non-frozen) transactions for the current week.
+        Process regular (non-frozen, non-cancelled) transactions for the current week.
 
-        These are transactions that take effect immediately.
+        These are transactions that were submitted during the non-freeze period
+        and should take effect immediately when the new week starts.
         """
         try:
-            # Get all non-frozen transactions for current week
-            client = await transaction_service.get_client()
-            params = [
-                ('season', str(current.season)),
-                ('week_start', str(current.week)),
-                ('week_end', str(current.week))
-            ]
+            # Get non-frozen, non-cancelled transactions for current week via service
+            transactions = await transaction_service.get_regular_transactions_by_week(
+                season=current.season,
+                week=current.week
+            )
 
-            response = await client.get('transactions', params=params)
-
-            if not response or response.get('count', 0) == 0:
+            if not transactions:
                 self.logger.info(f"No regular transactions to process for week {current.week}")
                 return
 
-            transactions = response.get('transactions', [])
             self.logger.info(f"Processing {len(transactions)} regular transactions for week {current.week}")
 
             # Execute player roster updates for all transactions
@@ -371,9 +368,9 @@ class TransactionFreezeTask:
                 try:
                     # Update player's team via PATCH /players/{player_id}?team_id={new_team_id}
                     await self._execute_player_update(
-                        player_id=transaction['player']['id'],
-                        new_team_id=transaction['newteam']['id'],
-                        player_name=transaction['player']['name']
+                        player_id=transaction.player.id,
+                        new_team_id=transaction.newteam.id,
+                        player_name=transaction.player.name
                     )
                     success_count += 1
 
@@ -382,9 +379,9 @@ class TransactionFreezeTask:
 
                 except Exception as e:
                     self.logger.error(
-                        f"Failed to execute transaction for {transaction['player']['name']}",
-                        player_id=transaction['player']['id'],
-                        new_team_id=transaction['newteam']['id'],
+                        f"Failed to execute transaction for {transaction.player.name}",
+                        player_id=transaction.player.id,
+                        new_team_id=transaction.newteam.id,
                         error=str(e)
                     )
                     failure_count += 1
